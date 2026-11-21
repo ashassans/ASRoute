@@ -31,6 +31,7 @@ import {
 import {
   publishCircuitUpdate,
   publishRouteActivity,
+  publishTelemetryUpdate,
   publishUserLog,
 } from "./sse.ts";
 
@@ -675,7 +676,7 @@ export async function resolveRoutingTarget(
     }
   }
 
-  // 4. Auto-inferred provider
+  // 4. Auto-inferred provider (prefer connections owning the requested model)
   const inferredProvider = requestedModel.startsWith("gemini")
     ? "gemini"
     : requestedModel.startsWith("claude")
@@ -686,9 +687,23 @@ export async function resolveRoutingTarget(
           ? "openai"
           : null;
 
-  const matchingConns = inferredProvider
+  const providerMatches = inferredProvider
     ? userConns.filter((c) => c.provider === inferredProvider && c.isActive)
-    : userConns.filter((c) => c.isActive);
+    : [];
+  const baseMatches =
+    providerMatches.length > 0
+      ? providerMatches
+      : userConns.filter((c) => c.isActive);
+
+  const matchingConns = [...baseMatches].sort((a, b) => {
+    const aOwns = connHasModel(a, trimmedModel) ? 1 : 0;
+    const bOwns = connHasModel(b, trimmedModel) ? 1 : 0;
+    if (aOwns !== bOwns) return bOwns - aOwns;
+    const aHealthy = a.circuitStatus === "healthy" ? 1 : 0;
+    const bHealthy = b.circuitStatus === "healthy" ? 1 : 0;
+    if (aHealthy !== bHealthy) return bHealthy - aHealthy;
+    return (a.lastLatencyMs ?? 9999) - (b.lastLatencyMs ?? 9999);
+  });
 
   return {
     combo: null,
@@ -889,7 +904,7 @@ export async function executeGatewayChatCompletion(params: {
     if (signal?.aborted) {
       break;
     }
-    if (tierIdx > 0 && Date.now() - startedAt > 35_000) {
+    if (tierIdx > 0 && Date.now() - startedAt > 55_000) {
       break;
     }
 
@@ -965,7 +980,7 @@ export async function executeGatewayChatCompletion(params: {
     const { keys: candidateKeys, cursor: startCursor } =
       resolveConnectionApiKeys(connection);
     const tierStart = Date.now();
-    const tierTimeoutMs = hasRemainingTier ? 12000 : 25000;
+    const tierTimeoutMs = hasRemainingTier ? 9000 : 25000;
 
     publishRouteActivity(userId, {
       requestId,
@@ -1068,6 +1083,21 @@ export async function executeGatewayChatCompletion(params: {
           testedAt: now.toISOString(),
         };
 
+        const nextUsedRequestsToday = connResetDaily
+          ? 1
+          : connection.usedRequestsToday + 1;
+        const nextUsedTokensToday = connResetDaily
+          ? totalTokens
+          : connection.usedTokensToday + totalTokens;
+        const nextUsedCostMonth = connResetMonthly
+          ? result.estimatedCostUsd
+          : connection.usedCostMonth + result.estimatedCostUsd;
+
+        const isRealTier =
+          Boolean(target.combo) &&
+          !tier.id.startsWith("direct-") &&
+          !tier.id.startsWith("auto-");
+
         const postSuccessWrites: Promise<unknown>[] = [
           ...pendingDbWrites,
           db
@@ -1118,11 +1148,42 @@ export async function executeGatewayChatCompletion(params: {
           publishCircuitUpdate(userId, connection.id, "healthy");
         }
 
-        if (
-          target.combo &&
-          !tier.id.startsWith("direct-") &&
-          !tier.id.startsWith("auto-")
-        ) {
+        publishTelemetryUpdate(userId, {
+          connectionUpdate: {
+            id: connection.id,
+            circuitStatus: "healthy",
+            failureCount: 0,
+            cooldownUntil: null,
+            lastLatencyMs: tierLatency,
+            lastError: null,
+            usedRequestsToday: nextUsedRequestsToday,
+            usedTokensToday: nextUsedTokensToday,
+            usedCostMonth: nextUsedCostMonth,
+            modelHealth: nextHealth,
+          },
+          ...(isRealTier && target.combo
+            ? {
+                tierIncrement: {
+                  comboId: target.combo.id,
+                  tierId: tier.id,
+                  delta: 1,
+                },
+              }
+            : {}),
+          ...(apiKeyId
+            ? {
+                keyIncrement: {
+                  keyId: apiKeyId,
+                  requests: 1,
+                  tokens: totalTokens,
+                  costUsd: result.estimatedCostUsd,
+                  lastUsedAt: now.toISOString(),
+                },
+              }
+            : {}),
+        });
+
+        if (isRealTier) {
           postSuccessWrites.push(
             db
               .update(comboTiers)
@@ -1190,7 +1251,12 @@ export async function executeGatewayChatCompletion(params: {
         const canRotatePoolKey =
           !streamedAnyChunk &&
           keyIdx + 1 < candidateKeys.length &&
-          (sc === 429 || sc === 401 || sc === 403 || sc >= 500);
+          (sc === 429 ||
+            sc === 408 ||
+            sc === 402 ||
+            sc === 401 ||
+            sc === 403 ||
+            sc >= 500);
         if (canRotatePoolKey) {
           continue;
         }
@@ -1233,38 +1299,62 @@ export async function executeGatewayChatCompletion(params: {
         };
       }
 
+      const nextHealth = parseModelHealth(connection.modelHealth);
+      const existingModelHealth = nextHealth[tier.upstreamModel];
+
       if (capabilityMismatch && hasTools) {
-        const nextHealth = parseModelHealth(connection.modelHealth);
-        const existing = nextHealth[tier.upstreamModel];
         nextHealth[tier.upstreamModel] = {
-          ok: existing?.ok ?? true,
-          latencyMs: existing?.latencyMs ?? tierLatency,
+          ok: existingModelHealth?.ok ?? true,
+          latencyMs: existingModelHealth?.latencyMs ?? tierLatency,
           supportsTools: false,
           testedAt: now.toISOString(),
         };
+        const serializedHealth = JSON.stringify(nextHealth);
+        connection.modelHealth = serializedHealth;
         pendingDbWrites.push(
           db
             .update(providerConnections)
-            .set({ modelHealth: JSON.stringify(nextHealth) })
+            .set({ modelHealth: serializedHealth })
             .where(eq(providerConnections.id, connection.id))
         );
+        publishTelemetryUpdate(userId, {
+          connectionUpdate: {
+            id: connection.id,
+            modelHealth: nextHealth,
+          },
+        });
       } else {
         const isModelSpecificClientError =
           statusCode === 400 || statusCode === 404 || statusCode === 422;
+        const isAuthError = statusCode === 401 || statusCode === 403;
         const newFailureCount = isModelSpecificClientError
           ? connection.failureCount
           : connection.failureCount + 1;
         const shouldOpenCircuit =
           !isModelSpecificClientError &&
-          (statusCode === 429 ||
-            statusCode === 401 ||
-            statusCode === 403 ||
-            newFailureCount >= 2);
+          (isAuthError || newFailureCount >= 2);
 
         const nextStatus = shouldOpenCircuit ? "open" : connection.circuitStatus;
         const cooldownUntil = shouldOpenCircuit
           ? new Date(Date.now() + (statusCode === 429 ? 30_000 : 45_000))
           : connection.cooldownUntil;
+
+        nextHealth[tier.upstreamModel] = {
+          ok: false,
+          latencyMs: tierLatency,
+          supportsTools: existingModelHealth?.supportsTools,
+          testedAt: now.toISOString(),
+          error: errMessage.slice(0, 140),
+        };
+        const serializedHealth = JSON.stringify(nextHealth);
+        const trimmedError = errMessage.slice(0, 300);
+
+        connection.failureCount = newFailureCount;
+        connection.circuitStatus = nextStatus;
+        connection.cooldownUntil = cooldownUntil;
+        connection.lastLatencyMs = tierLatency;
+        connection.lastError = trimmedError;
+        connection.modelHealth = serializedHealth;
 
         pendingDbWrites.push(
           db
@@ -1274,7 +1364,8 @@ export async function executeGatewayChatCompletion(params: {
               circuitStatus: nextStatus,
               cooldownUntil,
               lastLatencyMs: tierLatency,
-              lastError: errMessage.slice(0, 300),
+              lastError: trimmedError,
+              modelHealth: serializedHealth,
             })
             .where(eq(providerConnections.id, connection.id))
         );
@@ -1282,6 +1373,17 @@ export async function executeGatewayChatCompletion(params: {
         if (shouldOpenCircuit) {
           publishCircuitUpdate(userId, connection.id, "open");
         }
+        publishTelemetryUpdate(userId, {
+          connectionUpdate: {
+            id: connection.id,
+            circuitStatus: nextStatus,
+            failureCount: newFailureCount,
+            cooldownUntil: cooldownUntil ? cooldownUntil.toISOString() : null,
+            lastLatencyMs: tierLatency,
+            lastError: trimmedError,
+            modelHealth: nextHealth,
+          },
+        });
       }
 
       attempts.push({
@@ -1323,6 +1425,7 @@ export async function executeGatewayChatCompletion(params: {
         model: toolFallbackCandidate.tier.upstreamModel,
         apiKey: toolFallbackCandidate.apiKey,
         baseUrl: toolFallbackCandidate.connection.baseUrl,
+        timeoutMs: 12000,
         signal,
         request: {
           model: request.model,
@@ -1369,6 +1472,11 @@ export async function executeGatewayChatCompletion(params: {
         fbLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
         fbLastReset.getUTCMonth() !== now.getUTCMonth();
 
+      const isRealAdapterTier =
+        Boolean(target.combo) &&
+        !toolFallbackCandidate.tier.id.startsWith("direct-") &&
+        !toolFallbackCandidate.tier.id.startsWith("auto-");
+
       const adapterWrites: Promise<unknown>[] = [
         ...pendingDbWrites,
         db
@@ -1409,11 +1517,41 @@ export async function executeGatewayChatCompletion(params: {
         }),
       ];
 
-      if (
-        target.combo &&
-        !toolFallbackCandidate.tier.id.startsWith("direct-") &&
-        !toolFallbackCandidate.tier.id.startsWith("auto-")
-      ) {
+      publishTelemetryUpdate(userId, {
+        connectionUpdate: {
+          id: fbConn.id,
+          usedRequestsToday: fbResetDaily ? 1 : fbConn.usedRequestsToday + 1,
+          usedTokensToday: fbResetDaily
+            ? totalTokens
+            : fbConn.usedTokensToday + totalTokens,
+          usedCostMonth: fbResetMonthly
+            ? adapterResult.estimatedCostUsd
+            : fbConn.usedCostMonth + adapterResult.estimatedCostUsd,
+          lastLatencyMs: adapterLatency,
+        },
+        ...(isRealAdapterTier && target.combo
+          ? {
+              tierIncrement: {
+                comboId: target.combo.id,
+                tierId: toolFallbackCandidate.tier.id,
+                delta: 1,
+              },
+            }
+          : {}),
+        ...(apiKeyId
+          ? {
+              keyIncrement: {
+                keyId: apiKeyId,
+                requests: 1,
+                tokens: totalTokens,
+                costUsd: adapterResult.estimatedCostUsd,
+                lastUsedAt: now.toISOString(),
+              },
+            }
+          : {}),
+      });
+
+      if (isRealAdapterTier) {
         adapterWrites.push(
           db
             .update(comboTiers)

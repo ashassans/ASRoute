@@ -390,30 +390,111 @@ export async function invokeUpstreamCompletion(params: {
   });
 }
 
-async function withInitialTimeout<T>(
-  promise: Promise<T>,
+function isRetryableStatus(statusCode: number): boolean {
+  return (
+    statusCode === 401 ||
+    statusCode === 402 ||
+    statusCode === 403 ||
+    statusCode === 404 ||
+    statusCode === 408 ||
+    statusCode === 429 ||
+    statusCode >= 500
+  );
+}
+
+function createUpstreamTimeoutController(
+  parentSignal: AbortSignal | undefined,
   timeoutMs: number,
   label: string
-): Promise<T> {
+) {
+  const controller = new AbortController();
+  let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(
-            new UpstreamHttpError(
-              `${label} timed out after ${timeoutMs}ms`,
-              504,
-              true
-            )
-          );
-        }, timeoutMs);
-      }),
-    ]);
-  } finally {
+
+  const toAbortError = (): UpstreamHttpError => {
+    if (parentSignal?.aborted) {
+      return new UpstreamHttpError("Request aborted by client.", 499, false);
+    }
+    if (timedOut) {
+      return new UpstreamHttpError(
+        `${label} timed out after ${timeoutMs}ms`,
+        504,
+        true
+      );
+    }
+    return new UpstreamHttpError(`${label} connection error`, 504, true);
+  };
+
+  const triggerTimeout = () => {
+    timedOut = true;
+    controller.abort(
+      new UpstreamHttpError(
+        `${label} timed out after ${timeoutMs}ms`,
+        504,
+        true
+      )
+    );
+  };
+
+  const reset = () => {
     if (timer) clearTimeout(timer);
+    if (!controller.signal.aborted) {
+      timer = setTimeout(triggerTimeout, timeoutMs);
+    }
+  };
+
+  const onParentAbort = () => {
+    if (timer) clearTimeout(timer);
+    controller.abort(
+      new UpstreamHttpError("Request aborted by client.", 499, false)
+    );
+  };
+
+  if (parentSignal?.aborted) {
+    onParentAbort();
+  } else {
+    parentSignal?.addEventListener("abort", onParentAbort, { once: true });
+    reset();
   }
+
+  const cleanup = () => {
+    if (timer) clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", onParentAbort);
+  };
+
+  return {
+    signal: controller.signal,
+    reset,
+    cleanup,
+    toAbortError,
+    get timedOut() {
+      return timedOut;
+    },
+  };
+}
+
+async function raceWithAbort<T>(
+  promise: Promise<T>,
+  abortSignal: AbortSignal,
+  getError: () => UpstreamHttpError
+): Promise<T> {
+  if (abortSignal.aborted) {
+    throw getError();
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(getError());
+    abortSignal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (val) => {
+        abortSignal.removeEventListener("abort", onAbort);
+        resolve(val);
+      },
+      (err) => {
+        abortSignal.removeEventListener("abort", onAbort);
+        reject(err);
+      }
+    );
+  });
 }
 
 async function invokeGemini(params: {
@@ -445,73 +526,102 @@ async function invokeGemini(params: {
   const { systemInstruction, contents, tools, toolConfig } =
     await buildGeminiPayload(request);
 
+  const watchdog = createUpstreamTimeoutController(
+    signal,
+    timeoutMs,
+    `Gemini (${model})`
+  );
+
   const config: Record<string, unknown> = {};
   if (systemInstruction) config.systemInstruction = systemInstruction;
+  if (typeof request.temperature === "number") {
+    config.temperature = request.temperature;
+  }
   if (typeof request.max_tokens === "number" && request.max_tokens > 0) {
     config.maxOutputTokens = request.max_tokens;
   }
   if (tools) config.tools = tools;
   if (toolConfig) config.toolConfig = toolConfig;
-  if (signal) config.abortSignal = signal;
+  config.abortSignal = watchdog.signal;
 
   try {
     if (request.stream && onStreamDelta) {
-      const stream = await withInitialTimeout(
+      const stream = await raceWithAbort(
         ai.models.generateContentStream({
           model,
           contents,
           config: Object.keys(config).length > 0 ? config : undefined,
         }),
-        timeoutMs,
-        `Gemini (${model})`
+        watchdog.signal,
+        watchdog.toAbortError
       );
 
       let fullText = "";
       let promptTokens = 0;
       let completionTokens = 0;
       const collectedToolCalls: OpenAIToolCall[] = [];
+      const iterator = stream[Symbol.asyncIterator]();
 
-      for await (const chunk of stream) {
-        if (signal?.aborted) break;
-        const chunkText = chunk.text ?? "";
-        if (chunkText) {
-          fullText += chunkText;
-          onStreamDelta({ content: chunkText });
-        }
+      try {
+        while (true) {
+          const step = await raceWithAbort(
+            iterator.next(),
+            watchdog.signal,
+            watchdog.toAbortError
+          );
+          if (step.done) break;
+          watchdog.reset();
+          const chunk = step.value;
+          const chunkText = chunk.text ?? "";
+          if (chunkText) {
+            fullText += chunkText;
+            onStreamDelta({ content: chunkText });
+          }
 
-        if (Array.isArray(chunk.functionCalls) && chunk.functionCalls.length > 0) {
-          for (const fc of chunk.functionCalls) {
-            const idx = collectedToolCalls.length;
-            const callId =
-              fc.id || `call_${crypto.randomBytes(6).toString("hex")}`;
-            const argsJson = JSON.stringify(fc.args || {});
-            const tc: OpenAIToolCall = {
-              id: callId,
-              type: "function",
-              function: {
-                name: fc.name || "function",
-                arguments: argsJson,
-              },
-            };
-            collectedToolCalls.push(tc);
-            onStreamDelta({
-              tool_calls: [
-                {
-                  index: idx,
-                  id: callId,
-                  type: "function",
-                  function: { name: tc.function.name, arguments: argsJson },
+          if (Array.isArray(chunk.functionCalls) && chunk.functionCalls.length > 0) {
+            for (const fc of chunk.functionCalls) {
+              const idx = collectedToolCalls.length;
+              const callId =
+                fc.id || `call_${crypto.randomBytes(6).toString("hex")}`;
+              const argsJson = JSON.stringify(fc.args || {});
+              const tc: OpenAIToolCall = {
+                id: callId,
+                type: "function",
+                function: {
+                  name: fc.name || "function",
+                  arguments: argsJson,
                 },
-              ],
-            });
+              };
+              collectedToolCalls.push(tc);
+              onStreamDelta({
+                tool_calls: [
+                  {
+                    index: idx,
+                    id: callId,
+                    type: "function",
+                    function: { name: tc.function.name, arguments: argsJson },
+                  },
+                ],
+              });
+            }
+          }
+
+          if (chunk.usageMetadata) {
+            promptTokens = chunk.usageMetadata.promptTokenCount ?? promptTokens;
+            completionTokens =
+              chunk.usageMetadata.candidatesTokenCount ?? completionTokens;
           }
         }
+      } finally {
+        iterator.return?.(undefined).catch(() => {});
+      }
 
-        if (chunk.usageMetadata) {
-          promptTokens = chunk.usageMetadata.promptTokenCount ?? promptTokens;
-          completionTokens =
-            chunk.usageMetadata.candidatesTokenCount ?? completionTokens;
-        }
+      if (fullText.length === 0 && collectedToolCalls.length === 0) {
+        throw new UpstreamHttpError(
+          `Gemini (${model}) returned an empty completion`,
+          502,
+          true
+        );
       }
 
       if (!promptTokens) {
@@ -541,14 +651,14 @@ async function invokeGemini(params: {
       };
     }
 
-    const response = await withInitialTimeout(
+    const response = await raceWithAbort(
       ai.models.generateContent({
         model,
         contents,
         config: Object.keys(config).length > 0 ? config : undefined,
       }),
-      timeoutMs,
-      `Gemini (${model})`
+      watchdog.signal,
+      watchdog.toAbortError
     );
 
     const text = response.text ?? "";
@@ -562,6 +672,14 @@ async function invokeGemini(params: {
         },
       })
     );
+
+    if (text.length === 0 && toolCalls.length === 0) {
+      throw new UpstreamHttpError(
+        `Gemini (${model}) returned an empty completion`,
+        502,
+        true
+      );
+    }
 
     const promptTokens =
       response.usageMetadata?.promptTokenCount ??
@@ -587,16 +705,21 @@ async function invokeGemini(params: {
     };
   } catch (err: unknown) {
     if (err instanceof UpstreamHttpError) throw err;
+    if (watchdog.timedOut) {
+      throw watchdog.toAbortError();
+    }
     const message = err instanceof Error ? err.message : String(err);
-    const statusMatch = message.match(/\b(400|401|403|404|429|500|502|503|504)\b/);
+    const statusMatch = message.match(
+      /\b(400|401|402|403|404|408|429|500|502|503|504)\b/
+    );
     const statusCode = statusMatch ? Number(statusMatch[1]) : 502;
-    const retryable =
-      statusCode === 429 ||
-      statusCode >= 500 ||
-      statusCode === 401 ||
-      statusCode === 403 ||
-      statusCode === 404;
-    throw new UpstreamHttpError(message, statusCode, retryable);
+    throw new UpstreamHttpError(
+      message,
+      statusCode,
+      isRetryableStatus(statusCode)
+    );
+  } finally {
+    watchdog.cleanup();
   }
 }
 
@@ -772,158 +895,263 @@ async function invokeAnthropic(params: {
     }
   }
 
-  const connectController = new AbortController();
-  const onParentAbort = () =>
-    connectController.abort(new Error("Request aborted by client"));
-  signal?.addEventListener("abort", onParentAbort, { once: true });
-  const connectTimer = setTimeout(() => {
-    connectController.abort(
-      new Error(`Anthropic upstream timed out after ${timeoutMs}ms`)
-    );
-  }, timeoutMs);
+  const watchdog = createUpstreamTimeoutController(
+    signal,
+    timeoutMs,
+    `Anthropic (${model})`
+  );
 
-  let res: globalThis.Response;
   try {
-    res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(body),
-      signal: connectController.signal,
-    });
-  } catch (err) {
-    clearTimeout(connectTimer);
-    signal?.removeEventListener("abort", onParentAbort);
-    throw new UpstreamHttpError(
-      err instanceof Error ? err.message : "Anthropic connection error",
-      signal?.aborted ? 499 : 504,
-      !signal?.aborted
-    );
-  }
-  clearTimeout(connectTimer);
-  signal?.removeEventListener("abort", onParentAbort);
+    let res: globalThis.Response;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(body),
+        signal: watchdog.signal,
+      });
+    } catch (err) {
+      if (watchdog.signal.aborted) {
+        throw watchdog.toAbortError();
+      }
+      throw new UpstreamHttpError(
+        err instanceof Error ? err.message : "Anthropic connection error",
+        504,
+        true
+      );
+    }
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new UpstreamHttpError(
-      errText || `Anthropic HTTP ${res.status}`,
-      res.status,
-      res.status === 429 ||
-        res.status >= 500 ||
-        res.status === 401 ||
-        res.status === 403
-    );
-  }
+    if (!res.ok) {
+      const errText = await raceWithAbort(
+        res.text(),
+        watchdog.signal,
+        watchdog.toAbortError
+      );
+      throw new UpstreamHttpError(
+        errText || `Anthropic HTTP ${res.status}`,
+        res.status,
+        isRetryableStatus(res.status)
+      );
+    }
 
-  if (request.stream && onStreamDelta && res.body) {
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let fullText = "";
-    let promptTokens = 0;
-    let completionTokens = 0;
-    const toolMap = new Map<
-      number,
-      { id: string; name: string; args: string; openAiIdx: number }
-    >();
+    if (request.stream && onStreamDelta && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+      let promptTokens = 0;
+      let completionTokens = 0;
+      const toolMap = new Map<
+        number,
+        { id: string; name: string; args: string; openAiIdx: number }
+      >();
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const dataStr = line.slice(5).trim();
-        if (!dataStr || dataStr === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(dataStr);
-          if (parsed.type === "message_start" && parsed.message?.usage) {
-            promptTokens = parsed.message.usage.input_tokens ?? promptTokens;
-          } else if (
-            parsed.type === "content_block_start" &&
-            parsed.content_block?.type === "tool_use"
-          ) {
-            const openAiIdx = toolMap.size;
-            const callId =
-              parsed.content_block.id ||
-              `call_${crypto.randomBytes(6).toString("hex")}`;
-            const name = parsed.content_block.name || "function";
-            toolMap.set(parsed.index, {
-              id: callId,
-              name,
-              args: "",
-              openAiIdx,
-            });
-            onStreamDelta({
-              tool_calls: [
-                {
-                  index: openAiIdx,
-                  id: callId,
-                  type: "function",
-                  function: { name, arguments: "" },
-                },
-              ],
-            });
-          } else if (
-            parsed.type === "content_block_delta" &&
-            parsed.delta?.type === "text_delta" &&
-            parsed.delta?.text
-          ) {
-            fullText += parsed.delta.text;
-            onStreamDelta({ content: parsed.delta.text });
-          } else if (
-            parsed.type === "content_block_delta" &&
-            parsed.delta?.type === "input_json_delta" &&
-            typeof parsed.delta?.partial_json === "string"
-          ) {
-            const entry = toolMap.get(parsed.index);
-            if (entry) {
-              entry.args += parsed.delta.partial_json;
+      try {
+        while (true) {
+          const { value, done } = await raceWithAbort(
+            reader.read(),
+            watchdog.signal,
+            watchdog.toAbortError
+          );
+          if (done) break;
+          watchdog.reset();
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const dataStr = line.slice(5).trim();
+            if (!dataStr || dataStr === "[DONE]") continue;
+            let parsed: Record<string, any>;
+            try {
+              parsed = JSON.parse(dataStr);
+            } catch {
+              continue;
+            }
+            if (parsed.type === "error" || parsed.error) {
+              const errMsg =
+                parsed.error?.message ||
+                JSON.stringify(parsed.error || parsed);
+              const errCode = Number(parsed.error?.status || 502) || 502;
+              if (fullText.length === 0 && toolMap.size === 0) {
+                throw new UpstreamHttpError(
+                  errMsg || "Anthropic upstream stream error",
+                  errCode,
+                  isRetryableStatus(errCode)
+                );
+              }
+              continue;
+            }
+            if (parsed.type === "message_start" && parsed.message?.usage) {
+              promptTokens = parsed.message.usage.input_tokens ?? promptTokens;
+            } else if (
+              parsed.type === "content_block_start" &&
+              parsed.content_block?.type === "tool_use"
+            ) {
+              const openAiIdx = toolMap.size;
+              const callId =
+                parsed.content_block.id ||
+                `call_${crypto.randomBytes(6).toString("hex")}`;
+              const name = parsed.content_block.name || "function";
+              toolMap.set(parsed.index, {
+                id: callId,
+                name,
+                args: "",
+                openAiIdx,
+              });
               onStreamDelta({
                 tool_calls: [
                   {
-                    index: entry.openAiIdx,
-                    function: { arguments: parsed.delta.partial_json },
+                    index: openAiIdx,
+                    id: callId,
+                    type: "function",
+                    function: { name, arguments: "" },
                   },
                 ],
               });
+            } else if (
+              parsed.type === "content_block_delta" &&
+              parsed.delta?.type === "text_delta" &&
+              parsed.delta?.text
+            ) {
+              fullText += parsed.delta.text;
+              onStreamDelta({ content: parsed.delta.text });
+            } else if (
+              parsed.type === "content_block_delta" &&
+              parsed.delta?.type === "input_json_delta" &&
+              typeof parsed.delta?.partial_json === "string"
+            ) {
+              const entry = toolMap.get(parsed.index);
+              if (entry) {
+                entry.args += parsed.delta.partial_json;
+                onStreamDelta({
+                  tool_calls: [
+                    {
+                      index: entry.openAiIdx,
+                      function: { arguments: parsed.delta.partial_json },
+                    },
+                  ],
+                });
+              }
+            } else if (parsed.type === "message_delta" && parsed.usage) {
+              completionTokens =
+                parsed.usage.output_tokens ?? completionTokens;
             }
-          } else if (parsed.type === "message_delta" && parsed.usage) {
-            completionTokens =
-              parsed.usage.output_tokens ?? completionTokens;
           }
-        } catch {
-          // ignore malformed SSE chunk
         }
+      } finally {
+        reader.cancel().catch(() => {});
       }
+
+      const toolCalls: OpenAIToolCall[] = Array.from(toolMap.values()).map(
+        (t) => ({
+          id: t.id,
+          type: "function",
+          function: { name: t.name, arguments: t.args || "{}" },
+        })
+      );
+
+      if (fullText.length === 0 && toolCalls.length === 0) {
+        throw new UpstreamHttpError(
+          `Anthropic (${model}) returned an empty completion`,
+          502,
+          true
+        );
+      }
+
+      if (!promptTokens) {
+        promptTokens = approximateTokens(
+          request.messages.map((m) => extractTextContent(m.content)).join(" ")
+        );
+      }
+      if (!completionTokens) {
+        completionTokens = approximateTokens(
+          fullText + JSON.stringify(toolCalls)
+        );
+      }
+
+      return {
+        content: fullText,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        promptTokens,
+        completionTokens,
+        estimatedCostUsd: estimateModelCostUsd(
+          "anthropic",
+          model,
+          promptTokens,
+          completionTokens
+        ),
+        finishReason: toolCalls.length > 0 ? "tool_calls" : "stop",
+      };
     }
 
-    const toolCalls: OpenAIToolCall[] = Array.from(toolMap.values()).map(
-      (t) => ({
-        id: t.id,
-        type: "function",
-        function: { name: t.name, arguments: t.args || "{}" },
-      })
-    );
+    const json = (await raceWithAbort(
+      res.json(),
+      watchdog.signal,
+      watchdog.toAbortError
+    )) as {
+      type?: string;
+      error?: { message?: string; status?: number };
+      content?: Array<{
+        type?: string;
+        text?: string;
+        id?: string;
+        name?: string;
+        input?: unknown;
+      }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
+      stop_reason?: string;
+    };
 
-    if (!promptTokens) {
-      promptTokens = approximateTokens(
+    if (json.type === "error" || json.error) {
+      const errCode = Number(json.error?.status || 502) || 502;
+      throw new UpstreamHttpError(
+        json.error?.message || "Anthropic upstream error",
+        errCode,
+        isRetryableStatus(errCode)
+      );
+    }
+
+    const blocks = json.content || [];
+    const content = blocks
+      .filter((b) => b.type === "text" || typeof b.text === "string")
+      .map((b) => b.text || "")
+      .join("");
+
+    const toolCalls: OpenAIToolCall[] = blocks
+      .filter((b) => b.type === "tool_use")
+      .map((b) => ({
+        id: b.id || `call_${crypto.randomBytes(6).toString("hex")}`,
+        type: "function",
+        function: {
+          name: b.name || "function",
+          arguments: JSON.stringify(b.input || {}),
+        },
+      }));
+
+    if (content.length === 0 && toolCalls.length === 0) {
+      throw new UpstreamHttpError(
+        `Anthropic (${model}) returned an empty completion`,
+        502,
+        true
+      );
+    }
+
+    const promptTokens =
+      json.usage?.input_tokens ??
+      approximateTokens(
         request.messages.map((m) => extractTextContent(m.content)).join(" ")
       );
-    }
-    if (!completionTokens) {
-      completionTokens = approximateTokens(
-        fullText + JSON.stringify(toolCalls)
-      );
-    }
+    const completionTokens =
+      json.usage?.output_tokens ??
+      approximateTokens(content + JSON.stringify(toolCalls));
 
     return {
-      content: fullText,
+      content,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       promptTokens,
       completionTokens,
@@ -933,66 +1161,16 @@ async function invokeAnthropic(params: {
         promptTokens,
         completionTokens
       ),
-      finishReason: toolCalls.length > 0 ? "tool_calls" : "stop",
+      finishReason:
+        toolCalls.length > 0
+          ? "tool_calls"
+          : json.stop_reason === "max_tokens"
+            ? "length"
+            : "stop",
     };
+  } finally {
+    watchdog.cleanup();
   }
-
-  const json = (await res.json()) as {
-    content?: Array<{
-      type?: string;
-      text?: string;
-      id?: string;
-      name?: string;
-      input?: unknown;
-    }>;
-    usage?: { input_tokens?: number; output_tokens?: number };
-    stop_reason?: string;
-  };
-
-  const blocks = json.content || [];
-  const content = blocks
-    .filter((b) => b.type === "text" || typeof b.text === "string")
-    .map((b) => b.text || "")
-    .join("");
-
-  const toolCalls: OpenAIToolCall[] = blocks
-    .filter((b) => b.type === "tool_use")
-    .map((b) => ({
-      id: b.id || `call_${crypto.randomBytes(6).toString("hex")}`,
-      type: "function",
-      function: {
-        name: b.name || "function",
-        arguments: JSON.stringify(b.input || {}),
-      },
-    }));
-
-  const promptTokens =
-    json.usage?.input_tokens ??
-    approximateTokens(
-      request.messages.map((m) => extractTextContent(m.content)).join(" ")
-    );
-  const completionTokens =
-    json.usage?.output_tokens ??
-    approximateTokens(content + JSON.stringify(toolCalls));
-
-  return {
-    content,
-    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-    promptTokens,
-    completionTokens,
-    estimatedCostUsd: estimateModelCostUsd(
-      "anthropic",
-      model,
-      promptTokens,
-      completionTokens
-    ),
-    finishReason:
-      toolCalls.length > 0
-        ? "tool_calls"
-        : json.stop_reason === "max_tokens"
-          ? "length"
-          : "stop",
-  };
 }
 
 async function invokeOpenAICompatible(params: {
@@ -1048,148 +1226,286 @@ async function invokeOpenAICompatible(params: {
   if (request.tool_choice !== undefined) {
     body.tool_choice = request.tool_choice;
   }
-  if (body.stream) {
+  const supportsStreamOptions =
+    provider === "openai" ||
+    provider === "groq" ||
+    provider === "deepseek" ||
+    provider === "openrouter";
+  if (body.stream && supportsStreamOptions) {
     body.stream_options = { include_usage: true };
   }
 
-  const connectController = new AbortController();
-  const onParentAbort = () =>
-    connectController.abort(new Error("Request aborted by client"));
-  signal?.addEventListener("abort", onParentAbort, { once: true });
-  const connectTimer = setTimeout(() => {
-    connectController.abort(
-      new Error(`${spec.label} timed out after ${timeoutMs}ms`)
-    );
-  }, timeoutMs);
+  const watchdog = createUpstreamTimeoutController(
+    signal,
+    timeoutMs,
+    `${spec.label} (${model})`
+  );
 
-  let res: globalThis.Response;
   try {
-    res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: connectController.signal,
-    });
-  } catch (err) {
-    clearTimeout(connectTimer);
-    signal?.removeEventListener("abort", onParentAbort);
-    throw new UpstreamHttpError(
-      err instanceof Error ? err.message : `${spec.label} connection error`,
-      signal?.aborted ? 499 : 504,
-      !signal?.aborted
-    );
-  }
-  clearTimeout(connectTimer);
-  signal?.removeEventListener("abort", onParentAbort);
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new UpstreamHttpError(
-      errText || `${spec.label} HTTP ${res.status}`,
-      res.status,
-      res.status === 429 ||
-        res.status >= 500 ||
-        res.status === 401 ||
-        res.status === 403
-    );
-  }
-
-  if (request.stream && onStreamDelta && res.body) {
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let fullText = "";
-    let promptTokens = 0;
-    let completionTokens = 0;
-    let finishReason = "stop";
-    const toolAcc = new Map<
-      number,
-      { id: string; name: string; arguments: string }
-    >();
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const dataStr = line.slice(5).trim();
-        if (!dataStr || dataStr === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(dataStr);
-          const deltaObj = parsed.choices?.[0]?.delta;
-          if (deltaObj) {
-            const payload: StreamDeltaPayload = {};
-            if (
-              typeof deltaObj.content === "string" &&
-              deltaObj.content.length > 0
-            ) {
-              fullText += deltaObj.content;
-              payload.content = deltaObj.content;
-            }
-            if (Array.isArray(deltaObj.tool_calls)) {
-              payload.tool_calls = deltaObj.tool_calls;
-              for (const tc of deltaObj.tool_calls) {
-                const idx = typeof tc.index === "number" ? tc.index : 0;
-                const existing = toolAcc.get(idx) || {
-                  id: tc.id || `call_${idx}`,
-                  name: tc.function?.name || "",
-                  arguments: "",
-                };
-                if (tc.id) existing.id = tc.id;
-                if (tc.function?.name) existing.name += tc.function.name;
-                if (tc.function?.arguments) {
-                  existing.arguments += tc.function.arguments;
-                }
-                toolAcc.set(idx, existing);
-              }
-            }
-            if (payload.content || payload.tool_calls) {
-              onStreamDelta(payload);
-            }
-          }
-          if (parsed.choices?.[0]?.finish_reason) {
-            finishReason = parsed.choices[0].finish_reason;
-          }
-          if (parsed.usage) {
-            promptTokens = parsed.usage.prompt_tokens ?? promptTokens;
-            completionTokens =
-              parsed.usage.completion_tokens ?? completionTokens;
-          }
-        } catch {
-          // ignore partial SSE line
+    const sendFetch = async (payloadBody: Record<string, unknown>) => {
+      try {
+        return await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify(payloadBody),
+          signal: watchdog.signal,
+        });
+      } catch (err) {
+        if (watchdog.signal.aborted) {
+          throw watchdog.toAbortError();
         }
+        throw new UpstreamHttpError(
+          err instanceof Error ? err.message : `${spec.label} connection error`,
+          504,
+          true
+        );
+      }
+    };
+
+    let res = await sendFetch(body);
+
+    if (!res.ok) {
+      let errText = await raceWithAbort(
+        res.text(),
+        watchdog.signal,
+        watchdog.toAbortError
+      );
+      if (
+        (res.status === 400 || res.status === 422) &&
+        body.stream_options &&
+        /stream_options|extra_forbidden|unrecognized|additional properties/i.test(
+          errText
+        )
+      ) {
+        const retryBody = { ...body };
+        delete retryBody.stream_options;
+        watchdog.reset();
+        res = await sendFetch(retryBody);
+        if (!res.ok) {
+          errText = await raceWithAbort(
+            res.text(),
+            watchdog.signal,
+            watchdog.toAbortError
+          );
+        }
+      }
+
+      if (!res.ok) {
+        throw new UpstreamHttpError(
+          errText || `${spec.label} HTTP ${res.status}`,
+          res.status,
+          isRetryableStatus(res.status)
+        );
       }
     }
 
-    const toolCalls: OpenAIToolCall[] = Array.from(toolAcc.values()).map(
-      (t) => ({
-        id: t.id,
-        type: "function",
-        function: { name: t.name, arguments: t.arguments || "{}" },
-      })
-    );
+    if (request.stream && onStreamDelta && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+      let promptTokens = 0;
+      let completionTokens = 0;
+      let finishReason = "stop";
+      const toolAcc = new Map<
+        number,
+        { id: string; name: string; arguments: string }
+      >();
 
-    if (!promptTokens) {
-      promptTokens = approximateTokens(
+      try {
+        while (true) {
+          const { value, done } = await raceWithAbort(
+            reader.read(),
+            watchdog.signal,
+            watchdog.toAbortError
+          );
+          if (done) break;
+          watchdog.reset();
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const dataStr = line.slice(5).trim();
+            if (!dataStr || dataStr === "[DONE]") continue;
+            let parsed: Record<string, any>;
+            try {
+              parsed = JSON.parse(dataStr);
+            } catch {
+              continue;
+            }
+
+            if (parsed.error) {
+              const errMsg =
+                parsed.error?.message ||
+                (typeof parsed.error === "string"
+                  ? parsed.error
+                  : JSON.stringify(parsed.error));
+              const errCode = Number(parsed.error?.code || parsed.error?.status || 502) || 502;
+              if (fullText.length === 0 && toolAcc.size === 0) {
+                throw new UpstreamHttpError(
+                  errMsg || `${spec.label} inline stream error`,
+                  errCode,
+                  isRetryableStatus(errCode)
+                );
+              }
+              continue;
+            }
+
+            const deltaObj = parsed.choices?.[0]?.delta;
+            if (deltaObj) {
+              const payload: StreamDeltaPayload = {};
+              if (
+                typeof deltaObj.content === "string" &&
+                deltaObj.content.length > 0
+              ) {
+                fullText += deltaObj.content;
+                payload.content = deltaObj.content;
+              }
+              if (Array.isArray(deltaObj.tool_calls)) {
+                payload.tool_calls = deltaObj.tool_calls;
+                for (const tc of deltaObj.tool_calls) {
+                  const idx = typeof tc.index === "number" ? tc.index : 0;
+                  const existing = toolAcc.get(idx) || {
+                    id: tc.id || `call_${idx}`,
+                    name: tc.function?.name || "",
+                    arguments: "",
+                  };
+                  if (tc.id) existing.id = tc.id;
+                  if (tc.function?.name) existing.name += tc.function.name;
+                  if (tc.function?.arguments) {
+                    existing.arguments += tc.function.arguments;
+                  }
+                  toolAcc.set(idx, existing);
+                }
+              }
+              if (payload.content || payload.tool_calls) {
+                onStreamDelta(payload);
+              }
+            }
+            if (parsed.choices?.[0]?.finish_reason) {
+              finishReason = parsed.choices[0].finish_reason;
+              if (
+                finishReason === "error" &&
+                fullText.length === 0 &&
+                toolAcc.size === 0
+              ) {
+                throw new UpstreamHttpError(
+                  `${spec.label} stream terminated with finish_reason=error`,
+                  502,
+                  true
+                );
+              }
+            }
+            if (parsed.usage) {
+              promptTokens = parsed.usage.prompt_tokens ?? promptTokens;
+              completionTokens =
+                parsed.usage.completion_tokens ?? completionTokens;
+            }
+          }
+        }
+      } finally {
+        reader.cancel().catch(() => {});
+      }
+
+      const toolCalls: OpenAIToolCall[] = Array.from(toolAcc.values()).map(
+        (t) => ({
+          id: t.id,
+          type: "function",
+          function: { name: t.name, arguments: t.arguments || "{}" },
+        })
+      );
+
+      if (fullText.length === 0 && toolCalls.length === 0) {
+        throw new UpstreamHttpError(
+          `${spec.label} (${model}) returned an empty completion`,
+          502,
+          true
+        );
+      }
+
+      if (!promptTokens) {
+        promptTokens = approximateTokens(
+          request.messages.map((m) => extractTextContent(m.content)).join(" ")
+        );
+      }
+      if (!completionTokens) {
+        completionTokens = approximateTokens(
+          fullText + JSON.stringify(toolCalls)
+        );
+      }
+
+      return {
+        content: fullText,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        promptTokens,
+        completionTokens,
+        estimatedCostUsd: estimateModelCostUsd(
+          provider,
+          model,
+          promptTokens,
+          completionTokens
+        ),
+        finishReason,
+      };
+    }
+
+    const json = (await raceWithAbort(
+      res.json(),
+      watchdog.signal,
+      watchdog.toAbortError
+    )) as {
+      error?: { message?: string; code?: number; status?: number };
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+          tool_calls?: OpenAIToolCall[];
+        };
+        finish_reason?: string;
+      }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+
+    if (json.error) {
+      const errCode = Number(json.error.code || json.error.status || 502) || 502;
+      throw new UpstreamHttpError(
+        json.error.message || `${spec.label} error response`,
+        errCode,
+        isRetryableStatus(errCode)
+      );
+    }
+
+    const msg = json.choices?.[0]?.message;
+    const content = msg?.content ?? "";
+    const toolCalls =
+      Array.isArray(msg?.tool_calls) && msg.tool_calls.length > 0
+        ? msg.tool_calls
+        : undefined;
+
+    if (content.length === 0 && !toolCalls) {
+      throw new UpstreamHttpError(
+        `${spec.label} (${model}) returned an empty completion`,
+        502,
+        true
+      );
+    }
+
+    const promptTokens =
+      json.usage?.prompt_tokens ??
+      approximateTokens(
         request.messages.map((m) => extractTextContent(m.content)).join(" ")
       );
-    }
-    if (!completionTokens) {
-      completionTokens = approximateTokens(
-        fullText + JSON.stringify(toolCalls)
-      );
-    }
+    const completionTokens =
+      json.usage?.completion_tokens ??
+      approximateTokens(content + JSON.stringify(toolCalls || []));
 
     return {
-      content: fullText,
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      content,
+      toolCalls,
       promptTokens,
       completionTokens,
       estimatedCostUsd: estimateModelCostUsd(
@@ -1198,49 +1514,11 @@ async function invokeOpenAICompatible(params: {
         promptTokens,
         completionTokens
       ),
-      finishReason,
+      finishReason: json.choices?.[0]?.finish_reason || "stop",
     };
+  } finally {
+    watchdog.cleanup();
   }
-
-  const json = (await res.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string | null;
-        tool_calls?: OpenAIToolCall[];
-      };
-      finish_reason?: string;
-    }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-  };
-
-  const msg = json.choices?.[0]?.message;
-  const content = msg?.content ?? "";
-  const toolCalls =
-    Array.isArray(msg?.tool_calls) && msg.tool_calls.length > 0
-      ? msg.tool_calls
-      : undefined;
-  const promptTokens =
-    json.usage?.prompt_tokens ??
-    approximateTokens(
-      request.messages.map((m) => extractTextContent(m.content)).join(" ")
-    );
-  const completionTokens =
-    json.usage?.completion_tokens ??
-    approximateTokens(content + JSON.stringify(toolCalls || []));
-
-  return {
-    content,
-    toolCalls,
-    promptTokens,
-    completionTokens,
-    estimatedCostUsd: estimateModelCostUsd(
-      provider,
-      model,
-      promptTokens,
-      completionTokens
-    ),
-    finishReason: json.choices?.[0]?.finish_reason || "stop",
-  };
 }
 
 export async function testProviderConnection(params: {
@@ -1556,6 +1834,7 @@ export async function probeProviderFreeModels(params: {
             model: modelId,
             apiKey: keyToUse,
             baseUrl,
+            timeoutMs: 10000,
             request: {
               model: modelId,
               messages: [{ role: "user", content: "OK" }],

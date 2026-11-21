@@ -240,6 +240,8 @@ gatewayRouter.post("/chat/completions", async (req: Request, res: Response) => {
       res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
       res.setHeader("Cache-Control", "no-cache, no-transform");
       res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      req.socket?.setNoDelay?.(true);
       res.flushHeaders?.();
       res.write(": asrouter-stream\n\n");
 
@@ -565,6 +567,8 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
       res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
       res.setHeader("Cache-Control", "no-cache, no-transform");
       res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      req.socket?.setNoDelay?.(true);
       res.flushHeaders?.();
 
       const msgId = `msg_${crypto.randomBytes(10).toString("hex")}`;

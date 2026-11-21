@@ -30,8 +30,13 @@ import { ProvidersView } from "./components/ProvidersView.tsx";
 import { authClient } from "./lib/auth-client.ts";
 import type {
   BootstrapPayload,
+  Combo,
+  GatewayApiKey,
   LiveRouteActivity,
+  ModelHealthEntry,
+  ProviderConnection,
   RequestLog,
+  WildcardRoute,
 } from "./types/gateway.ts";
 
 type NavTab =
@@ -184,24 +189,38 @@ export default function App() {
     []
   );
 
-  const fetchBootstrap = useCallback(async () => {
-    setLoadingWorkspace(true);
-    setLoadError(null);
-    try {
-      const res = await fetch("/api/bootstrap");
-      if (!res.ok) {
-        throw new Error("Failed to load AS ROUTER workspace.");
+  const fetchBootstrap = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) {
+        setLoadingWorkspace(true);
       }
-      const data = (await res.json()) as BootstrapPayload;
-      setWorkspace(data);
-    } catch (err: unknown) {
-      setLoadError(
-        err instanceof Error ? err.message : "Unable to load workspace."
-      );
-    } finally {
-      setLoadingWorkspace(false);
-    }
-  }, []);
+      setLoadError(null);
+      try {
+        const res = await fetch("/api/bootstrap");
+        if (!res.ok) {
+          throw new Error("Failed to load AS ROUTER workspace.");
+        }
+        const data = (await res.json()) as BootstrapPayload;
+        setWorkspace(data);
+      } catch (err: unknown) {
+        if (!opts?.silent) {
+          setLoadError(
+            err instanceof Error ? err.message : "Unable to load workspace."
+          );
+        }
+      } finally {
+        if (!opts?.silent) {
+          setLoadingWorkspace(false);
+        }
+      }
+    },
+    []
+  );
+
+  const refreshWorkspace = useCallback(
+    () => fetchBootstrap(),
+    [fetchBootstrap]
+  );
 
   useEffect(() => {
     if (session?.user) {
@@ -211,7 +230,7 @@ export default function App() {
     }
   }, [session?.user, fetchBootstrap]);
 
-  // Real-time SSE Log, Live Activity & Circuit Stream
+  // Real-time SSE Log, Live Activity, Circuit, Telemetry & Workspace Stream
   useEffect(() => {
     if (!session?.user || streamPaused) {
       setSseConnected(false);
@@ -219,11 +238,19 @@ export default function App() {
       return;
     }
 
+    let wasDisconnected = false;
     const es = new EventSource("/api/logs/stream");
 
-    es.addEventListener("connected", () => {
+    const markConnected = () => {
       setSseConnected(true);
-    });
+      if (wasDisconnected) {
+        wasDisconnected = false;
+        void fetchBootstrap({ silent: true });
+      }
+    };
+
+    es.onopen = markConnected;
+    es.addEventListener("connected", markConnected);
 
     es.addEventListener("active_snapshot", (ev) => {
       try {
@@ -295,9 +322,230 @@ export default function App() {
       }
     });
 
+    es.addEventListener("telemetry", (ev) => {
+      try {
+        const data = JSON.parse((ev as MessageEvent).data) as {
+          connectionUpdate?: {
+            id: string;
+            circuitStatus?: string;
+            failureCount?: number;
+            cooldownUntil?: string | null;
+            lastLatencyMs?: number | null;
+            lastError?: string | null;
+            usedRequestsToday?: number;
+            usedTokensToday?: number;
+            usedCostMonth?: number;
+            modelHealth?: Record<string, ModelHealthEntry>;
+          };
+          tierIncrement?: {
+            comboId: string;
+            tierId: string;
+            delta: number;
+          };
+          keyIncrement?: {
+            keyId: string;
+            requests: number;
+            tokens: number;
+            costUsd: number;
+            lastUsedAt: string;
+          };
+        };
+
+        setWorkspace((prev) => {
+          if (!prev) return prev;
+          let nextConnections = prev.connections;
+          let nextCombos = prev.combos;
+          let nextKeys = prev.keys;
+
+          if (data.connectionUpdate) {
+            const u = data.connectionUpdate;
+            nextConnections = prev.connections.map((c) => {
+              if (c.id !== u.id) return c;
+              return {
+                ...c,
+                ...(u.circuitStatus !== undefined
+                  ? { circuitStatus: u.circuitStatus }
+                  : {}),
+                ...(u.failureCount !== undefined
+                  ? { failureCount: u.failureCount }
+                  : {}),
+                ...(u.cooldownUntil !== undefined
+                  ? { cooldownUntil: u.cooldownUntil }
+                  : {}),
+                ...(u.lastLatencyMs !== undefined
+                  ? { lastLatencyMs: u.lastLatencyMs }
+                  : {}),
+                ...(u.lastError !== undefined ? { lastError: u.lastError } : {}),
+                ...(u.usedRequestsToday !== undefined
+                  ? { usedRequestsToday: u.usedRequestsToday }
+                  : {}),
+                ...(u.usedTokensToday !== undefined
+                  ? { usedTokensToday: u.usedTokensToday }
+                  : {}),
+                ...(u.usedCostMonth !== undefined
+                  ? { usedCostMonth: u.usedCostMonth }
+                  : {}),
+                ...(u.modelHealth !== undefined
+                  ? { modelHealth: u.modelHealth }
+                  : {}),
+              };
+            });
+          }
+
+          if (data.tierIncrement) {
+            const ti = data.tierIncrement;
+            nextCombos = prev.combos.map((combo) =>
+              combo.id === ti.comboId
+                ? {
+                    ...combo,
+                    tiers: combo.tiers.map((t) =>
+                      t.id === ti.tierId
+                        ? { ...t, requestCount: t.requestCount + ti.delta }
+                        : t
+                    ),
+                  }
+                : combo
+            );
+          }
+
+          if (data.keyIncrement) {
+            const ki = data.keyIncrement;
+            nextKeys = prev.keys.map((k) =>
+              k.id === ki.keyId
+                ? {
+                    ...k,
+                    totalRequests: k.totalRequests + ki.requests,
+                    totalTokens: k.totalTokens + ki.tokens,
+                    totalCostUsd: k.totalCostUsd + ki.costUsd,
+                    usedTokensToday: k.usedTokensToday + ki.tokens,
+                    usedCostMonth: k.usedCostMonth + ki.costUsd,
+                    lastUsedAt: ki.lastUsedAt,
+                  }
+                : k
+            );
+          }
+
+          return {
+            ...prev,
+            connections: nextConnections,
+            combos: nextCombos,
+            keys: nextKeys,
+          };
+        });
+      } catch {
+        // ignore malformed telemetry event
+      }
+    });
+
+    es.addEventListener("workspace", (ev) => {
+      try {
+        const data = JSON.parse((ev as MessageEvent).data) as {
+          entity: "provider" | "combo" | "key" | "wildcard" | "logs";
+          action: "upsert" | "delete" | "clear";
+          id?: string;
+          record?: unknown;
+        };
+
+        setWorkspace((prev) => {
+          if (!prev) return prev;
+          if (data.entity === "logs" && data.action === "clear") {
+            return { ...prev, logs: [] };
+          }
+          if (data.entity === "provider") {
+            if (data.action === "delete" && data.id) {
+              return {
+                ...prev,
+                connections: prev.connections.filter((c) => c.id !== data.id),
+                combos: prev.combos.map((combo) => ({
+                  ...combo,
+                  tiers: combo.tiers.filter((t) => t.connectionId !== data.id),
+                })),
+              };
+            }
+            if (data.action === "upsert" && data.record) {
+              const rec = data.record as ProviderConnection;
+              const exists = prev.connections.some((c) => c.id === rec.id);
+              return {
+                ...prev,
+                connections: exists
+                  ? prev.connections.map((c) => (c.id === rec.id ? rec : c))
+                  : [rec, ...prev.connections],
+              };
+            }
+          }
+          if (data.entity === "combo") {
+            if (data.action === "delete" && data.id) {
+              return {
+                ...prev,
+                combos: prev.combos.filter((c) => c.id !== data.id),
+                wildcards: prev.wildcards.filter((w) => w.comboId !== data.id),
+              };
+            }
+            if (data.action === "upsert" && data.record) {
+              const rec = data.record as Combo;
+              const exists = prev.combos.some((c) => c.id === rec.id);
+              return {
+                ...prev,
+                combos: exists
+                  ? prev.combos.map((c) => (c.id === rec.id ? rec : c))
+                  : [rec, ...prev.combos],
+              };
+            }
+          }
+          if (data.entity === "key") {
+            if (data.action === "delete" && data.id) {
+              return {
+                ...prev,
+                keys: prev.keys.filter((k) => k.id !== data.id),
+              };
+            }
+            if (data.action === "upsert" && data.record) {
+              const rec = data.record as GatewayApiKey;
+              const exists = prev.keys.some((k) => k.id === rec.id);
+              return {
+                ...prev,
+                keys: exists
+                  ? prev.keys.map((k) => (k.id === rec.id ? rec : k))
+                  : [rec, ...prev.keys],
+              };
+            }
+          }
+          if (data.entity === "wildcard") {
+            if (data.action === "delete" && data.id) {
+              return {
+                ...prev,
+                wildcards: prev.wildcards.filter((w) => w.id !== data.id),
+              };
+            }
+            if (data.action === "upsert" && data.record) {
+              const rec = data.record as WildcardRoute;
+              const exists = prev.wildcards.some((w) => w.id === rec.id);
+              return {
+                ...prev,
+                wildcards: exists
+                  ? prev.wildcards.map((w) => (w.id === rec.id ? rec : w))
+                  : [rec, ...prev.wildcards],
+              };
+            }
+          }
+          return prev;
+        });
+      } catch {
+        // ignore malformed workspace event
+      }
+    });
+
     es.onerror = () => {
       setSseConnected(false);
+      wasDisconnected = true;
     };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchBootstrap({ silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     const cleanupTimer = window.setInterval(() => {
       const cutoff = Date.now() - 60_000;
@@ -308,10 +556,11 @@ export default function App() {
 
     return () => {
       window.clearInterval(cleanupTimer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       es.close();
       setSseConnected(false);
     };
-  }, [session?.user, streamPaused]);
+  }, [session?.user, streamPaused, fetchBootstrap]);
 
   const handleSignOut = async () => {
     await authClient.signOut();
@@ -695,7 +944,7 @@ export default function App() {
               <span>{loadError}</span>
               <button
                 type="button"
-                onClick={fetchBootstrap}
+                onClick={refreshWorkspace}
                 className="underline font-medium"
               >
                 Retry
@@ -733,14 +982,14 @@ export default function App() {
                     logs={workspace.logs}
                     activeRoutes={activeRoutes}
                     onNavigate={navigateTab}
-                    onRefresh={fetchBootstrap}
+                    onRefresh={refreshWorkspace}
                     onNotify={notify}
                   />
                 )}
                 {activeTab === "providers" && (
                   <ProvidersView
                     connections={workspace.connections}
-                    onRefresh={fetchBootstrap}
+                    onRefresh={refreshWorkspace}
                     onUpdateWorkspace={setWorkspace}
                     onNotify={notify}
                   />
@@ -758,7 +1007,7 @@ export default function App() {
                     combos={workspace.combos}
                     connections={workspace.connections}
                     wildcards={workspace.wildcards}
-                    onRefresh={fetchBootstrap}
+                    onRefresh={refreshWorkspace}
                     onUpdateWorkspace={setWorkspace}
                     onNotify={notify}
                   />
@@ -769,7 +1018,7 @@ export default function App() {
                     combos={workspace.combos}
                     gatewayEndpoint={workspace.environment.gatewayEndpoint}
                     openCreateCounter={openCreateKeyCounter}
-                    onRefresh={fetchBootstrap}
+                    onRefresh={refreshWorkspace}
                     onUpdateWorkspace={setWorkspace}
                     onNotify={notify}
                   />
@@ -788,7 +1037,7 @@ export default function App() {
                   <PlaygroundView
                     combos={workspace.combos}
                     connections={workspace.connections}
-                    onRefresh={fetchBootstrap}
+                    onRefresh={refreshWorkspace}
                     onNotify={notify}
                   />
                 )}

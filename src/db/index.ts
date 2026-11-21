@@ -49,9 +49,9 @@ function getOrCreateDb(): AppDatabase {
     return global._asRouterDb;
   }
 
-  const pglite = new PGlite(
-    process.env.NODE_TEST_CONTEXT ? undefined : "./.asrouter-pgdata"
-  );
+  const pglite = process.env.NODE_TEST_CONTEXT
+    ? new PGlite()
+    : new PGlite("./.asrouter-pgdata", { relaxedDurability: true });
   global._asRouterPglite = pglite;
   global._asRouterDb = drizzlePglite(pglite, {
     schema,
@@ -228,7 +228,12 @@ const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "idx_provider_connections_user" ON "provider_connections" ("user_id")`,
   `CREATE INDEX IF NOT EXISTS "idx_combos_user" ON "combos" ("user_id")`,
   `CREATE INDEX IF NOT EXISTS "idx_combo_tiers_combo" ON "combo_tiers" ("combo_id")`,
+  `CREATE INDEX IF NOT EXISTS "idx_combo_tiers_connection" ON "combo_tiers" ("connection_id")`,
   `CREATE INDEX IF NOT EXISTS "idx_wildcard_routes_user" ON "wildcard_routes" ("user_id")`,
+  `CREATE INDEX IF NOT EXISTS "idx_wildcard_routes_combo" ON "wildcard_routes" ("combo_id")`,
+  `CREATE INDEX IF NOT EXISTS "idx_session_user" ON "session" ("user_id")`,
+  `CREATE INDEX IF NOT EXISTS "idx_account_user" ON "account" ("user_id")`,
+  `CREATE INDEX IF NOT EXISTS "idx_verification_identifier" ON "verification" ("identifier")`,
   `CREATE TABLE IF NOT EXISTS "system_config" (
     "key" text PRIMARY KEY NOT NULL,
     "value" text NOT NULL,

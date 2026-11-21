@@ -35,11 +35,61 @@ export interface LiveRouteActivityEvent {
   timestamp: string;
 }
 
+export interface LiveTelemetryEvent {
+  connectionUpdate?: {
+    id: string;
+    circuitStatus?: string;
+    failureCount?: number;
+    cooldownUntil?: string | null;
+    lastLatencyMs?: number | null;
+    lastError?: string | null;
+    usedRequestsToday?: number;
+    usedTokensToday?: number;
+    usedCostMonth?: number;
+    modelHealth?: Record<string, unknown>;
+  };
+  tierIncrement?: {
+    comboId: string;
+    tierId: string;
+    delta: number;
+  };
+  keyIncrement?: {
+    keyId: string;
+    requests: number;
+    tokens: number;
+    costUsd: number;
+    lastUsedAt: string;
+  };
+  timestamp: string;
+}
+
+export interface LiveWorkspaceMutationEvent {
+  entity: "provider" | "combo" | "key" | "wildcard" | "logs";
+  action: "upsert" | "delete" | "clear";
+  id?: string;
+  record?: unknown;
+  timestamp: string;
+}
+
 const subscribers = new Map<string, Set<Response>>();
 const activeRequestsByUser = new Map<
   string,
   Map<string, LiveRouteActivityEvent>
 >();
+
+function broadcastEvent(userId: string, eventName: string, data: unknown): void {
+  const set = subscribers.get(userId);
+  if (!set || set.size === 0) return;
+
+  const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of set) {
+    try {
+      res.write(payload);
+    } catch {
+      set.delete(res);
+    }
+  }
+}
 
 export function subscribeUserLogs(userId: string, res: Response): () => void {
   let set = subscribers.get(userId);
@@ -65,7 +115,7 @@ export function subscribeUserLogs(userId: string, res: Response): () => void {
     } catch {
       clearInterval(heartbeat);
     }
-  }, 25000);
+  }, 15000);
 
   return () => {
     clearInterval(heartbeat);
@@ -98,31 +148,11 @@ export function publishRouteActivity(
     }
   }
 
-  const set = subscribers.get(userId);
-  if (!set || set.size === 0) return;
-
-  const payload = `event: activity\ndata: ${JSON.stringify(event)}\n\n`;
-  for (const res of set) {
-    try {
-      res.write(payload);
-    } catch {
-      set.delete(res);
-    }
-  }
+  broadcastEvent(userId, "activity", event);
 }
 
 export function publishUserLog(userId: string, event: LiveLogEvent): void {
-  const set = subscribers.get(userId);
-  if (!set || set.size === 0) return;
-
-  const payload = `event: log\ndata: ${JSON.stringify(event)}\n\n`;
-  for (const res of set) {
-    try {
-      res.write(payload);
-    } catch {
-      set.delete(res);
-    }
-  }
+  broadcastEvent(userId, "log", event);
 }
 
 export function publishCircuitUpdate(
@@ -130,19 +160,29 @@ export function publishCircuitUpdate(
   connectionId: string,
   circuitStatus: string
 ): void {
-  const set = subscribers.get(userId);
-  if (!set || set.size === 0) return;
-
-  const payload = `event: circuit\ndata: ${JSON.stringify({
+  broadcastEvent(userId, "circuit", {
     connectionId,
     circuitStatus,
     timestamp: new Date().toISOString(),
-  })}\n\n`;
-  for (const res of set) {
-    try {
-      res.write(payload);
-    } catch {
-      set.delete(res);
-    }
-  }
+  });
+}
+
+export function publishTelemetryUpdate(
+  userId: string,
+  event: Omit<LiveTelemetryEvent, "timestamp">
+): void {
+  broadcastEvent(userId, "telemetry", {
+    ...event,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+export function publishWorkspaceMutation(
+  userId: string,
+  event: Omit<LiveWorkspaceMutationEvent, "timestamp">
+): void {
+  broadcastEvent(userId, "workspace", {
+    ...event,
+    timestamp: new Date().toISOString(),
+  });
 }

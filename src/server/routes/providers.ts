@@ -10,7 +10,7 @@ import {
   probeProviderFreeModels,
   testProviderConnection,
 } from "../providers.ts";
-import { publishCircuitUpdate } from "../sse.ts";
+import { publishCircuitUpdate, publishWorkspaceMutation } from "../sse.ts";
 import { validateOutboundUrl } from "../urlSafety.ts";
 import {
   decryptConnectionAllKeys,
@@ -87,8 +87,9 @@ providersRouter.post(
         freeOnly: Boolean(freeOnly),
       });
 
+      let updatedConnPayload: ReturnType<typeof sanitizeConnection> | undefined;
       if (typeof connectionId === "string" && connectionId.trim()) {
-        await db
+        const [updatedConn] = await db
           .update(providerConnections)
           .set({
             availableModels: JSON.stringify(models),
@@ -98,10 +99,20 @@ providersRouter.post(
               eq(providerConnections.id, connectionId.trim()),
               eq(providerConnections.userId, userId)
             )
-          );
+          )
+          .returning();
+        if (updatedConn) {
+          updatedConnPayload = sanitizeConnection(updatedConn);
+          publishWorkspaceMutation(userId, {
+            entity: "provider",
+            action: "upsert",
+            id: updatedConn.id,
+            record: updatedConnPayload,
+          });
+        }
       }
 
-      return res.json({ models });
+      return res.json({ models, connection: updatedConnPayload });
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Failed to fetch upstream models";
@@ -198,8 +209,16 @@ providersRouter.post(
         })
         .returning();
 
+      const sanitized = sanitizeConnection(created);
+      publishWorkspaceMutation(userId, {
+        entity: "provider",
+        action: "upsert",
+        id: created.id,
+        record: sanitized,
+      });
+
       return res.status(201).json({
-        connection: sanitizeConnection(created),
+        connection: sanitized,
       });
     } catch (err) {
       console.error("[AS ROUTER] Create provider error:", err);
@@ -315,8 +334,16 @@ providersRouter.patch(
         return res.status(404).json({ error: "Provider connection not found" });
       }
 
+      const sanitized = sanitizeConnection(updated);
+      publishWorkspaceMutation(userId, {
+        entity: "provider",
+        action: "upsert",
+        id: updated.id,
+        record: sanitized,
+      });
+
       return res.json({
-        connection: sanitizeConnection(updated),
+        connection: sanitized,
       });
     } catch (err) {
       console.error("[AS ROUTER] Update provider error:", err);
@@ -358,7 +385,7 @@ providersRouter.post(
         baseUrl: conn.baseUrl,
       });
 
-      await db
+      const [updatedConn] = await db
         .update(providerConnections)
         .set({
           lastLatencyMs: result.latencyMs,
@@ -367,13 +394,24 @@ providersRouter.post(
           failureCount: result.ok ? 0 : conn.failureCount,
           cooldownUntil: result.ok ? null : conn.cooldownUntil,
         })
-        .where(eq(providerConnections.id, conn.id));
+        .where(eq(providerConnections.id, conn.id))
+        .returning();
 
       if (result.ok && conn.circuitStatus !== "healthy") {
         publishCircuitUpdate(userId, conn.id, "healthy");
       }
 
-      return res.json(result);
+      const sanitized = updatedConn ? sanitizeConnection(updatedConn) : undefined;
+      if (sanitized) {
+        publishWorkspaceMutation(userId, {
+          entity: "provider",
+          action: "upsert",
+          id: conn.id,
+          record: sanitized,
+        });
+      }
+
+      return res.json({ ...result, connection: sanitized });
     } catch (err) {
       console.error("[AS ROUTER] Test provider error:", err);
       return res
@@ -435,15 +473,26 @@ providersRouter.post(
         .filter((h) => h && h.ok)
         .sort((a, b) => a.latencyMs - b.latencyMs)[0];
 
-      await db
+      const [updatedConn] = await db
         .update(providerConnections)
         .set({
           modelHealth: JSON.stringify(probeResult.healthMap),
           ...(fastestHealthy ? { lastLatencyMs: fastestHealthy.latencyMs } : {}),
         })
-        .where(eq(providerConnections.id, conn.id));
+        .where(eq(providerConnections.id, conn.id))
+        .returning();
 
-      return res.json(probeResult);
+      const sanitized = updatedConn ? sanitizeConnection(updatedConn) : undefined;
+      if (sanitized) {
+        publishWorkspaceMutation(userId, {
+          entity: "provider",
+          action: "upsert",
+          id: conn.id,
+          record: sanitized,
+        });
+      }
+
+      return res.json({ ...probeResult, connection: sanitized });
     } catch (err) {
       console.error("[AS ROUTER] Probe free models error:", err);
       return res.status(500).json({ error: "Failed to probe free models" });
@@ -478,8 +527,15 @@ providersRouter.post(
       if (!updated) {
         return res.status(404).json({ error: "Connection not found" });
       }
+      const sanitized = sanitizeConnection(updated);
       publishCircuitUpdate(userId, updated.id, "healthy");
-      return res.json({ ok: true });
+      publishWorkspaceMutation(userId, {
+        entity: "provider",
+        action: "upsert",
+        id: updated.id,
+        record: sanitized,
+      });
+      return res.json({ ok: true, connection: sanitized });
     } catch (err) {
       console.error("[AS ROUTER] Reset circuit error:", err);
       return res.status(500).json({ error: "Failed to reset circuit breaker" });
@@ -502,7 +558,12 @@ providersRouter.delete(
             eq(providerConnections.userId, userId)
           )
         );
-      return res.json({ ok: true });
+      publishWorkspaceMutation(userId, {
+        entity: "provider",
+        action: "delete",
+        id,
+      });
+      return res.json({ ok: true, id });
     } catch (err) {
       console.error("[AS ROUTER] Delete provider error:", err);
       return res

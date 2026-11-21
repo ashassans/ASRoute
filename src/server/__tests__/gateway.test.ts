@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
+import { eq } from "drizzle-orm";
 import test, { after } from "node:test";
-
-after(async () => {
-  const g = globalThis as {
-    _asRouterPglite?: { close?: () => Promise<void> };
-  };
-  await g._asRouterPglite?.close?.();
-});
+import { db, ensureSchema } from "../../db/index.ts";
+import {
+  combos,
+  comboTiers,
+  providerConnections,
+  user,
+} from "../../db/schema.ts";
 import { isModelKnownFree } from "../../shared/catalog.ts";
 import {
   decryptSecret,
@@ -14,13 +15,23 @@ import {
   generateGatewayApiKey,
   hashGatewayApiKey,
 } from "../crypto.ts";
+import { invokeUpstreamCompletion, UpstreamHttpError } from "../providers.ts";
 import {
   classifyRequestIntent,
   evaluateTierEligibility,
+  executeGatewayChatCompletion,
   globToRegex,
   orderTiersByStrategy,
+  resolveRoutingTarget,
 } from "../routerEngine.ts";
 import { isBlockedHost, validateOutboundUrl } from "../urlSafety.ts";
+
+after(async () => {
+  const g = globalThis as {
+    _asRouterPglite?: { close?: () => Promise<void> };
+  };
+  await g._asRouterPglite?.close?.();
+});
 
 function makeConn(overrides: Record<string, unknown> = {}) {
   const now = new Date();
@@ -256,3 +267,354 @@ test("orderTiersByStrategy orders priority, round_robin, cost_optimized, and int
     ["t_paid", "t_free"]
   );
 });
+
+test("resolveRoutingTarget prioritizes active connection owning nested-slash model ID", async () => {
+  await ensureSchema();
+  const uid = "user_route_nested";
+  await db.delete(user).where(eq(user.id, uid));
+  await db.insert(user).values({
+    id: uid,
+    name: "Route Test",
+    email: "route-test@example.com",
+  });
+
+  await db.insert(providerConnections).values([
+    {
+      id: "conn_openai_non_owner",
+      userId: uid,
+      provider: "openai",
+      name: "OpenAI",
+      availableModels: JSON.stringify(["gpt-4.1-mini"]),
+      encryptedApiKey: encryptSecret("sk-test-openai"),
+      isActive: true,
+      lastLatencyMs: 90,
+    },
+    {
+      id: "conn_openrouter_owner",
+      userId: uid,
+      provider: "openrouter",
+      name: "OpenRouter",
+      availableModels: JSON.stringify(["meta-llama/llama-3.3-70b-instruct:free"]),
+      encryptedApiKey: encryptSecret("sk-test-or"),
+      isActive: true,
+      lastLatencyMs: 320,
+    },
+  ]);
+
+  const target = await resolveRoutingTarget(
+    uid,
+    "meta-llama/llama-3.3-70b-instruct:free"
+  );
+  assert.equal(target.matchedVia, "default");
+  assert.equal(target.tiers[0]?.connection.id, "conn_openrouter_owner");
+  assert.equal(
+    target.tiers[0]?.tier.upstreamModel,
+    "meta-llama/llama-3.3-70b-instruct:free"
+  );
+});
+
+test("executeGatewayChatCompletion falls back across HTTP 429, inline SSE 200 error, and isolates single 429 circuit", async () => {
+  await ensureSchema();
+  const uid = "user_fb_test";
+  await db.delete(user).where(eq(user.id, uid));
+  await db.insert(user).values({
+    id: uid,
+    name: "Fallback Test",
+    email: "fallback-test@example.com",
+  });
+
+  await db.insert(providerConnections).values([
+    {
+      id: "conn_fb_1",
+      userId: uid,
+      provider: "openai",
+      name: "Tier 1 OpenAI",
+      baseUrl: "https://api.openai.com/v1",
+      encryptedApiKey: encryptSecret("sk-key-1"),
+      isActive: true,
+    },
+    {
+      id: "conn_fb_2",
+      userId: uid,
+      provider: "openrouter",
+      name: "Tier 2 OpenRouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      encryptedApiKey: encryptSecret("sk-key-2"),
+      isActive: true,
+    },
+    {
+      id: "conn_fb_3",
+      userId: uid,
+      provider: "groq",
+      name: "Tier 3 Groq",
+      baseUrl: "https://api.groq.com/openai/v1",
+      encryptedApiKey: encryptSecret("sk-key-3"),
+      isActive: true,
+    },
+  ]);
+
+  await db.insert(combos).values({
+    id: "combo_fb_1",
+    userId: uid,
+    name: "resilient-combo",
+    strategy: "priority",
+    isActive: true,
+  });
+
+  await db.insert(comboTiers).values([
+    {
+      id: "tier_fb_1",
+      comboId: "combo_fb_1",
+      connectionId: "conn_fb_1",
+      upstreamModel: "gpt-4.1-mini",
+      priority: 0,
+      weight: 100,
+    },
+    {
+      id: "tier_fb_2",
+      comboId: "combo_fb_1",
+      connectionId: "conn_fb_2",
+      upstreamModel: "meta-llama/llama-3.3-70b-instruct:free",
+      priority: 1,
+      weight: 100,
+    },
+    {
+      id: "tier_fb_3",
+      comboId: "combo_fb_1",
+      connectionId: "conn_fb_3",
+      upstreamModel: "llama-3.3-70b-versatile",
+      priority: 2,
+      weight: 100,
+    },
+  ]);
+
+  const originalFetch = globalThis.fetch;
+  const encoder = new TextEncoder();
+  const seenUrls: string[] = [];
+
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    seenUrls.push(url);
+
+    if (url.includes("api.openai.com")) {
+      return new Response(
+        JSON.stringify({ error: { message: "Rate limit exceeded" } }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (url.includes("openrouter.ai")) {
+      const sseBody = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              'data: {"error":{"code":503,"message":"Provider overloaded"}}\n\n'
+            )
+          );
+          controller.close();
+        },
+      });
+      return new Response(sseBody, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
+
+    const okSseBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            'data: {"choices":[{"delta":{"content":"Recovered ok"}}]}\n\n'
+          )
+        );
+        controller.enqueue(
+          encoder.encode(
+            'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":3}}\n\n'
+          )
+        );
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+    return new Response(okSseBody, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const deltas: string[] = [];
+    const res1 = await executeGatewayChatCompletion({
+      userId: uid,
+      apiKeyId: null,
+      apiKeyPrefix: null,
+      request: {
+        model: "resilient-combo",
+        messages: [{ role: "user", content: "Hello" }],
+        stream: true,
+      },
+      onStreamDelta: (d) => {
+        if (d.content) deltas.push(d.content);
+      },
+    });
+
+    assert.equal(res1.resolvedProvider, "groq");
+    assert.equal(res1.resolvedModel, "llama-3.3-70b-versatile");
+    assert.equal(res1.content, "Recovered ok");
+    assert.equal(deltas.join(""), "Recovered ok");
+    assert.equal(res1.fallbackAttempts.length, 3);
+    assert.equal(res1.fallbackAttempts[0]?.status, "failed");
+    assert.equal(res1.fallbackAttempts[0]?.statusCode, 429);
+    assert.equal(res1.fallbackAttempts[1]?.status, "failed");
+    assert.equal(res1.fallbackAttempts[1]?.statusCode, 503);
+    assert.equal(res1.fallbackAttempts[2]?.status, "success");
+
+    // Single 429 failure should NOT open the whole connection circuit yet (requires >= 2)
+    const [conn1AfterFirst] = await db
+      .select()
+      .from(providerConnections)
+      .where(eq(providerConnections.id, "conn_fb_1"));
+    assert.equal(conn1AfterFirst?.circuitStatus, "healthy");
+    assert.equal(conn1AfterFirst?.failureCount, 1);
+
+    // Second request hitting another 429 on Tier 1 SHOULD open its circuit
+    const res2 = await executeGatewayChatCompletion({
+      userId: uid,
+      apiKeyId: null,
+      apiKeyPrefix: null,
+      request: {
+        model: "resilient-combo",
+        messages: [{ role: "user", content: "Hello again" }],
+        stream: true,
+      },
+      onStreamDelta: () => {},
+    });
+    assert.equal(res2.resolvedProvider, "groq");
+    const [conn1AfterSecond] = await db
+      .select()
+      .from(providerConnections)
+      .where(eq(providerConnections.id, "conn_fb_1"));
+    assert.equal(conn1AfterSecond?.circuitStatus, "open");
+    assert.equal(conn1AfterSecond?.failureCount, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("invokeUpstreamCompletion retries without stream_options on 400 and rejects empty completions", async () => {
+  const originalFetch = globalThis.fetch;
+  const encoder = new TextEncoder();
+  const capturedBodies: Array<Record<string, unknown>> = [];
+
+  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const parsed = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    capturedBodies.push(parsed);
+
+    if (capturedBodies.length === 1) {
+      return new Response("Extra inputs are not permitted: stream_options", {
+        status: 400,
+      });
+    }
+    if (capturedBodies.length === 2) {
+      const sseBody = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"choices":[{"delta":{"content":"Streamed"}}]}\n\n')
+          );
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      });
+      return new Response(sseBody, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({ choices: [{ message: { content: "" }, finish_reason: "stop" }] }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }) as typeof fetch;
+
+  try {
+    const ok = await invokeUpstreamCompletion({
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      apiKey: "sk-test",
+      baseUrl: "https://api.openai.com/v1",
+      request: {
+        model: "gpt-4.1-mini",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      },
+      onStreamDelta: () => {},
+    });
+    assert.equal(ok.content, "Streamed");
+    assert.equal(capturedBodies.length, 2);
+    assert.ok("stream_options" in capturedBodies[0]!);
+    assert.equal("stream_options" in capturedBodies[1]!, false);
+
+    await assert.rejects(
+      () =>
+        invokeUpstreamCompletion({
+          provider: "openai",
+          model: "gpt-4.1-mini",
+          apiKey: "sk-test",
+          baseUrl: "https://api.openai.com/v1",
+          request: {
+            model: "gpt-4.1-mini",
+            messages: [{ role: "user", content: "hi" }],
+            stream: false,
+          },
+        }),
+      (err: unknown) =>
+        err instanceof UpstreamHttpError &&
+        err.statusCode === 502 &&
+        err.retryable === true
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("invokeUpstreamCompletion aborts stalled SSE stream cleanly on timeoutMs", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    const stalledStream = new ReadableStream({
+      start() {
+        // Never enqueue or close to simulate an upstream hang after headers
+      },
+    });
+    return new Response(stalledStream, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () =>
+        invokeUpstreamCompletion({
+          provider: "openai",
+          model: "gpt-4.1-mini",
+          apiKey: "sk-test",
+          baseUrl: "https://api.openai.com/v1",
+          timeoutMs: 80,
+          request: {
+            model: "gpt-4.1-mini",
+            messages: [{ role: "user", content: "hi" }],
+            stream: true,
+          },
+          onStreamDelta: () => {},
+        }),
+      (err: unknown) =>
+        err instanceof UpstreamHttpError &&
+        err.statusCode === 504 &&
+        err.retryable === true
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+

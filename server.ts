@@ -77,15 +77,15 @@ app.use(
   })
 );
 
-app.use("/api", (req: Request, res: Response, next: NextFunction) => {
-  const middleware = cors({
-    origin: (origin, callback) => {
-      callback(null, isTrustedControlPlaneOrigin(origin, req));
-    },
+const apiCors = cors<Request>((req, callback) => {
+  const origin = req.header("origin");
+  callback(null, {
+    origin: isTrustedControlPlaneOrigin(origin, req),
     credentials: true,
   });
-  return middleware(req, res, next);
 });
+
+app.use("/api", apiCors);
 
 // Better Auth handler MUST precede express.json()
 app.all("/api/auth/*", async (req: Request, res: Response) => {

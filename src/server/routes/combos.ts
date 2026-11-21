@@ -14,6 +14,7 @@ import {
   clearGatewayResponseCache,
   simulateComboRoute,
 } from "../routerEngine.ts";
+import { publishWorkspaceMutation } from "../sse.ts";
 import { parseAvailableModels, parseModelHealth } from "../utils/connections.ts";
 
 export const combosRouter = Router();
@@ -118,8 +119,16 @@ combosRouter.post(
           ? await db.insert(comboTiers).values(tierValues).returning()
           : [];
 
+      const comboPayload = { ...created, tiers: insertedTiers };
+      publishWorkspaceMutation(userId, {
+        entity: "combo",
+        action: "upsert",
+        id: created.id,
+        record: comboPayload,
+      });
+
       return res.status(201).json({
-        combo: { ...created, tiers: insertedTiers },
+        combo: comboPayload,
       });
     } catch (err) {
       console.error("[AS ROUTER] Create combo error:", err);
@@ -249,8 +258,16 @@ combosRouter.post(
           ? await db.insert(comboTiers).values(tierValues).returning()
           : [];
 
+      const comboPayload = { ...comboRow, tiers: insertedTiers };
+      publishWorkspaceMutation(userId, {
+        entity: "combo",
+        action: "upsert",
+        id: comboRow.id,
+        record: comboPayload,
+      });
+
       return res.json({
-        combo: { ...comboRow, tiers: insertedTiers },
+        combo: comboPayload,
         tierCount: insertedTiers.length,
         updated: Boolean(existing),
       });
@@ -374,7 +391,15 @@ combosRouter.patch(
             : [];
       }
 
-      return res.json({ combo: { ...updated, tiers: currentTiers } });
+      const comboPayload = { ...updated, tiers: currentTiers };
+      publishWorkspaceMutation(userId, {
+        entity: "combo",
+        action: "upsert",
+        id: updated.id,
+        record: comboPayload,
+      });
+
+      return res.json({ combo: comboPayload });
     } catch (err) {
       console.error("[AS ROUTER] Update combo error:", err);
       return res.status(500).json({ error: "Failed to update combo" });
@@ -392,7 +417,12 @@ combosRouter.delete(
       await db
         .delete(combos)
         .where(and(eq(combos.id, id), eq(combos.userId, userId)));
-      return res.json({ ok: true });
+      publishWorkspaceMutation(userId, {
+        entity: "combo",
+        action: "delete",
+        id,
+      });
+      return res.json({ ok: true, id });
     } catch (err) {
       console.error("[AS ROUTER] Delete combo error:", err);
       return res.status(500).json({ error: "Failed to delete combo" });
@@ -486,6 +516,12 @@ combosRouter.post(
           isActive: true,
         })
         .returning();
+      publishWorkspaceMutation(userId, {
+        entity: "wildcard",
+        action: "upsert",
+        id: created.id,
+        record: created,
+      });
       return res.status(201).json({ wildcard: created });
     } catch (err) {
       console.error("[AS ROUTER] Create wildcard error:", err);
@@ -506,7 +542,12 @@ combosRouter.delete(
         .where(
           and(eq(wildcardRoutes.id, id), eq(wildcardRoutes.userId, userId))
         );
-      return res.json({ ok: true });
+      publishWorkspaceMutation(userId, {
+        entity: "wildcard",
+        action: "delete",
+        id,
+      });
+      return res.json({ ok: true, id });
     } catch (err) {
       console.error("[AS ROUTER] Delete wildcard error:", err);
       return res.status(500).json({ error: "Failed to delete wildcard route" });

@@ -184,11 +184,24 @@ export function ProvidersView({
       }
       const models: string[] = Array.isArray(data.models) ? data.models : [];
       setFetchedModels(models);
+      if (data.connection) {
+        const updatedConn = data.connection as ProviderConnection;
+        onUpdateWorkspace((prev) =>
+          prev
+            ? {
+                ...prev,
+                connections: prev.connections.map((c) =>
+                  c.id === updatedConn.id ? updatedConn : c
+                ),
+              }
+            : prev
+        );
+      }
       if (models.length > 0) {
         if (!defaultModel.trim() || (onlyFree && !models.includes(defaultModel))) {
           setDefaultModel(models[0]);
         }
-        if (editingId) {
+        if (editingId && !data.connection) {
           await onRefresh();
         }
         onNotify(
@@ -330,7 +343,21 @@ export function ProvidersView({
       const res = await fetch(`/api/providers/${id}/test`, { method: "POST" });
       const data = await res.json();
       setTestResults((prev) => ({ ...prev, [id]: data }));
-      await onRefresh();
+      if (data.connection) {
+        const updatedConn = data.connection as ProviderConnection;
+        onUpdateWorkspace((prev) =>
+          prev
+            ? {
+                ...prev,
+                connections: prev.connections.map((c) =>
+                  c.id === updatedConn.id ? updatedConn : c
+                ),
+              }
+            : prev
+        );
+      } else {
+        await onRefresh();
+      }
       onNotify(
         data.ok
           ? `Probe succeeded in ${data.latencyMs}ms`
@@ -361,7 +388,21 @@ export function ProvidersView({
         return;
       }
       const models: string[] = Array.isArray(data.models) ? data.models : [];
-      await onRefresh();
+      if (data.connection) {
+        const updatedConn = data.connection as ProviderConnection;
+        onUpdateWorkspace((prev) =>
+          prev
+            ? {
+                ...prev,
+                connections: prev.connections.map((c) =>
+                  c.id === updatedConn.id ? updatedConn : c
+                ),
+              }
+            : prev
+        );
+      } else {
+        await onRefresh();
+      }
       onNotify(
         `Synced ${models.length}${onlyFree ? " free" : ""} model${models.length === 1 ? "" : "s"} for ${conn.name}`,
         "success"
@@ -384,7 +425,21 @@ export function ProvidersView({
         onNotify(data.error || "Failed to ping free models", "error");
         return;
       }
-      await onRefresh();
+      if (data.connection) {
+        const updatedConn = data.connection as ProviderConnection;
+        onUpdateWorkspace((prev) =>
+          prev
+            ? {
+                ...prev,
+                connections: prev.connections.map((c) =>
+                  c.id === updatedConn.id ? updatedConn : c
+                ),
+              }
+            : prev
+        );
+      } else {
+        await onRefresh();
+      }
       const probedCount = Array.isArray(data.probedModels)
         ? data.probedModels.length
         : 0;
@@ -409,6 +464,7 @@ export function ProvidersView({
     setProbingAll(true);
     let totalHealthy = 0;
     let totalProbed = 0;
+    let missingConnectionPayload = false;
     try {
       for (const conn of activeConns) {
         try {
@@ -421,12 +477,29 @@ export function ProvidersView({
             totalProbed += Array.isArray(data.probedModels)
               ? data.probedModels.length
               : 0;
+            if (data.connection) {
+              const updatedConn = data.connection as ProviderConnection;
+              onUpdateWorkspace((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      connections: prev.connections.map((c) =>
+                        c.id === updatedConn.id ? updatedConn : c
+                      ),
+                    }
+                  : prev
+              );
+            } else {
+              missingConnectionPayload = true;
+            }
           }
         } catch {
           // continue probing remaining connections
         }
       }
-      await onRefresh();
+      if (missingConnectionPayload) {
+        await onRefresh();
+      }
       if (totalProbed > 0) {
         onNotify(
           `Health check complete: ${totalHealthy}/${totalProbed} free models online`,

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
   ArrowRight,
@@ -243,17 +243,23 @@ export function OverviewView({
     []
   );
 
+  const latestLogId = logs[0]?.id ?? "";
+  const mountedRef = useRef(false);
+
   useEffect(() => {
     loadAnalytics(range);
   }, [range, loadAnalytics]);
 
   useEffect(() => {
-    if (logs.length === 0) return;
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
     const timer = window.setTimeout(() => {
       loadAnalytics(range);
-    }, 2500);
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [logs.length, range, loadAnalytics]);
+  }, [latestLogId, logs.length, range, loadAnalytics]);
 
   const activeCombo = combos.length
     ? combos[previewComboIdx % combos.length]

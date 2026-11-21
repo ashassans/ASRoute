@@ -5,6 +5,7 @@ import { db } from "../../db/index.ts";
 import { gatewayApiKeys } from "../../db/schema.ts";
 import { generateGatewayApiKey } from "../crypto.ts";
 import { type AuthedRequest, requireSession } from "../middleware/auth.ts";
+import { publishWorkspaceMutation } from "../sse.ts";
 
 export const keysRouter = Router();
 
@@ -49,8 +50,16 @@ keysRouter.post(
         })
         .returning();
 
+      const safeKey = { ...created, keyHash: undefined };
+      publishWorkspaceMutation(userId, {
+        entity: "key",
+        action: "upsert",
+        id: created.id,
+        record: safeKey,
+      });
+
       return res.status(201).json({
-        key: { ...created, keyHash: undefined },
+        key: safeKey,
         rawKey,
       });
     } catch (err) {
@@ -109,7 +118,14 @@ keysRouter.patch(
       if (!updated) {
         return res.status(404).json({ error: "API key not found" });
       }
-      return res.json({ key: { ...updated, keyHash: undefined } });
+      const safeKey = { ...updated, keyHash: undefined };
+      publishWorkspaceMutation(userId, {
+        entity: "key",
+        action: "upsert",
+        id: updated.id,
+        record: safeKey,
+      });
+      return res.json({ key: safeKey });
     } catch (err) {
       console.error("[AS ROUTER] Update key error:", err);
       return res.status(500).json({ error: "Failed to update API key" });
@@ -129,7 +145,12 @@ keysRouter.delete(
         .where(
           and(eq(gatewayApiKeys.id, id), eq(gatewayApiKeys.userId, userId))
         );
-      return res.json({ ok: true });
+      publishWorkspaceMutation(userId, {
+        entity: "key",
+        action: "delete",
+        id,
+      });
+      return res.json({ ok: true, id });
     } catch (err) {
       console.error("[AS ROUTER] Delete key error:", err);
       return res.status(500).json({ error: "Failed to revoke API key" });

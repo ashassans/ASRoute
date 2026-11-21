@@ -11,7 +11,7 @@ import {
   wildcardRoutes,
 } from "../../db/schema.ts";
 import { type AuthedRequest, requireSession } from "../middleware/auth.ts";
-import { subscribeUserLogs } from "../sse.ts";
+import { publishWorkspaceMutation, subscribeUserLogs } from "../sse.ts";
 import { getGatewayBaseUrl, sanitizeConnection } from "../utils/connections.ts";
 
 export const analyticsRouter = Router();
@@ -165,6 +165,7 @@ analyticsRouter.delete(
     try {
       const userId = req.authUser!.id;
       await db.delete(requestLogs).where(eq(requestLogs.userId, userId));
+      publishWorkspaceMutation(userId, { entity: "logs", action: "clear" });
       return res.json({ ok: true });
     } catch (err) {
       console.error("[AS ROUTER] Clear logs error:", err);
@@ -181,6 +182,8 @@ analyticsRouter.get(
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    req.socket?.setNoDelay?.(true);
     res.flushHeaders?.();
 
     const unsubscribe = subscribeUserLogs(userId, res);
