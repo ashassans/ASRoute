@@ -88,6 +88,13 @@ function parseRoute(pathname: string): {
 export default function App() {
   const { data: session, isPending: sessionLoading, refetch } =
     authClient.useSession();
+  const [initialSessionChecked, setInitialSessionChecked] = useState(false);
+
+  useEffect(() => {
+    if (!sessionLoading) {
+      setInitialSessionChecked(true);
+    }
+  }, [sessionLoading]);
 
   const initialRoute =
     typeof window !== "undefined"
@@ -326,7 +333,7 @@ export default function App() {
     }
   };
 
-  if (sessionLoading) {
+  if (sessionLoading && !initialSessionChecked) {
     return (
       <div className="min-h-screen bg-[#09090B] text-[#A1A1AA] flex items-center justify-center text-sm">
         Loading AS ROUTER...

@@ -9,6 +9,55 @@ interface AuthGateProps {
   onAuthenticated: () => void;
 }
 
+const PENDING_VERIFY_KEY = "asrouter_pending_verify_email";
+
+function loadPendingVerifyEmail(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw =
+      window.sessionStorage.getItem(PENDING_VERIFY_KEY) ||
+      window.localStorage.getItem(PENDING_VERIFY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { email?: string; expiresAt?: number };
+    if (
+      typeof parsed?.email === "string" &&
+      typeof parsed?.expiresAt === "number" &&
+      parsed.expiresAt > Date.now()
+    ) {
+      return parsed.email;
+    }
+    window.sessionStorage.removeItem(PENDING_VERIFY_KEY);
+    window.localStorage.removeItem(PENDING_VERIFY_KEY);
+  } catch {
+    // ignore storage errors
+  }
+  return null;
+}
+
+function savePendingVerifyEmail(email: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const payload = JSON.stringify({
+      email,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+    window.sessionStorage.setItem(PENDING_VERIFY_KEY, payload);
+    window.localStorage.setItem(PENDING_VERIFY_KEY, payload);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function clearPendingVerifyEmail() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(PENDING_VERIFY_KEY);
+    window.localStorage.removeItem(PENDING_VERIFY_KEY);
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export function AuthGate({
   initialMode = "signin",
   onBackHome,
@@ -22,7 +71,7 @@ export function AuthGate({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const [pendingVerifyEmail, setPendingVerifyEmail] = useState<string | null>(
-    null
+    () => loadPendingVerifyEmail()
   );
   const [otpCode, setOtpCode] = useState("");
   const [verifyingOtp, setVerifyingOtp] = useState(false);
@@ -33,9 +82,6 @@ export function AuthGate({
 
   useEffect(() => {
     setMode(initialMode);
-    setPendingVerifyEmail(null);
-    setOtpCode("");
-    setInfo(null);
     setError(null);
   }, [initialMode]);
 
@@ -108,6 +154,7 @@ export function AuthGate({
         }
         // When email verification is enabled, token is null until OTP is verified
         if (!res.data?.token) {
+          savePendingVerifyEmail(normalizedEmail);
           setPendingVerifyEmail(normalizedEmail);
           setOtpCode("");
           setResendCooldown(30);
@@ -126,6 +173,7 @@ export function AuthGate({
             res.error.status === 403 ||
             msg.toLowerCase().includes("email not verified");
           if (isUnverified) {
+            savePendingVerifyEmail(normalizedEmail);
             setPendingVerifyEmail(normalizedEmail);
             setOtpCode("");
             const otpRes = await authClient.emailOtp.sendVerificationOtp({
@@ -148,6 +196,7 @@ export function AuthGate({
           return;
         }
       }
+      clearPendingVerifyEmail();
       onAuthenticated();
     } catch (err: unknown) {
       setError(
@@ -178,6 +227,7 @@ export function AuthGate({
         setError(res.error.message || "Invalid or expired verification code.");
         return;
       }
+      clearPendingVerifyEmail();
       onAuthenticated();
     } catch (err: unknown) {
       setError(
@@ -324,6 +374,7 @@ export function AuthGate({
                   <button
                     type="button"
                     onClick={() => {
+                      clearPendingVerifyEmail();
                       setPendingVerifyEmail(null);
                       setOtpCode("");
                       setInfo(null);
