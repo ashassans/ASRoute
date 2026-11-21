@@ -4,6 +4,7 @@ import {
   Activity,
   Check,
   Copy,
+  Cpu,
   Home,
   KeyRound,
   Layers,
@@ -22,6 +23,7 @@ import { AuthGate } from "./components/AuthGate.tsx";
 import { CombosView } from "./components/CombosView.tsx";
 import { LandingPage } from "./components/LandingPage.tsx";
 import { LogsView } from "./components/LogsView.tsx";
+import { ModelsView } from "./components/ModelsView.tsx";
 import { OverviewView } from "./components/OverviewView.tsx";
 import { PlaygroundView } from "./components/PlaygroundView.tsx";
 import { ProvidersView } from "./components/ProvidersView.tsx";
@@ -35,6 +37,7 @@ import type {
 type NavTab =
   | "overview"
   | "providers"
+  | "models"
   | "combos"
   | "keys"
   | "logs"
@@ -47,6 +50,7 @@ const NAV_ITEMS: Array<{
 }> = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "providers", label: "Providers", icon: Server },
+  { id: "models", label: "Models", icon: Cpu },
   { id: "combos", label: "Combos", icon: Layers },
   { id: "keys", label: "API Keys", icon: KeyRound },
   { id: "logs", label: "Live Logs", icon: Activity },
@@ -56,6 +60,7 @@ const NAV_ITEMS: Array<{
 const VALID_TABS = new Set<NavTab>([
   "overview",
   "providers",
+  "models",
   "combos",
   "keys",
   "logs",
@@ -723,6 +728,13 @@ export default function App() {
                   <ProvidersView
                     connections={workspace.connections}
                     onRefresh={fetchBootstrap}
+                    onNotify={notify}
+                  />
+                )}
+                {activeTab === "models" && (
+                  <ModelsView
+                    connections={workspace.connections}
+                    onConnectProvider={() => navigateTab("providers")}
                     onNotify={notify}
                   />
                 )}

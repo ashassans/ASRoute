@@ -26,7 +26,14 @@ interface OverviewViewProps {
   logs: RequestLog[];
   activeRoutes?: LiveRouteActivity[];
   onNavigate: (
-    tab: "overview" | "providers" | "combos" | "keys" | "logs" | "playground"
+    tab:
+      | "overview"
+      | "providers"
+      | "models"
+      | "combos"
+      | "keys"
+      | "logs"
+      | "playground"
   ) => void;
   onRefresh?: () => Promise<void>;
   onNotify?: (msg: string, tone?: "success" | "error") => void;

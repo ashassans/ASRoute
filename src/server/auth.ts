@@ -1,11 +1,17 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
+import { emailOTP } from "better-auth/plugins";
 import { db } from "../db/index.ts";
 import * as schema from "../db/schema.ts";
 import { getAuthSecret } from "./crypto.ts";
+import {
+  isGmailMailerConfigured,
+  sendVerificationOtpEmail,
+} from "./mailer.ts";
 
 const appUrl = process.env.APP_URL?.trim() || "http://localhost:3000";
 const isHttps = appUrl.startsWith("https://");
+const emailVerificationEnabled = isGmailMailerConfigured();
 
 const baseTrustedOrigins = Array.from(
   new Set(
@@ -36,7 +42,26 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 6,
+    requireEmailVerification: emailVerificationEnabled,
   },
+  emailVerification: {
+    sendOnSignUp: emailVerificationEnabled,
+    autoSignInAfterVerification: true,
+  },
+  plugins: [
+    emailOTP({
+      otpLength: 6,
+      expiresIn: 600,
+      allowedAttempts: 5,
+      storeOTP: "hashed",
+      overrideDefaultEmailVerification: true,
+      async sendVerificationOTP({ email, otp, type }) {
+        if (type === "email-verification") {
+          await sendVerificationOtpEmail({ to: email, otp });
+        }
+      },
+    }),
+  ],
   socialProviders:
     process.env.GOOGLE_CLIENT_ID?.trim() &&
     process.env.GOOGLE_CLIENT_SECRET?.trim()
