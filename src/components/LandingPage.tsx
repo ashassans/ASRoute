@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "motion/react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   Activity,
   ArrowRight,
@@ -169,6 +169,122 @@ export function LandingPage({
   );
   const [copiedSdk, setCopiedSdk] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const scrollAnimRef = useRef<number | null>(null);
+
+  const scrollToSection = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+      if (!href.startsWith("#")) return;
+      e.preventDefault();
+      const targetId = href.slice(1);
+      setMobileMenuOpen(false);
+
+      if (scrollAnimRef.current !== null) {
+        window.cancelAnimationFrame(scrollAnimRef.current);
+        scrollAnimRef.current = null;
+      }
+
+      const prefersReduced =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      const headerOffset = 64;
+      const targetEl =
+        targetId === "top" ? null : document.getElementById(targetId);
+      const startY = window.scrollY;
+      const targetY =
+        targetId === "top" || !targetEl
+          ? 0
+          : Math.max(
+              0,
+              targetEl.getBoundingClientRect().top + window.scrollY - headerOffset
+            );
+
+      setActiveSection(targetId === "top" ? "" : targetId);
+
+      if (prefersReduced || Math.abs(targetY - startY) < 4) {
+        window.scrollTo({ top: targetY });
+        window.history.replaceState(null, "", href);
+        return;
+      }
+
+      const duration = Math.min(
+        900,
+        Math.max(520, Math.abs(targetY - startY) * 0.42)
+      );
+      const startTime = performance.now();
+
+      const easeInOutCubic = (t: number) =>
+        t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+      const cancelOnInput = () => {
+        if (scrollAnimRef.current !== null) {
+          window.cancelAnimationFrame(scrollAnimRef.current);
+          scrollAnimRef.current = null;
+        }
+        window.removeEventListener("wheel", cancelOnInput);
+        window.removeEventListener("touchstart", cancelOnInput);
+      };
+
+      window.addEventListener("wheel", cancelOnInput, { passive: true });
+      window.addEventListener("touchstart", cancelOnInput, { passive: true });
+
+      const step = (now: number) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(1, elapsed / duration);
+        const eased = easeInOutCubic(progress);
+        window.scrollTo(0, startY + (targetY - startY) * eased);
+
+        if (progress < 1) {
+          scrollAnimRef.current = window.requestAnimationFrame(step);
+        } else {
+          scrollAnimRef.current = null;
+          window.removeEventListener("wheel", cancelOnInput);
+          window.removeEventListener("touchstart", cancelOnInput);
+          window.history.replaceState(null, "", href);
+        }
+      };
+
+      scrollAnimRef.current = window.requestAnimationFrame(step);
+    },
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      if (scrollAnimRef.current !== null) {
+        window.cancelAnimationFrame(scrollAnimRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let ticking = false;
+    const sectionIds = ["routing", "failover", "policies", "quickstart"];
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        const scrollPos = window.scrollY + 140;
+        if (window.scrollY < 160) {
+          setActiveSection("");
+          ticking = false;
+          return;
+        }
+        let current = "";
+        for (const id of sectionIds) {
+          const el = document.getElementById(id);
+          if (el && el.offsetTop <= scrollPos) {
+            current = id;
+          }
+        }
+        setActiveSection(current);
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Live animated failover pulse every 1.4s
   useEffect(() => {
@@ -295,6 +411,7 @@ const msg = await client.messages.create({
         <div className="max-w-[1280px] mx-auto h-full px-5 sm:px-8 flex items-center justify-between gap-4 sm:gap-8">
           <a
             href="#top"
+            onClick={(e) => scrollToSection(e, "#top")}
             className="font-display text-base font-bold tracking-tight text-[#FAFAFA] whitespace-nowrap shrink-0 flex items-center gap-2.5"
           >
             <span className="w-6 h-6 rounded-md bg-amber-400 text-[#09090B] font-mono text-xs font-bold flex items-center justify-center">
@@ -307,15 +424,35 @@ const msg = await client.messages.create({
             aria-label="Primary navigation"
             className="hidden md:flex items-center gap-7 text-sm font-medium text-[#D4D4D8]"
           >
-            {NAV_LINKS.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="hover:text-amber-400 transition-colors whitespace-nowrap shrink-0"
-              >
-                {link.label}
-              </a>
-            ))}
+            {NAV_LINKS.map((link) => {
+              const id = link.href.slice(1);
+              const isActive = activeSection === id;
+              return (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={(e) => scrollToSection(e, link.href)}
+                  className={`relative py-1 transition-colors whitespace-nowrap shrink-0 ${
+                    isActive
+                      ? "text-amber-400"
+                      : "text-[#D4D4D8] hover:text-[#FAFAFA]"
+                  }`}
+                >
+                  <span>{link.label}</span>
+                  {isActive && (
+                    <motion.span
+                      layoutId="landing-nav-underline"
+                      transition={{
+                        type: "spring",
+                        stiffness: 380,
+                        damping: 32,
+                      }}
+                      className="absolute left-0 right-0 -bottom-0.5 h-0.5 bg-amber-400 rounded-full"
+                    />
+                  )}
+                </a>
+              );
+            })}
           </nav>
 
           <div className="flex items-center gap-2.5 shrink-0">
@@ -353,60 +490,89 @@ const msg = await client.messages.create({
               aria-expanded={mobileMenuOpen}
               className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg bg-[#111114] border border-[#27272A] text-[#FAFAFA] hover:bg-[#18181B] transition-colors"
             >
-              {mobileMenuOpen ? (
-                <X className="w-4 h-4" />
-              ) : (
-                <Menu className="w-4 h-4" />
-              )}
+              <motion.span
+                key={mobileMenuOpen ? "close" : "open"}
+                initial={{ opacity: 0, rotate: -45, scale: 0.85 }}
+                animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                transition={{ duration: 0.18 }}
+              >
+                {mobileMenuOpen ? (
+                  <X className="w-4 h-4" />
+                ) : (
+                  <Menu className="w-4 h-4" />
+                )}
+              </motion.span>
             </button>
           </div>
         </div>
 
-        {/* Mobile Navigation Drawer */}
-        {mobileMenuOpen && (
-          <div className="md:hidden absolute top-16 inset-x-0 z-40 border-b border-[#222227] bg-[#09090B] px-5 py-4 space-y-2 shadow-2xl">
-            <nav
-              aria-label="Mobile navigation"
-              className="flex flex-col space-y-1"
+        {/* Animated Mobile Navigation Drawer */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="md:hidden absolute top-16 inset-x-0 z-40 border-b border-[#222227] bg-[#09090B]/95 backdrop-blur-md px-5 py-4 space-y-2 shadow-2xl"
             >
-              {NAV_LINKS.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="min-h-[44px] px-3 flex items-center justify-between text-sm font-medium text-[#D4D4D8] hover:text-amber-400 hover:bg-[#111114] rounded-lg transition-colors"
-                >
-                  <span>{link.label}</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[#A1A1AA]" />
-                </a>
-              ))}
-            </nav>
-            {!isAuthenticated && (
-              <div className="pt-2 border-t border-[#1C1C21] grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    onOpenAuth("signin");
-                  }}
-                  className="min-h-[44px] px-3 text-xs font-medium text-[#FAFAFA] bg-[#111114] border border-[#27272A] rounded-lg"
-                >
-                  Sign in
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    onOpenAuth("signup");
-                  }}
-                  className="min-h-[44px] px-3 text-xs font-semibold bg-amber-400 text-[#09090B] rounded-lg"
-                >
-                  Create workspace
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+              <nav
+                aria-label="Mobile navigation"
+                className="flex flex-col space-y-1"
+              >
+                {NAV_LINKS.map((link, idx) => {
+                  const isActive = activeSection === link.href.slice(1);
+                  return (
+                    <motion.a
+                      key={link.href}
+                      href={link.href}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{
+                        duration: 0.2,
+                        delay: idx * 0.04,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
+                      onClick={(e) => scrollToSection(e, link.href)}
+                      className={`min-h-[44px] px-3 flex items-center justify-between text-sm font-medium rounded-lg transition-colors ${
+                        isActive
+                          ? "text-amber-400 bg-[#111114]"
+                          : "text-[#D4D4D8] hover:text-amber-400 hover:bg-[#111114]"
+                      }`}
+                    >
+                      <span>{link.label}</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[#A1A1AA]" />
+                    </motion.a>
+                  );
+                })}
+              </nav>
+              {!isAuthenticated && (
+                <div className="pt-2 border-t border-[#1C1C21] grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onOpenAuth("signin");
+                    }}
+                    className="min-h-[44px] px-3 text-xs font-medium text-[#FAFAFA] bg-[#111114] border border-[#27272A] rounded-lg"
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onOpenAuth("signup");
+                    }}
+                    className="min-h-[44px] px-3 text-xs font-semibold bg-amber-400 text-[#09090B] rounded-lg"
+                  >
+                    Create workspace
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       <main>
@@ -455,6 +621,7 @@ const msg = await client.messages.create({
 
                 <a
                   href="#quickstart"
+                  onClick={(e) => scrollToSection(e, "#quickstart")}
                   className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#FAFAFA] bg-[#111114] hover:bg-[#18181B] border border-[#27272A] rounded-lg transition-colors whitespace-nowrap shrink-0"
                 >
                   <Terminal className="w-4 h-4 text-amber-400" />
@@ -1306,6 +1473,7 @@ const msg = await client.messages.create({
               <a
                 key={link.href}
                 href={link.href}
+                onClick={(e) => scrollToSection(e, link.href)}
                 className="hover:text-[#FAFAFA] transition-colors"
               >
                 {link.label}
