@@ -67,6 +67,11 @@ const PROVIDER_BADGE_MAP: Record<
   deepseek: { short: "D", color: "#38BDF8", bg: "rgba(56,189,248,0.14)" },
   mistral: { short: "M", color: "#FBBF24", bg: "rgba(251,191,36,0.14)" },
   openrouter: { short: "R", color: "#EC4899", bg: "rgba(236,72,153,0.14)" },
+  xai: { short: "X", color: "#E4E4E7", bg: "rgba(228,228,231,0.12)" },
+  cerebras: { short: "Cb", color: "#22D3EE", bg: "rgba(34,211,238,0.14)" },
+  together: { short: "T", color: "#818CF8", bg: "rgba(129,140,248,0.14)" },
+  fireworks: { short: "Fw", color: "#FB923C", bg: "rgba(251,146,60,0.14)" },
+  perplexity: { short: "Px", color: "#2DD4BF", bg: "rgba(45,212,191,0.14)" },
   custom: { short: "C", color: "#10B981", bg: "rgba(16,185,129,0.14)" },
 };
 
@@ -282,19 +287,21 @@ export function OverviewView({
     compressPrompt?: boolean;
     strategy?: "priority" | "intent_auto" | "cost_optimized";
   }) => {
+    if (!activeCombo) {
+      onNotify?.(
+        "Create a combo first to save routing policies.",
+        "error"
+      );
+      return;
+    }
+
+    const prevCompress = localCompress;
+    const prevStrategy = localStrategy;
     if (patch.compressPrompt !== undefined) {
       setLocalCompress(patch.compressPrompt);
     }
     if (patch.strategy !== undefined) {
       setLocalStrategy(patch.strategy);
-    }
-
-    if (!activeCombo) {
-      onNotify?.(
-        "Workspace policy preference updated (create a combo to persist per-alias rules).",
-        "success"
-      );
-      return;
     }
 
     setSavingPolicy(true);
@@ -311,9 +318,13 @@ export function OverviewView({
           "success"
         );
       } else {
+        setLocalCompress(prevCompress);
+        setLocalStrategy(prevStrategy);
         onNotify?.("Failed to update combo policy.", "error");
       }
     } catch {
+      setLocalCompress(prevCompress);
+      setLocalStrategy(prevStrategy);
       onNotify?.("Network error updating gateway policy.", "error");
     } finally {
       setSavingPolicy(false);
@@ -405,11 +416,12 @@ export function OverviewView({
         (l) =>
           l.connectionName === conn.name || l.resolvedProvider === conn.provider
       );
+      const startOffset = Math.max(0, SLOT_COUNT - connLogs.length);
       const slots: Array<"ok" | "fail" | "amber" | "idle"> = Array.from(
         { length: SLOT_COUNT },
         (_, idx) => {
-          if (idx < connLogs.length) {
-            const log = connLogs[idx];
+          if (idx >= startOffset) {
+            const log = connLogs[idx - startOffset];
             if (log.outcome === "error" || log.outcome === "rate_limited") {
               return "fail";
             }
@@ -421,9 +433,6 @@ export function OverviewView({
           }
           if (conn.circuitStatus === "half_open" && idx >= SLOT_COUNT - 3) {
             return "amber";
-          }
-          if (conn.isActive && conn.circuitStatus === "healthy" && idx >= SLOT_COUNT - 12) {
-            return "ok";
           }
           return "idle";
         }
@@ -437,15 +446,17 @@ export function OverviewView({
       };
     });
 
+    const gwOffset = Math.max(0, SLOT_COUNT - recentLogs.length);
     const gatewaySlots: Array<"ok" | "fail" | "amber" | "idle"> = Array.from(
       { length: SLOT_COUNT },
       (_, idx) => {
-        if (idx < recentLogs.length) {
-          const l = recentLogs[idx];
-          if (l.outcome === "error") return "fail";
+        if (idx >= gwOffset) {
+          const l = recentLogs[idx - gwOffset];
+          if (l.outcome === "error" || l.outcome === "rate_limited") return "fail";
+          if (l.outcome === "fallback_success") return "amber";
           return "ok";
         }
-        return idx >= SLOT_COUNT - 22 ? "ok" : "idle";
+        return "idle";
       }
     );
 
@@ -1183,7 +1194,7 @@ export function OverviewView({
                 className="flex items-center gap-1.5 flex-wrap justify-end"
                 title="Manage connected providers"
               >
-                {PROVIDER_CATALOG.slice(0, 7).map((spec) => {
+                {PROVIDER_CATALOG.filter((spec) => spec.id !== "custom").map((spec) => {
                   const active = connectedProviderSet.has(spec.id);
                   const badge =
                     PROVIDER_BADGE_MAP[spec.id] || PROVIDER_BADGE_MAP.custom;

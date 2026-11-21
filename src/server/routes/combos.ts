@@ -77,13 +77,28 @@ combosRouter.post(
         });
       }
 
+      const cleanName = name.trim();
+      const existingUserCombos = await db
+        .select({ id: combos.id, name: combos.name })
+        .from(combos)
+        .where(eq(combos.userId, userId));
+      if (
+        existingUserCombos.some(
+          (c) => c.name.trim().toLowerCase() === cleanName.toLowerCase()
+        )
+      ) {
+        return res.status(409).json({
+          error: `A combo named "${cleanName}" already exists in your workspace.`,
+        });
+      }
+
       const comboId = `combo_${crypto.randomBytes(8).toString("hex")}`;
       const [created] = await db
         .insert(combos)
         .values({
           id: comboId,
           userId,
-          name: name.trim(),
+          name: cleanName,
           description: description ? String(description).trim() : null,
           strategy: strategy || "priority",
           compressPrompt: Boolean(compressPrompt),
@@ -110,7 +125,10 @@ combosRouter.post(
           upstreamModel: String(t.upstreamModel).trim(),
           priority: typeof t.priority === "number" ? t.priority : i,
           weight: typeof t.weight === "number" ? Math.max(1, t.weight) : 100,
-          maxRetries: typeof t.maxRetries === "number" ? t.maxRetries : 1,
+          maxRetries:
+            typeof t.maxRetries === "number"
+              ? Math.min(3, Math.max(1, Math.round(t.maxRetries)))
+              : 1,
         })
       );
 
@@ -330,7 +348,25 @@ combosRouter.patch(
       }
 
       const updates: Partial<typeof combos.$inferInsert> = {};
-      if (typeof name === "string" && name.trim()) updates.name = name.trim();
+      if (typeof name === "string" && name.trim()) {
+        const cleanName = name.trim();
+        const existingUserCombos = await db
+          .select({ id: combos.id, name: combos.name })
+          .from(combos)
+          .where(eq(combos.userId, userId));
+        if (
+          existingUserCombos.some(
+            (c) =>
+              c.id !== id &&
+              c.name.trim().toLowerCase() === cleanName.toLowerCase()
+          )
+        ) {
+          return res.status(409).json({
+            error: `Another combo named "${cleanName}" already exists.`,
+          });
+        }
+        updates.name = cleanName;
+      }
       if (description !== undefined) {
         updates.description = description ? String(description).trim() : null;
       }
@@ -382,7 +418,10 @@ combosRouter.patch(
             upstreamModel: String(t.upstreamModel).trim(),
             priority: typeof t.priority === "number" ? t.priority : i,
             weight: typeof t.weight === "number" ? Math.max(1, t.weight) : 100,
-            maxRetries: typeof t.maxRetries === "number" ? t.maxRetries : 1,
+            maxRetries:
+              typeof t.maxRetries === "number"
+                ? Math.min(3, Math.max(1, Math.round(t.maxRetries)))
+                : 1,
           })
         );
         currentTiers =
@@ -526,6 +565,63 @@ combosRouter.post(
     } catch (err) {
       console.error("[AS ROUTER] Create wildcard error:", err);
       return res.status(500).json({ error: "Failed to create wildcard route" });
+    }
+  }
+);
+
+combosRouter.patch(
+  "/wildcards/:id",
+  requireSession,
+  async (req: AuthedRequest, res: Response) => {
+    try {
+      const userId = req.authUser!.id;
+      const { id } = req.params;
+      const { pattern, comboId, isActive } = req.body || {};
+
+      const updates: Partial<typeof wildcardRoutes.$inferInsert> = {};
+      if (typeof pattern === "string" && pattern.trim()) {
+        updates.pattern = pattern.trim();
+      }
+      if (typeof comboId === "string" && comboId.trim()) {
+        const [ownedCombo] = await db
+          .select({ id: combos.id })
+          .from(combos)
+          .where(and(eq(combos.id, comboId.trim()), eq(combos.userId, userId)));
+        if (!ownedCombo) {
+          return res.status(400).json({ error: "Target combo not found." });
+        }
+        updates.comboId = ownedCombo.id;
+      }
+      if (typeof isActive === "boolean") {
+        updates.isActive = isActive;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No wildcard updates provided." });
+      }
+
+      const [updated] = await db
+        .update(wildcardRoutes)
+        .set(updates)
+        .where(
+          and(eq(wildcardRoutes.id, id), eq(wildcardRoutes.userId, userId))
+        )
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Wildcard route not found" });
+      }
+
+      publishWorkspaceMutation(userId, {
+        entity: "wildcard",
+        action: "upsert",
+        id: updated.id,
+        record: updated,
+      });
+      return res.json({ wildcard: updated });
+    } catch (err) {
+      console.error("[AS ROUTER] Update wildcard error:", err);
+      return res.status(500).json({ error: "Failed to update wildcard route" });
     }
   }
 );

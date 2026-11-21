@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { Router, type Response } from "express";
 import { db } from "../../db/index.ts";
 import { providerConnections } from "../../db/schema.ts";
-import { decryptSecret, encryptSecret } from "../crypto.ts";
+import { decryptSecret, encryptSecret, maskSecret } from "../crypto.ts";
 import { type AuthedRequest, requireSession } from "../middleware/auth.ts";
 import {
   fetchProviderModels,
@@ -30,7 +30,7 @@ providersRouter.post(
   async (req: AuthedRequest, res: Response) => {
     try {
       const userId = req.authUser!.id;
-      const { connectionId, provider, baseUrl, apiKey, freeOnly } =
+      const { connectionId, provider, baseUrl, apiKey, useServerKey, freeOnly } =
         req.body || {};
 
       let resolvedProvider = typeof provider === "string" ? provider : "openai";
@@ -38,6 +38,7 @@ providersRouter.post(
         typeof baseUrl === "string" && baseUrl.trim() ? baseUrl.trim() : null;
       let resolvedApiKey =
         typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : "";
+      let wantsServerKey = Boolean(useServerKey);
 
       if (typeof connectionId === "string" && connectionId.trim()) {
         const [existingConn] = await db
@@ -56,9 +57,14 @@ providersRouter.post(
         }
         if (!provider) resolvedProvider = existingConn.provider;
         if (baseUrl === undefined) resolvedBaseUrl = existingConn.baseUrl;
-        if (!resolvedApiKey && existingConn.encryptedApiKey) {
-          resolvedApiKey = decryptSecret(existingConn.encryptedApiKey);
+        if (!resolvedApiKey) {
+          const allConnKeys = decryptConnectionAllKeys(existingConn);
+          resolvedApiKey = allConnKeys[0] || "";
         }
+      }
+
+      if (!resolvedApiKey && wantsServerKey && resolvedProvider === "gemini") {
+        resolvedApiKey = process.env.GEMINI_API_KEY?.trim() || "";
       }
 
       if (resolvedBaseUrl) {
@@ -135,6 +141,7 @@ providersRouter.post(
         availableModels,
         apiKey,
         extraApiKeys,
+        useServerKey,
         rpmLimit,
         rpdLimit,
         dailyTokenQuota,
@@ -147,7 +154,20 @@ providersRouter.post(
           .json({ error: "Provider type and connection name are required." });
       }
 
-      if (!apiKey || !String(apiKey).trim()) {
+      const rawSecret = apiKey && String(apiKey).trim() ? String(apiKey).trim() : "";
+      const allowServerKey =
+        Boolean(useServerKey) &&
+        String(provider) === "gemini" &&
+        Boolean(process.env.GEMINI_API_KEY?.trim());
+
+      if (Boolean(useServerKey) && !allowServerKey) {
+        return res.status(400).json({
+          error:
+            "Server GEMINI_API_KEY is not configured in this environment. Please enter your own API key.",
+        });
+      }
+
+      if (!rawSecret && !allowServerKey) {
         return res.status(400).json({ error: "Provider API key is required." });
       }
 
@@ -166,7 +186,6 @@ providersRouter.post(
         }
       }
 
-      const rawSecret = String(apiKey).trim();
       const parsedPoolKeys = parseExtraApiKeyInput(extraApiKeys).filter(
         (k) => k !== rawSecret
       );
@@ -185,9 +204,9 @@ providersRouter.post(
               ? String(defaultModel).trim()
               : null,
           availableModels: serializeAvailableModels(availableModels),
-          encryptedApiKey: encryptSecret(rawSecret),
+          encryptedApiKey: rawSecret ? encryptSecret(rawSecret) : null,
           encryptedKeyPool: serializeEncryptedKeyPool(parsedPoolKeys),
-          useServerKey: false,
+          useServerKey: allowServerKey,
           isActive: true,
           rpmLimit:
             rpmLimit && Number(rpmLimit) > 0
@@ -245,11 +264,25 @@ providersRouter.patch(
         apiKey,
         extraApiKeys,
         clearKeyPool,
+        useServerKey,
         rpmLimit,
         rpdLimit,
         dailyTokenQuota,
         monthlyUsdQuota,
       } = req.body || {};
+
+      const [existing] = await db
+        .select()
+        .from(providerConnections)
+        .where(
+          and(
+            eq(providerConnections.id, id),
+            eq(providerConnections.userId, userId)
+          )
+        );
+      if (!existing) {
+        return res.status(404).json({ error: "Provider connection not found" });
+      }
 
       const updates: Partial<typeof providerConnections.$inferInsert> = {};
       if (typeof isActive === "boolean") updates.isActive = isActive;
@@ -279,6 +312,22 @@ providersRouter.patch(
       }
       if (Array.isArray(availableModels)) {
         updates.availableModels = serializeAvailableModels(availableModels);
+      }
+      if (typeof useServerKey === "boolean") {
+        if (useServerKey) {
+          if (
+            existing.provider !== "gemini" ||
+            !process.env.GEMINI_API_KEY?.trim()
+          ) {
+            return res.status(400).json({
+              error:
+                "Server GEMINI_API_KEY is only available for Gemini connections when configured on the server.",
+            });
+          }
+          updates.useServerKey = true;
+        } else {
+          updates.useServerKey = false;
+        }
       }
       if (typeof apiKey === "string" && apiKey.trim()) {
         updates.encryptedApiKey = encryptSecret(apiKey.trim());
@@ -377,19 +426,66 @@ providersRouter.post(
       }
 
       const keys = decryptConnectionAllKeys(conn);
-      const apiKey = keys[0] || "";
+      if (keys.length === 0) {
+        const result = {
+          ok: false,
+          latencyMs: 0,
+          detail: "No API key configured for this connection.",
+          keyResults: [],
+        };
+        return res.json({ ...result, connection: sanitizeConnection(conn) });
+      }
 
-      const result = await testProviderConnection({
-        provider: conn.provider,
-        apiKey,
-        baseUrl: conn.baseUrl,
-      });
+      const keyResults = await Promise.all(
+        keys.map(async (keyVal, index) => {
+          const single = await testProviderConnection({
+            provider: conn.provider,
+            apiKey: keyVal,
+            baseUrl: conn.baseUrl,
+          });
+          return {
+            index: index + 1,
+            maskedKey:
+              conn.useServerKey &&
+              conn.provider === "gemini" &&
+              keyVal === process.env.GEMINI_API_KEY?.trim()
+                ? "Server GEMINI_API_KEY"
+                : maskSecret(keyVal),
+            ...single,
+          };
+        })
+      );
+
+      const passing = keyResults.filter((r) => r.ok);
+      const failing = keyResults.filter((r) => !r.ok);
+      const avgLatency =
+        passing.length > 0
+          ? Math.round(
+              passing.reduce((sum, r) => sum + r.latencyMs, 0) / passing.length
+            )
+          : keyResults[0]?.latencyMs ?? 0;
+      const overallOk = passing.length > 0;
+      const detail =
+        keyResults.length === 1
+          ? keyResults[0].detail
+          : overallOk
+            ? failing.length === 0
+              ? `All ${keyResults.length} pooled keys verified (${avgLatency}ms avg).`
+              : `${passing.length}/${keyResults.length} pooled keys verified; ${failing.length} failed (${failing[0].maskedKey}: ${failing[0].detail.slice(0, 80)}).`
+            : `All ${keyResults.length} keys failed (${keyResults[0].detail.slice(0, 100)}).`;
+
+      const result = {
+        ok: overallOk,
+        latencyMs: avgLatency,
+        detail,
+        keyResults,
+      };
 
       const [updatedConn] = await db
         .update(providerConnections)
         .set({
           lastLatencyMs: result.latencyMs,
-          lastError: result.ok ? null : result.detail,
+          lastError: result.ok && failing.length === 0 ? null : result.detail,
           circuitStatus: result.ok ? "healthy" : conn.circuitStatus,
           failureCount: result.ok ? 0 : conn.failureCount,
           cooldownUntil: result.ok ? null : conn.cooldownUntil,

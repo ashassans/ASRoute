@@ -70,6 +70,12 @@ export function AuthGate({
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [emailVerificationEnabled, setEmailVerificationEnabled] = useState(false);
+  const [forgotStep, setForgotStep] = useState<null | "request" | "verify">(null);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetOtp, setResetOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetSubmitting, setResetSubmitting] = useState(false);
   const [pendingVerifyEmail, setPendingVerifyEmail] = useState<string | null>(
     () => loadPendingVerifyEmail()
   );
@@ -82,6 +88,7 @@ export function AuthGate({
 
   useEffect(() => {
     setMode(initialMode);
+    setForgotStep(null);
     setError(null);
   }, [initialMode]);
 
@@ -96,8 +103,12 @@ export function AuthGate({
     fetch("/api/health")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (active && data && typeof data.googleOAuthEnabled === "boolean") {
+        if (!active || !data) return;
+        if (typeof data.googleOAuthEnabled === "boolean") {
           setGoogleEnabled(data.googleOAuthEnabled);
+        }
+        if (typeof data.emailVerificationEnabled === "boolean") {
+          setEmailVerificationEnabled(data.emailVerificationEnabled);
         }
       })
       .catch(() => {
@@ -261,6 +272,83 @@ export function AuthGate({
     }
   };
 
+  const handleSendResetOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetEmail = (resetEmail || email).trim();
+    if (!targetEmail) {
+      setError("Enter your account email address.");
+      return;
+    }
+    if (!emailVerificationEnabled) {
+      setError(
+        "Email OTP delivery requires Gmail SMTP (GMAIL_USER / GMAIL_APP_PASSWORD) configured on this server."
+      );
+      return;
+    }
+    setError(null);
+    setInfo(null);
+    setResetSubmitting(true);
+    try {
+      const res = await authClient.emailOtp.sendVerificationOtp({
+        email: targetEmail,
+        type: "forget-password",
+      });
+      if (res.error) {
+        setError(res.error.message || "Unable to send password reset code.");
+        return;
+      }
+      setResetEmail(targetEmail);
+      setResetOtp("");
+      setNewPassword("");
+      setResendCooldown(30);
+      setForgotStep("verify");
+      setInfo(`A 6-digit password reset code was sent to ${targetEmail}.`);
+    } catch {
+      setError("Network error requesting password reset code.");
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetEmail = resetEmail.trim();
+    const cleanOtp = resetOtp.trim();
+    if (cleanOtp.length < 6) {
+      setError("Enter the 6-digit verification code.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setError(null);
+    setInfo(null);
+    setResetSubmitting(true);
+    try {
+      const res = await authClient.emailOtp.resetPassword({
+        email: targetEmail,
+        otp: cleanOtp,
+        password: newPassword,
+      });
+      if (res.error) {
+        setError(res.error.message || "Invalid or expired reset code.");
+        return;
+      }
+      setForgotStep(null);
+      setEmail(targetEmail);
+      setPassword("");
+      setResetOtp("");
+      setNewPassword("");
+      setMode("signin");
+      setInfo("Password updated. Sign in with your new password.");
+    } catch {
+      setError("Network error resetting password.");
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#09090B] text-[#FAFAFA] flex flex-col relative overflow-hidden">
       {/* Subtle amber spotlight backdrop */}
@@ -399,6 +487,133 @@ export function AuthGate({
                   </button>
                 </div>
               </div>
+            ) : forgotStep ? (
+              <div>
+                <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA] mb-1">
+                  Reset password
+                </h1>
+                <p className="text-xs text-[#A1A1AA]">
+                  {forgotStep === "request"
+                    ? "Enter your account email to receive a 6-digit reset code."
+                    : `Enter the 6-digit code sent to ${resetEmail} and choose a new password.`}
+                </p>
+
+                {info && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-300"
+                  >
+                    {info}
+                  </motion.div>
+                )}
+
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300"
+                  >
+                    {error}
+                  </motion.div>
+                )}
+
+                {forgotStep === "request" ? (
+                  <form onSubmit={handleSendResetOtp} className="mt-5 space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
+                      />
+                    </div>
+                    {!emailVerificationEnabled && (
+                      <p className="text-[11px] text-[#A1A1AA]">
+                        Note: Server email OTP delivery is currently disabled until GMAIL_USER and GMAIL_APP_PASSWORD are set.
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={resetSubmitting || !emailVerificationEnabled}
+                      className="w-full inline-flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-[#09090B] font-semibold text-sm py-2.5 px-4 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      <span>{resetSubmitting ? "Sending..." : "Send Reset Code"}</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleConfirmResetPassword} className="mt-5 space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                        6-Digit Reset Code
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        required
+                        maxLength={6}
+                        value={resetOtp}
+                        onChange={(e) =>
+                          setResetOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                        }
+                        className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-center font-mono text-lg tracking-[0.35em] text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={resetSubmitting}
+                      className="w-full inline-flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-[#09090B] font-semibold text-sm py-2.5 px-4 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      <span>
+                        {resetSubmitting ? "Updating..." : "Reset Password"}
+                      </span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </form>
+                )}
+
+                <div className="mt-4 flex items-center justify-between text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotStep(null);
+                      setError(null);
+                      setInfo(null);
+                    }}
+                    className="text-[#A1A1AA] hover:text-white transition-colors"
+                  >
+                    Back to Sign In
+                  </button>
+                  {forgotStep === "verify" && (
+                    <button
+                      type="button"
+                      disabled={resetSubmitting || resendCooldown > 0}
+                      onClick={(e) => handleSendResetOtp(e as unknown as React.FormEvent)}
+                      className="text-amber-400 hover:text-amber-300 disabled:opacity-50 font-medium transition-colors"
+                    >
+                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                    </button>
+                  )}
+                </div>
+              </div>
             ) : (
               <>
                 {/* Animated Segmented Sign-In / Sign-Up Switch */}
@@ -442,6 +657,16 @@ export function AuthGate({
                 <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA] mb-1">
                   {mode === "signin" ? "Sign in to AS ROUTER" : "Create workspace"}
                 </h1>
+
+                {info && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-300"
+                  >
+                    {info}
+                  </motion.div>
+                )}
 
                 {error && (
                   <motion.div
@@ -487,9 +712,25 @@ export function AuthGate({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                      Password
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-medium text-[#D4D4D8]">
+                        Password
+                      </label>
+                      {mode === "signin" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResetEmail(email.trim());
+                            setForgotStep("request");
+                            setError(null);
+                            setInfo(null);
+                          }}
+                          className="text-[11px] text-amber-400 hover:text-amber-300 transition-colors"
+                        >
+                          Forgot password?
+                        </button>
+                      )}
+                    </div>
                     <input
                       type="password"
                       required

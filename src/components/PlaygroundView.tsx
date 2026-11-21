@@ -7,6 +7,7 @@ import {
   ImagePlus,
   RefreshCw,
   SlidersHorizontal,
+  Square,
   SquarePen,
   X,
 } from "lucide-react";
@@ -27,9 +28,11 @@ interface PlaygroundViewProps {
 
 interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   content: string;
   imageDataUrl?: string | null;
+  toolCallId?: string;
+  toolName?: string;
   toolCalls?: Array<{
     id: string;
     type: string;
@@ -233,10 +236,13 @@ export function PlaygroundView({
   const [freeOnly, setFreeOnly] = useState(false);
   const [useCache, setUseCache] = useState(false);
   const [streamResponse, setStreamResponse] = useState(true);
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState("2048");
   const [clearingCache, setClearingCache] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [running, setRunning] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [toolReplyDrafts, setToolReplyDrafts] = useState<Record<string, string>>({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -380,8 +386,43 @@ export function PlaygroundView({
       setInputText("");
     }
     setImageDataUrl(null);
-    setRunning(true);
+    await executeTurn(nextHistory, parsedTools);
+  };
 
+  const handleSubmitToolOutput = async (
+    toolCallId: string,
+    toolName: string
+  ) => {
+    if (running) return;
+    const rawOutput = (
+      toolReplyDrafts[toolCallId] ?? '{"status":"ok"}'
+    ).trim();
+    let parsedTools: unknown = undefined;
+    if (enableTools) {
+      try {
+        parsedTools = JSON.parse(toolsJson);
+      } catch {
+        parsedTools = undefined;
+      }
+    }
+    const toolMsg: ChatMessage = {
+      id: `t_${Date.now()}`,
+      role: "tool",
+      toolCallId,
+      toolName,
+      content: rawOutput || '{"status":"ok"}',
+    };
+    const nextHistory = [...messages, toolMsg];
+    setMessages(nextHistory);
+    await executeTurn(nextHistory, parsedTools);
+  };
+
+  const handleStop = () => {
+    abortRef.current?.abort();
+    setRunning(false);
+  };
+  const executeTurn = async (nextHistory: ChatMessage[], parsedTools?: unknown) => {
+    setRunning(true);
     const assistantId = `a_${Date.now()}`;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -403,10 +444,26 @@ export function PlaygroundView({
                 ],
               };
             }
+            if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+              return {
+                role: "assistant",
+                content: m.content || null,
+                tool_calls: m.toolCalls,
+              };
+            }
+            if (m.role === "tool") {
+              return {
+                role: "tool",
+                tool_call_id: m.toolCallId,
+                name: m.toolName,
+                content: m.content,
+              };
+            }
             return { role: m.role, content: m.content };
           }),
       ];
 
+      const parsedMaxTokens = Number(maxTokens);
       const res = await fetch("/api/playground/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -414,6 +471,11 @@ export function PlaygroundView({
         body: JSON.stringify({
           model: selectedModel,
           messages: apiMessages,
+          temperature,
+          max_tokens:
+            Number.isFinite(parsedMaxTokens) && parsedMaxTokens > 0
+              ? Math.round(parsedMaxTokens)
+              : undefined,
           tools: parsedTools,
           freeOnly,
           useCache,
@@ -493,8 +555,10 @@ export function PlaygroundView({
                   m.id === assistantId
                     ? {
                         ...m,
-                        content: payload.error || "Stream failed",
-                        isError: true,
+                        content: streamedText
+                          ? `${streamedText}\n\n[Stream error: ${payload.error || "Stream failed"}]`
+                          : payload.error || "Stream failed",
+                        isError: !streamedText,
                       }
                     : m
                 )
@@ -717,6 +781,39 @@ export function PlaygroundView({
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between text-xs text-[#D4D4D8] mb-1">
+                    <span>Temperature</span>
+                    <span className="font-mono text-amber-400">
+                      {temperature.toFixed(1)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={temperature}
+                    onChange={(e) => setTemperature(Number(e.target.value))}
+                    className="w-full accent-amber-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#D4D4D8] mb-1">
+                    Max Tokens
+                  </label>
+                  <input
+                    type="number"
+                    min={64}
+                    max={32768}
+                    value={maxTokens}
+                    onChange={(e) => setMaxTokens(e.target.value)}
+                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
               <div className="divide-y divide-[#1D1D22] border-y border-[#1D1D22] py-1">
                 <ToggleSwitch
                   checked={streamResponse}
@@ -862,6 +959,17 @@ export function PlaygroundView({
                     )}
                   </div>
                 </motion.div>
+              ) : msg.role === "tool" ? (
+                <div key={msg.id} className="flex justify-end">
+                  <div className="max-w-[82%] bg-[#09090B] border border-emerald-500/30 rounded-xl px-3.5 py-2 text-xs font-mono text-emerald-300 space-y-1">
+                    <div className="text-[11px] text-emerald-400">
+                      tool output ({msg.toolName || msg.toolCallId})
+                    </div>
+                    <div className="whitespace-pre-wrap break-all text-[#D4D4D8]">
+                      {msg.content}
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <motion.div
                   key={msg.id}
@@ -890,50 +998,105 @@ export function PlaygroundView({
                     )}
 
                     {msg.toolCalls && msg.toolCalls.length > 0 && (
-                      <div className="bg-[#111114] border border-[#222227] rounded-xl p-3.5 space-y-1.5">
+                      <div className="bg-[#111114] border border-[#222227] rounded-xl p-3.5 space-y-3">
                         <div className="text-xs font-medium text-emerald-400">
                           Tool Calls ({msg.toolCalls.length})
                         </div>
                         <pre className="font-mono text-xs text-[#E5E7EB] overflow-x-auto">
                           {JSON.stringify(msg.toolCalls, null, 2)}
                         </pre>
+                        {msg.toolCalls.map((tc) => (
+                          <div
+                            key={tc.id}
+                            className="pt-2 border-t border-[#222227] flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+                          >
+                            <input
+                              type="text"
+                              value={
+                                toolReplyDrafts[tc.id] ??
+                                '{"status":"ok","latencyMs":42}'
+                              }
+                              onChange={(e) =>
+                                setToolReplyDrafts((prev) => ({
+                                  ...prev,
+                                  [tc.id]: e.target.value,
+                                }))
+                              }
+                              aria-label={`Tool response JSON for ${tc.function.name}`}
+                              className="flex-1 bg-[#09090B] border border-[#222227] rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                            />
+                            <button
+                              type="button"
+                              disabled={running}
+                              onClick={() =>
+                                handleSubmitToolOutput(tc.id, tc.function.name)
+                              }
+                              className="px-3 py-1.5 text-xs font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 rounded-lg whitespace-nowrap disabled:opacity-50"
+                            >
+                              Send {tc.function.name} output
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
 
                     {msg.meta && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] font-mono text-[#71717A] tabular-nums">
-                        <div className="flex flex-wrap items-center gap-x-1.5">
-                          <span className="text-[#A1A1AA]">
-                            {msg.meta.resolvedProvider}/{msg.meta.resolvedModel}
-                          </span>
-                          <span>·</span>
-                          <span>{msg.meta.latencyMs}ms</span>
-                          <span>·</span>
-                          <span>
-                            {msg.meta.promptTokens + msg.meta.completionTokens}{" "}
-                            tok
-                          </span>
-                          <span>·</span>
-                          <span>${msg.meta.estimatedCostUsd.toFixed(5)}</span>
-                          {msg.meta.cached && (
-                            <>
-                              <span>·</span>
-                              <span className="text-sky-400">Cache hit</span>
-                            </>
-                          )}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-[#71717A] tabular-nums">
+                          <div className="flex flex-wrap items-center gap-x-1.5">
+                            <span className="text-[#A1A1AA]">
+                              {msg.meta.resolvedProvider}/{msg.meta.resolvedModel}
+                            </span>
+                            <span>·</span>
+                            <span>{msg.meta.latencyMs}ms</span>
+                            <span>·</span>
+                            <span>
+                              {msg.meta.promptTokens + msg.meta.completionTokens}{" "}
+                              tok
+                            </span>
+                            <span>·</span>
+                            <span>${msg.meta.estimatedCostUsd.toFixed(5)}</span>
+                            {msg.meta.cached && (
+                              <>
+                                <span>·</span>
+                                <span className="text-sky-400">Cache hit</span>
+                              </>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyMessage(msg)}
+                            className="inline-flex items-center gap-1 text-[#71717A] hover:text-white transition-colors"
+                            title="Copy response"
+                          >
+                            {copiedId === msg.id ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyMessage(msg)}
-                          className="inline-flex items-center gap-1 text-[#71717A] hover:text-white transition-colors"
-                          title="Copy response"
-                        >
-                          {copiedId === msg.id ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
+
+                        {msg.meta.fallbackAttempts.length > 1 && (
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+                            {msg.meta.fallbackAttempts.map((hop, hIdx) => (
+                              <span
+                                key={`${hop.tierId}-${hIdx}`}
+                                title={hop.reason}
+                                className={`px-2 py-0.5 rounded border ${
+                                  hop.status === "success"
+                                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                                    : hop.status === "failed"
+                                      ? "bg-red-500/10 border-red-500/30 text-red-300"
+                                      : "bg-[#111114] border-[#27272A] text-[#A1A1AA]"
+                                }`}
+                              >
+                                #{hIdx + 1} {hop.provider}/{hop.model} ({hop.status}
+                                {hop.statusCode ? ` ${hop.statusCode}` : ""})
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1031,18 +1194,29 @@ export function PlaygroundView({
               </button>
             </div>
 
-            <button
-              type="submit"
-              disabled={
-                running ||
-                connections.length === 0 ||
-                (!inputText.trim() && !imageDataUrl)
-              }
-              aria-label="Send message"
-              className="w-8 h-8 rounded-full bg-amber-400 hover:bg-amber-300 disabled:bg-[#27272A] disabled:text-[#71717A] text-[#09090B] flex items-center justify-center transition-colors shrink-0"
-            >
-              <ArrowUp className="w-4 h-4" />
-            </button>
+            {running ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                aria-label="Stop generating"
+                className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 flex items-center justify-center transition-colors shrink-0"
+                title="Stop generating"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={
+                  connections.length === 0 ||
+                  (!inputText.trim() && !imageDataUrl)
+                }
+                aria-label="Send message"
+                className="w-8 h-8 rounded-full bg-amber-400 hover:bg-amber-300 disabled:bg-[#27272A] disabled:text-[#71717A] text-[#09090B] flex items-center justify-center transition-colors shrink-0"
+              >
+                <ArrowUp className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </form>
       </div>

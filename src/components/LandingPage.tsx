@@ -29,7 +29,7 @@ const ORBIT_PROVIDERS = [
     color: "#60A5FA",
     angle: 35,
     ring: 1,
-    models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-lite"],
+    models: ["gemini-4-hydrogen", "gemini-4-neon", "gemini-4-carbon"],
   },
   {
     id: "openai",
@@ -38,7 +38,7 @@ const ORBIT_PROVIDERS = [
     color: "#FAFAFA",
     angle: 115,
     ring: 2,
-    models: ["gpt-4.1", "gpt-4.1-mini", "o4-mini"],
+    models: ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-terra", "gpt-6-luna"],
   },
   {
     id: "anthropic",
@@ -47,7 +47,12 @@ const ORBIT_PROVIDERS = [
     color: "#FBBF24",
     angle: 205,
     ring: 1,
-    models: ["claude-sonnet-4", "claude-opus-4", "claude-3.5-haiku"],
+    models: [
+      "claude-sonnet-5-5",
+      "claude-opus-5-5",
+      "claude-fable-5-2",
+      "claude-haiku-5-5",
+    ],
   },
   {
     id: "deepseek",
@@ -56,7 +61,7 @@ const ORBIT_PROVIDERS = [
     color: "#38BDF8",
     angle: 295,
     ring: 2,
-    models: ["deepseek-chat", "deepseek-reasoner"],
+    models: ["deepseek-flash", "deepseek-v4-pro"],
   },
   {
     id: "groq",
@@ -65,7 +70,7 @@ const ORBIT_PROVIDERS = [
     color: "#F97316",
     angle: 162,
     ring: 3,
-    models: ["llama-3.3-70b-versatile", "llama-4-scout-17b"],
+    models: ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "llama-4-scout-17b"],
   },
   {
     id: "mistral",
@@ -74,7 +79,7 @@ const ORBIT_PROVIDERS = [
     color: "#F59E0B",
     angle: 342,
     ring: 3,
-    models: ["mistral-large-latest", "mistral-small-latest"],
+    models: ["mistral-large-latest", "mistral-small-latest", "ministral-8b-latest"],
   },
   {
     id: "openrouter",
@@ -83,9 +88,57 @@ const ORBIT_PROVIDERS = [
     color: "#EC4899",
     angle: 78,
     ring: 3,
-    models: ["google/gemini-2.5-flash", "openai/gpt-4.1-mini"],
+    models: [
+      "google/gemini-4-hydrogen",
+      "openai/gpt-6.2-sol",
+      "anthropic/claude-sonnet-5.5",
+    ],
   },
 ];
+
+const EXTRA_POPULAR_PROVIDERS = [
+  {
+    id: "xai",
+    name: "xAI (Grok)",
+    short: "X",
+    color: "#E4E4E7",
+    models: ["grok-4.7", "grok-4.6", "grok-4.20", "grok-3-mini"],
+  },
+  {
+    id: "cerebras",
+    name: "Cerebras",
+    short: "Cb",
+    color: "#22D3EE",
+    models: ["qwen-3.8-27b", "gpt-oss-120b", "llama-3.3-70b"],
+  },
+  {
+    id: "together",
+    name: "Together AI",
+    short: "T",
+    color: "#818CF8",
+    models: [
+      "deepseek-ai/DeepSeek-V4",
+      "Qwen/Qwen3.8-27B-Instruct",
+      "meta-llama/Llama-4-Maverick",
+    ],
+  },
+  {
+    id: "fireworks",
+    name: "Fireworks AI",
+    short: "Fw",
+    color: "#FB923C",
+    models: ["deepseek-v4-pro", "kimi-k3-instruct", "llama4-maverick"],
+  },
+  {
+    id: "perplexity",
+    name: "Perplexity",
+    short: "Px",
+    color: "#2DD4BF",
+    models: ["sonar", "sonar-pro", "sonar-reasoning-pro"],
+  },
+];
+
+const ALL_DISPLAY_PROVIDERS = [...ORBIT_PROVIDERS, ...EXTRA_POPULAR_PROVIDERS];
 
 const INTENT_ROUTING_PRESETS: Record<
   "coding" | "vision" | "tools" | "fast",
@@ -98,46 +151,46 @@ const INTENT_ROUTING_PRESETS: Record<
 > = {
   coding: {
     label: "Coding & Debug",
-    winner: "Claude Sonnet 4",
+    winner: "Claude Opus 5.5",
     savings: "Zero manual switching",
     branches: [
-      { model: "claude-sonnet-4", provider: "Anthropic", tag: "A", pct: 55 },
-      { model: "gemini-2.5-pro", provider: "Gemini", tag: "G", pct: 25 },
-      { model: "gpt-4.1", provider: "OpenAI", tag: "O", pct: 15 },
-      { model: "deepseek-reasoner", provider: "DeepSeek", tag: "D", pct: 5 },
+      { model: "claude-opus-5-5", provider: "Anthropic", tag: "A", pct: 55 },
+      { model: "gemini-4-neon", provider: "Gemini", tag: "G", pct: 25 },
+      { model: "gpt-6.2-astra", provider: "OpenAI", tag: "O", pct: 15 },
+      { model: "deepseek-v4-pro", provider: "DeepSeek", tag: "D", pct: 5 },
     ],
   },
   vision: {
     label: "Multimodal Vision",
-    winner: "Gemini 2.5 Pro",
+    winner: "GPT-6.1 Terra",
     savings: "Native image_url translation",
     branches: [
-      { model: "gemini-2.5-pro", provider: "Gemini", tag: "G", pct: 50 },
-      { model: "gpt-4.1", provider: "OpenAI", tag: "O", pct: 25 },
-      { model: "claude-sonnet-4", provider: "Anthropic", tag: "A", pct: 20 },
-      { model: "llama-4-scout-17b", provider: "Groq", tag: "Q", pct: 5 },
+      { model: "gpt-6.1-terra", provider: "OpenAI", tag: "O", pct: 45 },
+      { model: "gemini-4-carbon", provider: "Gemini", tag: "G", pct: 30 },
+      { model: "claude-sonnet-5-5", provider: "Anthropic", tag: "A", pct: 20 },
+      { model: "llama-4-maverick-17b", provider: "Groq", tag: "Q", pct: 5 },
     ],
   },
   tools: {
     label: "Function Calling",
-    winner: "GPT-4.1",
+    winner: "Gemini 4 Neon",
     savings: "Unified tools[] schema",
     branches: [
-      { model: "gpt-4.1", provider: "OpenAI", tag: "O", pct: 45 },
-      { model: "gemini-2.5-flash", provider: "Gemini", tag: "G", pct: 35 },
-      { model: "claude-sonnet-4", provider: "Anthropic", tag: "A", pct: 15 },
-      { model: "llama-3.3-70b", provider: "Groq", tag: "Q", pct: 5 },
+      { model: "gemini-4-neon", provider: "Gemini", tag: "G", pct: 45 },
+      { model: "gpt-6.2-sol", provider: "OpenAI", tag: "O", pct: 35 },
+      { model: "claude-sonnet-5-5", provider: "Anthropic", tag: "A", pct: 15 },
+      { model: "qwen/qwen3.8-27b", provider: "Groq", tag: "Q", pct: 5 },
     ],
   },
   fast: {
     label: "Fast Chat",
-    winner: "Gemini 2.5 Flash",
+    winner: "Gemini 4 Hydrogen",
     savings: "Up to 80% lower token spend",
     branches: [
-      { model: "gemini-2.5-flash", provider: "Gemini", tag: "G", pct: 60 },
-      { model: "claude-3.5-haiku", provider: "Anthropic", tag: "A", pct: 20 },
-      { model: "gpt-4.1-mini", provider: "OpenAI", tag: "O", pct: 12 },
-      { model: "llama-3.3-70b", provider: "Groq", tag: "Q", pct: 8 },
+      { model: "gemini-4-hydrogen", provider: "Gemini", tag: "G", pct: 55 },
+      { model: "gpt-6-luna", provider: "OpenAI", tag: "O", pct: 20 },
+      { model: "claude-haiku-5-5", provider: "Anthropic", tag: "A", pct: 15 },
+      { model: "deepseek-flash", provider: "DeepSeek", tag: "D", pct: 10 },
     ],
   },
 };
@@ -154,7 +207,13 @@ export function LandingPage({
   isAuthenticated = false,
   onOpenDashboard,
 }: LandingPageProps) {
-  const [hoveredProvider, setHoveredProvider] = useState(ORBIT_PROVIDERS[0]);
+  const [hoveredProvider, setHoveredProvider] = useState<{
+    id: string;
+    name: string;
+    short: string;
+    color: string;
+    models: string[];
+  }>(ORBIT_PROVIDERS[0]);
   const [activeIntent, setActiveIntent] = useState<
     "coding" | "vision" | "tools" | "fast"
   >("fast");
@@ -605,10 +664,10 @@ const msg = await client.messages.create({
               </h1>
 
               <p className="text-base sm:text-lg text-[#D4D4D8] leading-relaxed max-w-xl">
-                Connect your own Gemini, OpenAI, Anthropic, Groq, DeepSeek,
-                Mistral, and OpenRouter keys behind one OpenAI and Claude
-                compatible endpoint—with automatic 429 failover and strict
-                per-key budgets.
+                Connect Gemini, OpenAI, Anthropic, xAI Grok, DeepSeek, Groq,
+                Cerebras, Together, Fireworks, Perplexity, Mistral, OpenRouter,
+                or custom endpoints behind one unified API—with automatic 429
+                failover and strict per-key budgets.
               </p>
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -637,10 +696,10 @@ const msg = await client.messages.create({
               <div className="pt-4 border-t border-[#1C1C21] grid grid-cols-3 gap-4">
                 <div>
                   <div className="font-mono text-sm font-semibold text-[#FAFAFA] tabular-nums">
-                    7 Providers
+                    12+ Providers
                   </div>
                   <div className="text-xs text-[#A1A1AA] mt-0.5">
-                    Single unified API
+                    Popular &amp; custom APIs
                   </div>
                 </div>
                 <div>
@@ -856,15 +915,15 @@ const msg = await client.messages.create({
 
           {/* Supported Provider Strip */}
           <div className="max-w-[1280px] mx-auto px-5 sm:px-8 pb-10">
-            <div className="pt-6 border-t border-[#1C1C21] flex flex-wrap items-center justify-between gap-4 sm:gap-6 text-xs font-display font-semibold tracking-wide">
-              {ORBIT_PROVIDERS.map((p) => {
+            <div className="pt-6 border-t border-[#1C1C21] flex flex-wrap items-center justify-center sm:justify-between gap-x-4 gap-y-2 text-xs font-display font-semibold tracking-wide">
+              {ALL_DISPLAY_PROVIDERS.map((p) => {
                 const isSelected = hoveredProvider.id === p.id;
                 return (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => setHoveredProvider(p)}
-                    className={`min-h-[36px] px-2 transition-colors ${
+                    className={`min-h-[36px] px-2 transition-colors whitespace-nowrap ${
                       isSelected
                         ? "text-amber-400"
                         : "text-[#A1A1AA] hover:text-[#FAFAFA]"
@@ -1245,11 +1304,11 @@ const msg = await client.messages.create({
                 </div>
 
                 <div className="px-5 py-4 flex items-center justify-between gap-4">
-                  <span className="text-sm text-[#FAFAFA]">
+                  <span className="text-sm text-[#FAFAFA] whitespace-nowrap">
                     Allowed providers
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    {ORBIT_PROVIDERS.map((p) => (
+                  <div className="flex items-center flex-wrap justify-end gap-1.5">
+                    {ALL_DISPLAY_PROVIDERS.map((p) => (
                       <span
                         key={p.id}
                         style={{ color: p.color }}
@@ -1413,7 +1472,7 @@ const msg = await client.messages.create({
                 Built for production teams
               </p>
               <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#FAFAFA] text-balance">
-                Start routing across 7 providers in under 60 seconds.
+                Start routing across multiple providers in under 60 seconds.
               </h2>
               <p className="text-sm sm:text-base text-[#D4D4D8] leading-relaxed max-w-2xl">
                 Create an isolated workspace, connect your existing provider API

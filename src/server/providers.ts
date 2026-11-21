@@ -12,7 +12,7 @@ import {
   isModelKnownFree,
 } from "../shared/catalog.ts";
 import type { ModelHealthEntry } from "../types/gateway.ts";
-import { validateOutboundUrl } from "./urlSafety.ts";
+import { validateOutboundUrl, validateOutboundUrlWithDns } from "./urlSafety.ts";
 
 export type OpenAIContentPart =
   | { type: "text"; text: string }
@@ -50,6 +50,11 @@ export interface NormalizedCompletionRequest {
   stream?: boolean;
   temperature?: number;
   max_tokens?: number;
+  top_p?: number;
+  stop?: string | string[];
+  response_format?: Record<string, unknown>;
+  presence_penalty?: number;
+  frequency_penalty?: number;
   tools?: OpenAIToolDefinition[];
   tool_choice?:
     | "auto"
@@ -128,7 +133,7 @@ async function resolveImageToInlineData(
 
   let parsedUrl: URL;
   try {
-    parsedUrl = validateOutboundUrl(url, "image URL");
+    parsedUrl = await validateOutboundUrlWithDns(url, "image URL");
   } catch (err) {
     throw new UpstreamHttpError(
       err instanceof Error ? err.message : "Invalid image URL.",
@@ -137,7 +142,10 @@ async function resolveImageToInlineData(
     );
   }
 
-  const res = await fetch(parsedUrl.toString(), { signal: AbortSignal.timeout(10000) });
+  const res = await fetch(parsedUrl.toString(), {
+    redirect: "error",
+    signal: AbortSignal.timeout(10000),
+  });
   if (!res.ok) {
     throw new UpstreamHttpError(
       `Failed to fetch multimodal image URL (${res.status})`,
@@ -154,6 +162,42 @@ async function resolveImageToInlineData(
     mimeType: contentType.split(";")[0].trim(),
     data: Buffer.from(arrayBuffer).toString("base64"),
   };
+}
+
+function sanitizeGeminiSchema(schema: unknown): Record<string, unknown> {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return { type: "object", properties: {} };
+  }
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+    if (key === "$schema" || key === "additionalProperties") {
+      continue;
+    }
+    if (key === "properties" && value && typeof value === "object" && !Array.isArray(value)) {
+      const nextProps: Record<string, unknown> = {};
+      for (const [propKey, propSchema] of Object.entries(value as Record<string, unknown>)) {
+        nextProps[propKey] = sanitizeGeminiSchema(propSchema);
+      }
+      clean[key] = nextProps;
+    } else if (key === "items" && value && typeof value === "object" && !Array.isArray(value)) {
+      clean[key] = sanitizeGeminiSchema(value);
+    } else if ((key === "anyOf" || key === "oneOf" || key === "allOf") && Array.isArray(value)) {
+      clean[key] = value.map((item) => sanitizeGeminiSchema(item));
+    } else {
+      clean[key] = value;
+    }
+  }
+  return clean;
+}
+
+function pushGeminiContent(contents: Content[], role: "user" | "model", parts: Part[]) {
+  if (parts.length === 0) return;
+  const prev = contents[contents.length - 1];
+  if (prev && prev.role === role && Array.isArray(prev.parts)) {
+    prev.parts.push(...parts);
+  } else {
+    contents.push({ role, parts: [...parts] });
+  }
 }
 
 async function buildGeminiPayload(request: NormalizedCompletionRequest): Promise<{
@@ -201,9 +245,7 @@ async function buildGeminiPayload(request: NormalizedCompletionRequest): Promise
           });
         }
       }
-      if (parts.length > 0) {
-        contents.push({ role: "model", parts });
-      }
+      pushGeminiContent(contents, "model", parts);
       continue;
     }
 
@@ -223,18 +265,15 @@ async function buildGeminiPayload(request: NormalizedCompletionRequest): Promise
       } catch {
         parsedResp = { result: rawText };
       }
-      contents.push({
-        role: "user",
-        parts: [
-          {
-            functionResponse: {
-              id: msg.tool_call_id,
-              name: fnName,
-              response: parsedResp,
-            },
+      pushGeminiContent(contents, "user", [
+        {
+          functionResponse: {
+            id: msg.tool_call_id,
+            name: fnName,
+            response: parsedResp,
           },
-        ],
-      });
+        },
+      ]);
       continue;
     }
 
@@ -252,9 +291,7 @@ async function buildGeminiPayload(request: NormalizedCompletionRequest): Promise
         }
       }
     }
-    if (parts.length > 0) {
-      contents.push({ role: "user", parts });
-    }
+    pushGeminiContent(contents, "user", parts);
   }
 
   if (contents.length === 0) {
@@ -268,10 +305,7 @@ async function buildGeminiPayload(request: NormalizedCompletionRequest): Promise
       .map((t) => ({
         name: t.function.name,
         description: t.function.description,
-        parametersJsonSchema: t.function.parameters || {
-          type: "object",
-          properties: {},
-        },
+        parametersJsonSchema: sanitizeGeminiSchema(t.function.parameters),
       }));
     if (declarations.length > 0) {
       tools = [{ functionDeclarations: declarations }];
@@ -359,6 +393,7 @@ export async function invokeUpstreamCompletion(params: {
     return invokeGemini({
       model,
       apiKey,
+      baseUrl,
       timeoutMs,
       signal,
       request,
@@ -500,6 +535,7 @@ async function raceWithAbort<T>(
 async function invokeGemini(params: {
   model: string;
   apiKey: string;
+  baseUrl?: string | null;
   timeoutMs?: number;
   signal?: AbortSignal;
   request: NormalizedCompletionRequest;
@@ -508,15 +544,38 @@ async function invokeGemini(params: {
   const {
     model,
     apiKey,
+    baseUrl,
     timeoutMs = 25000,
     signal,
     request,
     onStreamDelta,
   } = params;
+
+  let resolvedGeminiBaseUrl: string | undefined;
+  if (baseUrl && baseUrl.trim()) {
+    const clean = baseUrl.trim().replace(/\/+$/, "").replace(/\/v1beta$/, "");
+    if (clean !== "https://generativelanguage.googleapis.com") {
+      try {
+        resolvedGeminiBaseUrl = (
+          await validateOutboundUrlWithDns(clean, "provider base URL")
+        )
+          .toString()
+          .replace(/\/+$/, "");
+      } catch (err) {
+        throw new UpstreamHttpError(
+          err instanceof Error ? err.message : "Invalid provider base URL.",
+          400,
+          false
+        );
+      }
+    }
+  }
+
   const ai = new GoogleGenAI({
     apiKey,
     httpOptions: {
       timeout: timeoutMs,
+      ...(resolvedGeminiBaseUrl ? { baseUrl: resolvedGeminiBaseUrl } : {}),
       headers: {
         "User-Agent": "aistudio-build",
       },
@@ -539,6 +598,24 @@ async function invokeGemini(params: {
   }
   if (typeof request.max_tokens === "number" && request.max_tokens > 0) {
     config.maxOutputTokens = request.max_tokens;
+  }
+  if (typeof request.top_p === "number") {
+    config.topP = request.top_p;
+  }
+  if (typeof request.stop === "string" && request.stop) {
+    config.stopSequences = [request.stop];
+  } else if (Array.isArray(request.stop) && request.stop.length > 0) {
+    config.stopSequences = request.stop.filter((s) => typeof s === "string" && s);
+  }
+  if (request.response_format && typeof request.response_format === "object") {
+    const fmtType = request.response_format.type;
+    if (fmtType === "json_object" || fmtType === "json_schema") {
+      config.responseMimeType = "application/json";
+      const jsonSchema = (request.response_format.json_schema as Record<string, unknown> | undefined)?.schema;
+      if (fmtType === "json_schema" && jsonSchema && typeof jsonSchema === "object") {
+        config.responseJsonSchema = sanitizeGeminiSchema(jsonSchema);
+      }
+    }
   }
   if (tools) config.tools = tools;
   if (toolConfig) config.toolConfig = toolConfig;
@@ -744,7 +821,7 @@ async function invokeAnthropic(params: {
   const rawEndpoint = `${(baseUrl || "https://api.anthropic.com/v1").replace(/\/+$/, "")}/messages`;
   let endpoint: string;
   try {
-    endpoint = validateOutboundUrl(rawEndpoint, "provider base URL").toString();
+    endpoint = (await validateOutboundUrlWithDns(rawEndpoint, "provider base URL")).toString();
   } catch (err) {
     throw new UpstreamHttpError(
       err instanceof Error ? err.message : "Invalid provider base URL.",
@@ -754,7 +831,20 @@ async function invokeAnthropic(params: {
   }
 
   const systemParts: string[] = [];
-  const messages: Array<{ role: "user" | "assistant"; content: unknown }> = [];
+  const messages: Array<{ role: "user" | "assistant"; content: Array<Record<string, unknown>> }> = [];
+
+  const pushAnthropicMessage = (
+    role: "user" | "assistant",
+    blocks: Array<Record<string, unknown>>
+  ) => {
+    if (blocks.length === 0) return;
+    const prev = messages[messages.length - 1];
+    if (prev && prev.role === role) {
+      prev.content.push(...blocks);
+    } else {
+      messages.push({ role, content: [...blocks] });
+    }
+  };
 
   for (const m of request.messages) {
     if (m.role === "system") {
@@ -764,16 +854,13 @@ async function invokeAnthropic(params: {
     }
 
     if (m.role === "tool") {
-      messages.push({
-        role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: m.tool_call_id || "tool_call",
-            content: extractTextContent(m.content),
-          },
-        ],
-      });
+      pushAnthropicMessage("user", [
+        {
+          type: "tool_result",
+          tool_use_id: m.tool_call_id || "tool_call",
+          content: extractTextContent(m.content),
+        },
+      ]);
       continue;
     }
 
@@ -797,16 +884,14 @@ async function invokeAnthropic(params: {
           });
         }
       }
-      if (blocks.length > 0) {
-        messages.push({ role: "assistant", content: blocks });
-      }
+      pushAnthropicMessage("assistant", blocks);
       continue;
     }
 
     // User message (string or multimodal array)
     if (typeof m.content === "string") {
       if (m.content) {
-        messages.push({ role: "user", content: m.content });
+        pushAnthropicMessage("user", [{ type: "text", text: m.content }]);
       }
     } else if (Array.isArray(m.content)) {
       const blocks: Array<Record<string, unknown>> = [];
@@ -827,9 +912,8 @@ async function invokeAnthropic(params: {
           } else {
             let safeUrl: string;
             try {
-              safeUrl = validateOutboundUrl(
-                part.image_url.url,
-                "image URL"
+              safeUrl = (
+                await validateOutboundUrlWithDns(part.image_url.url, "image URL")
               ).toString();
             } catch (err) {
               throw new UpstreamHttpError(
@@ -848,9 +932,7 @@ async function invokeAnthropic(params: {
           }
         }
       }
-      if (blocks.length > 0) {
-        messages.push({ role: "user", content: blocks });
-      }
+      pushAnthropicMessage("user", blocks);
     }
   }
 
@@ -858,7 +940,9 @@ async function invokeAnthropic(params: {
     model,
     max_tokens: request.max_tokens || 2048,
     messages:
-      messages.length > 0 ? messages : [{ role: "user", content: "Hello" }],
+      messages.length > 0
+        ? messages
+        : [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
     stream: Boolean(request.stream && onStreamDelta),
   };
   if (systemParts.length > 0) {
@@ -866,6 +950,14 @@ async function invokeAnthropic(params: {
   }
   if (typeof request.temperature === "number") {
     body.temperature = request.temperature;
+  }
+  if (typeof request.top_p === "number") {
+    body.top_p = request.top_p;
+  }
+  if (typeof request.stop === "string" && request.stop) {
+    body.stop_sequences = [request.stop];
+  } else if (Array.isArray(request.stop) && request.stop.length > 0) {
+    body.stop_sequences = request.stop.filter((s) => typeof s === "string" && s);
   }
   if (Array.isArray(request.tools) && request.tools.length > 0) {
     body.tools = request.tools
@@ -1200,7 +1292,9 @@ async function invokeOpenAICompatible(params: {
     : `${resolvedBase}/chat/completions`;
   let endpoint: string;
   try {
-    endpoint = validateOutboundUrl(rawEndpoint, "provider base URL").toString();
+    endpoint = (
+      await validateOutboundUrlWithDns(rawEndpoint, "provider base URL")
+    ).toString();
   } catch (err) {
     throw new UpstreamHttpError(
       err instanceof Error ? err.message : "Invalid provider base URL.",
@@ -1220,6 +1314,21 @@ async function invokeOpenAICompatible(params: {
   if (typeof request.max_tokens === "number") {
     body.max_tokens = request.max_tokens;
   }
+  if (typeof request.top_p === "number") {
+    body.top_p = request.top_p;
+  }
+  if (request.stop !== undefined) {
+    body.stop = request.stop;
+  }
+  if (request.response_format !== undefined) {
+    body.response_format = request.response_format;
+  }
+  if (typeof request.presence_penalty === "number") {
+    body.presence_penalty = request.presence_penalty;
+  }
+  if (typeof request.frequency_penalty === "number") {
+    body.frequency_penalty = request.frequency_penalty;
+  }
   if (Array.isArray(request.tools) && request.tools.length > 0) {
     body.tools = request.tools;
   }
@@ -1230,7 +1339,11 @@ async function invokeOpenAICompatible(params: {
     provider === "openai" ||
     provider === "groq" ||
     provider === "deepseek" ||
-    provider === "openrouter";
+    provider === "openrouter" ||
+    provider === "xai" ||
+    provider === "cerebras" ||
+    provider === "together" ||
+    provider === "fireworks";
   if (body.stream && supportsStreamOptions) {
     body.stream_options = { include_usage: true };
   }
@@ -1539,9 +1652,21 @@ export async function testProviderConnection(params: {
 
   try {
     if (provider === "gemini") {
+      let resolvedGeminiBaseUrl: string | undefined;
+      if (baseUrl && baseUrl.trim()) {
+        const clean = baseUrl.trim().replace(/\/+$/, "").replace(/\/v1beta$/, "");
+        if (clean !== "https://generativelanguage.googleapis.com") {
+          resolvedGeminiBaseUrl = (
+            await validateOutboundUrlWithDns(clean, "provider base URL")
+          )
+            .toString()
+            .replace(/\/+$/, "");
+        }
+      }
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
+          ...(resolvedGeminiBaseUrl ? { baseUrl: resolvedGeminiBaseUrl } : {}),
           headers: { "User-Agent": "aistudio-build" },
         },
       });
@@ -1813,7 +1938,7 @@ export async function probeProviderFreeModels(params: {
         .map((m) => m.trim())
         .filter((m) => Boolean(m) && isModelKnownFree(provider, m))
     )
-  ).slice(0, 12);
+  ).slice(0, 25);
 
   if (!activeKey || freeTargets.length === 0) {
     return { healthMap, probedModels: [], healthyCount: 0 };

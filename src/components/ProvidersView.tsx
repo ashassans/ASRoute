@@ -17,6 +17,7 @@ import type { BootstrapPayload, ProviderConnection } from "../types/gateway.ts";
 
 interface ProvidersViewProps {
   connections: ProviderConnection[];
+  serverGeminiKeyAvailable?: boolean;
   onRefresh: () => Promise<void>;
   onUpdateWorkspace: React.Dispatch<React.SetStateAction<BootstrapPayload | null>>;
   onNotify: (msg: string, tone?: "success" | "error") => void;
@@ -40,6 +41,7 @@ function getUtcResetCountdown(): string {
 
 export function ProvidersView({
   connections,
+  serverGeminiKeyAvailable = false,
   onRefresh,
   onUpdateWorkspace,
   onNotify,
@@ -55,6 +57,7 @@ export function ProvidersView({
   const [fetchingModels, setFetchingModels] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
+  const [useServerKey, setUseServerKey] = useState(false);
   const [extraApiKeys, setExtraApiKeys] = useState("");
   const [clearKeyPool, setClearKeyPool] = useState(false);
   const [editingPoolPreview, setEditingPoolPreview] = useState<string[]>([]);
@@ -72,7 +75,21 @@ export function ProvidersView({
   const [expandedHealthId, setExpandedHealthId] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [testResults, setTestResults] = useState<
-    Record<string, { ok: boolean; latencyMs: number; detail: string }>
+    Record<
+      string,
+      {
+        ok: boolean;
+        latencyMs: number;
+        detail: string;
+        keyResults?: Array<{
+          index: number;
+          maskedKey: string;
+          ok: boolean;
+          latencyMs: number;
+          detail: string;
+        }>;
+      }
+    >
   >({});
 
   useEffect(() => {
@@ -101,6 +118,7 @@ export function ProvidersView({
     setFreeOnly(false);
     setFetchError(null);
     setApiKey("");
+    setUseServerKey(false);
     setExtraApiKeys("");
     setClearKeyPool(false);
     setEditingPoolPreview([]);
@@ -122,6 +140,7 @@ export function ProvidersView({
     setFreeOnly(false);
     setFetchError(null);
     setApiKey("");
+    setUseServerKey(Boolean(conn.useServerKey));
     setExtraApiKeys("");
     setClearKeyPool(false);
     setEditingPoolPreview(conn.maskedPoolKeys || []);
@@ -152,12 +171,15 @@ export function ProvidersView({
     setDefaultModel("");
     setFetchedModels([]);
     setFetchError(null);
+    if (next !== "gemini") {
+      setUseServerKey(false);
+    }
   };
 
   const handleFetchModels = async (overrideFreeOnly?: boolean) => {
     const onlyFree =
       typeof overrideFreeOnly === "boolean" ? overrideFreeOnly : freeOnly;
-    if (!apiKey.trim() && !editingId) {
+    if (!apiKey.trim() && !editingId && !(useServerKey && provider === "gemini")) {
       setFetchError("Enter API key first");
       return;
     }
@@ -172,6 +194,7 @@ export function ProvidersView({
           provider,
           baseUrl: baseUrl.trim() || undefined,
           apiKey: apiKey.trim() || undefined,
+          useServerKey: provider === "gemini" ? useServerKey : false,
           freeOnly: onlyFree,
         }),
       });
@@ -239,13 +262,19 @@ export function ProvidersView({
 
       if (!isEdit) {
         payload.provider = provider;
-        payload.apiKey = apiKey.trim();
+        if (apiKey.trim()) payload.apiKey = apiKey.trim();
+        if (provider === "gemini" && useServerKey) {
+          payload.useServerKey = true;
+        }
         if (extraApiKeys.trim()) {
           payload.extraApiKeys = extraApiKeys;
         }
       } else {
         if (apiKey.trim()) {
           payload.apiKey = apiKey.trim();
+        }
+        if (provider === "gemini") {
+          payload.useServerKey = useServerKey;
         }
         if (clearKeyPool) {
           payload.clearKeyPool = true;
@@ -916,7 +945,33 @@ export function ProvidersView({
                               testInfo.ok ? "text-emerald-400" : "text-red-400"
                             }`}
                           >
-                            {testInfo.detail} ({testInfo.latencyMs}ms)
+                            <div>
+                              {testInfo.detail} ({testInfo.latencyMs}ms)
+                            </div>
+                            {testInfo.keyResults &&
+                              testInfo.keyResults.length > 1 && (
+                                <div className="mt-1 space-y-0.5 font-mono text-[11px] text-[#A1A1AA]">
+                                  {testInfo.keyResults.map((kr) => (
+                                    <div
+                                      key={kr.index}
+                                      className="flex items-center gap-2"
+                                    >
+                                      <span
+                                        className={
+                                          kr.ok
+                                            ? "text-emerald-400"
+                                            : "text-red-400"
+                                        }
+                                      >
+                                        {kr.ok ? "OK" : "ERR"}
+                                      </span>
+                                      <span>#{kr.index}</span>
+                                      <span>{kr.maskedKey}</span>
+                                      <span>{kr.latencyMs}ms</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                           </div>
                         )}
                       </td>
@@ -1196,19 +1251,38 @@ export function ProvidersView({
                 </div>
               </div>
 
+              {provider === "gemini" && serverGeminiKeyAvailable && (
+                <div className="px-1">
+                  <ToggleSwitch
+                    checked={useServerKey}
+                    onChange={(val) => {
+                      setUseServerKey(val);
+                      if (val) setApiKey("");
+                    }}
+                    label="Use server GEMINI_API_KEY"
+                    hint="Route using the server environment Gemini credential"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
                   API Key
                 </label>
                 <input
                   type="password"
-                  required={!editingId}
+                  required={!editingId && !(provider === "gemini" && useServerKey)}
+                  disabled={provider === "gemini" && useServerKey}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder={
-                    editingId ? "Leave blank to keep existing key" : undefined
+                    provider === "gemini" && useServerKey
+                      ? "Using server GEMINI_API_KEY"
+                      : editingId
+                        ? "Leave blank to keep existing key"
+                        : undefined
                   }
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] disabled:opacity-50 focus:outline-none focus:border-amber-400"
                 />
               </div>
 

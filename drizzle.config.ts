@@ -6,6 +6,9 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL || "postgresql://localhost:5432/as_router",
+    url:
+      process.env.DATABASE_URL?.trim() ||
+      process.env.NEON_DATABASE_URL?.trim() ||
+      "postgresql://localhost:5432/as_router",
   },
 });

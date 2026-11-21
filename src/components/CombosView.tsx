@@ -39,6 +39,7 @@ interface DraftTier {
   connectionId: string;
   upstreamModel: string;
   weight: number;
+  maxRetries: number;
 }
 
 interface SimulationStep {
@@ -145,6 +146,7 @@ export function CombosView({
                 firstSpec.models[0]?.id ||
                 "gemini-4-hydrogen",
               weight: 100,
+              maxRetries: 1,
             },
           ]
         : []
@@ -165,6 +167,7 @@ export function CombosView({
         connectionId: t.connectionId,
         upstreamModel: t.upstreamModel,
         weight: t.weight,
+        maxRetries: t.maxRetries ?? 1,
       }))
     );
     setShowBuilder(true);
@@ -181,6 +184,7 @@ export function CombosView({
         upstreamModel:
           conn.defaultModel || spec.models[0]?.id || "gpt-6-luna",
         weight: 50,
+        maxRetries: 1,
       },
     ]);
   };
@@ -381,6 +385,34 @@ export function CombosView({
       }
     } catch {
       onNotify("Failed to save wildcard route", "error");
+    }
+  };
+
+  const handleToggleWildcard = async (wc: WildcardRoute) => {
+    const nextActive = !wc.isActive;
+    onUpdateWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            wildcards: prev.wildcards.map((item) =>
+              item.id === wc.id ? { ...item, isActive: nextActive } : item
+            ),
+          }
+        : prev
+    );
+    try {
+      const res = await fetch(`/api/wildcards/${wc.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: nextActive }),
+      });
+      if (!res.ok) {
+        await onRefresh();
+        onNotify("Failed to update wildcard state", "error");
+      }
+    } catch {
+      await onRefresh();
+      onNotify("Failed to update wildcard state", "error");
     }
   };
 
@@ -684,22 +716,42 @@ export function CombosView({
                 return (
                   <div
                     key={wc.id}
-                    className="py-2.5 flex items-center justify-between text-xs"
+                    className="py-2.5 flex items-center justify-between gap-2 text-xs"
                   >
-                    <div className="font-mono">
-                      <span className="text-white">{wc.pattern}</span>
+                    <div className="font-mono min-w-0 truncate">
+                      <span
+                        className={
+                          wc.isActive ? "text-white" : "text-[#71717A] line-through"
+                        }
+                      >
+                        {wc.pattern}
+                      </span>
                       <span className="mx-2 text-[#A1A1AA]">→</span>
                       <span className="text-amber-400">
                         {target?.name || "Deleted combo"}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteWildcard(wc.id)}
-                      className="text-[#A1A1AA] hover:text-red-400"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleWildcard(wc)}
+                        className={`text-xs font-medium transition-colors ${
+                          wc.isActive
+                            ? "text-emerald-400 hover:text-emerald-300"
+                            : "text-[#A1A1AA] hover:text-white"
+                        }`}
+                      >
+                        {wc.isActive ? "Active" : "Paused"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteWildcard(wc.id)}
+                        className="text-[#A1A1AA] hover:text-red-400"
+                        title="Delete wildcard"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 );
               })
@@ -1071,7 +1123,7 @@ export function CombosView({
                           </select>
                         </div>
 
-                        <div className="sm:col-span-4">
+                        <div className="sm:col-span-3">
                           <input
                             type="text"
                             list={`models-${idx}`}
@@ -1094,7 +1146,7 @@ export function CombosView({
                           </datalist>
                         </div>
 
-                        <div className="sm:col-span-1">
+                        <div className="sm:col-span-2 flex items-center gap-1.5">
                           <input
                             type="number"
                             min={1}
@@ -1106,8 +1158,23 @@ export function CombosView({
                               })
                             }
                             title="Weight"
-                            className="w-full bg-[#111114] border border-[#222227] rounded-md px-2 py-1.5 text-xs font-mono text-white text-center"
+                            className="w-1/2 bg-[#111114] border border-[#222227] rounded-md px-1.5 py-1.5 text-xs font-mono text-white text-center"
                           />
+                          <select
+                            value={tier.maxRetries}
+                            onChange={(e) =>
+                              updateTier(idx, {
+                                maxRetries: Number(e.target.value) || 1,
+                              })
+                            }
+                            title="Retries per request"
+                            aria-label="Tier max retries"
+                            className="w-1/2 bg-[#111114] border border-[#222227] rounded-md px-1 py-1.5 text-xs font-mono text-[#D4D4D8]"
+                          >
+                            <option value={1}>1x</option>
+                            <option value={2}>2x</option>
+                            <option value={3}>3x</option>
+                          </select>
                         </div>
 
                         <div className="sm:col-span-2 flex items-center justify-end gap-1">

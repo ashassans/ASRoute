@@ -277,7 +277,99 @@ export function ApiKeysView({
           </button>
         </div>
       ) : (
-        <div className="bg-[#111114] border border-[#222227] rounded-lg overflow-hidden">
+        <>
+          <div className="md:hidden space-y-3">
+            {keys.map((k) => (
+              <div
+                key={k.id}
+                className="bg-[#111114] border border-[#222227] rounded-lg p-4 space-y-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium text-white truncate">{k.name}</div>
+                    <div className="mt-0.5 font-mono text-xs text-[#A1A1AA] truncate">
+                      {k.keyPrefix}
+                    </div>
+                  </div>
+                  <span
+                    className={`text-xs font-medium shrink-0 ${
+                      k.isActive ? "text-emerald-400" : "text-[#A1A1AA]"
+                    }`}
+                  >
+                    {k.isActive ? "Active" : "Disabled"}
+                  </span>
+                </div>
+
+                <div className="text-xs font-mono text-[#A1A1AA] space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span>
+                      {k.allowedCombo ? `combo: ${k.allowedCombo}` : "All models"}
+                    </span>
+                    {k.freeOnly && (
+                      <span className="text-emerald-400">· Free-only</span>
+                    )}
+                  </div>
+                  <div className="text-[#8B8B95] tabular-nums">
+                    {k.totalRequests.toLocaleString()} req ·{" "}
+                    {k.totalTokens.toLocaleString()} tok · $
+                    {k.totalCostUsd.toFixed(4)}
+                  </div>
+                  {(k.dailyTokenLimit || k.monthlyUsdLimit) && (
+                    <div className="text-[#71717A] tabular-nums">
+                      Cap:{" "}
+                      {k.dailyTokenLimit
+                        ? `${k.dailyTokenLimit.toLocaleString()} tok/d`
+                        : "∞ tok/d"}{" "}
+                      ·{" "}
+                      {k.monthlyUsdLimit
+                        ? `$${k.monthlyUsdLimit.toFixed(2)}/mo`
+                        : "∞ $/mo"}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-[#1D1D22] flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(k)}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#D4D4D8] hover:text-amber-400"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => handleToggle(k)}
+                      className="text-xs font-medium text-[#A1A1AA] hover:text-white"
+                    >
+                      {k.isActive ? "Disable" : "Enable"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirmDeleteId === k.id) {
+                          setConfirmDeleteId(null);
+                          handleDelete(k.id);
+                        } else {
+                          setConfirmDeleteId(k.id);
+                        }
+                      }}
+                      className={`text-xs font-medium ${
+                        confirmDeleteId === k.id
+                          ? "text-red-300 underline underline-offset-2"
+                          : "text-red-400 hover:text-red-300"
+                      }`}
+                    >
+                      {confirmDeleteId === k.id ? "Revoke?" : "Revoke"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block bg-[#111114] border border-[#222227] rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -390,6 +482,7 @@ export function ApiKeysView({
             </table>
           </div>
         </div>
+        </>
       )}
 
       <AnimatePresence>

@@ -35,6 +35,15 @@ playgroundRouter.post(
       }
     });
 
+    const safeTemp =
+      typeof temperature === "number" && Number.isFinite(temperature)
+        ? Math.min(2, Math.max(0, temperature))
+        : undefined;
+    const safeMaxTokens =
+      typeof max_tokens === "number" && Number.isFinite(max_tokens) && max_tokens > 0
+        ? Math.min(32768, Math.round(max_tokens))
+        : undefined;
+
     if (stream === true) {
       res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
       res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -56,9 +65,8 @@ playgroundRouter.post(
             model: String(model),
             messages,
             stream: true,
-            temperature:
-              typeof temperature === "number" ? temperature : undefined,
-            max_tokens: typeof max_tokens === "number" ? max_tokens : undefined,
+            temperature: safeTemp,
+            max_tokens: safeMaxTokens,
             tools: Array.isArray(tools) ? tools : undefined,
             tool_choice,
           },
@@ -96,9 +104,8 @@ playgroundRouter.post(
           model: String(model),
           messages,
           stream: false,
-          temperature:
-            typeof temperature === "number" ? temperature : undefined,
-          max_tokens: typeof max_tokens === "number" ? max_tokens : undefined,
+          temperature: safeTemp,
+          max_tokens: safeMaxTokens,
           tools: Array.isArray(tools) ? tools : undefined,
           tool_choice,
         },

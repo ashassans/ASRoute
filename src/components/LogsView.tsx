@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Pause, Play, Search, Terminal, Trash2, X } from "lucide-react";
+import { Download, Pause, Play, Search, Terminal, Trash2, X } from "lucide-react";
 import type { FallbackHop, RequestLog } from "../types/gateway.ts";
 
 interface LogsViewProps {
   logs: RequestLog[];
+  hasMoreLogs?: boolean;
+  loadingMoreLogs?: boolean;
   sseConnected: boolean;
   streamPaused: boolean;
   onTogglePause: () => void;
+  onLoadMoreLogs?: () => Promise<void>;
   onClearLogs: () => Promise<void>;
   onOpenPlayground?: () => void;
 }
@@ -21,11 +24,26 @@ function parseHops(raw: string): FallbackHop[] {
   }
 }
 
+function downloadBlob(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function LogsView({
   logs,
+  hasMoreLogs = false,
+  loadingMoreLogs = false,
   sseConnected,
   streamPaused,
   onTogglePause,
+  onLoadMoreLogs,
   onClearLogs,
   onOpenPlayground,
 }: LogsViewProps) {
@@ -77,6 +95,62 @@ export function LogsView({
     ? parseHops(selectedLog.fallbackAttempts)
     : [];
 
+  const handleExportCsv = () => {
+    const headers = [
+      "id",
+      "createdAt",
+      "statusCode",
+      "outcome",
+      "requestedModel",
+      "resolvedProvider",
+      "resolvedModel",
+      "connectionName",
+      "detectedIntent",
+      "promptTokens",
+      "completionTokens",
+      "estimatedCostUsd",
+      "latencyMs",
+      "errorMessage",
+    ];
+    const escapeCsv = (val: unknown) => {
+      const str = String(val ?? "");
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const rows = filtered.map((l) =>
+      [
+        l.id,
+        l.createdAt,
+        l.statusCode,
+        l.outcome,
+        l.requestedModel,
+        l.resolvedProvider,
+        l.resolvedModel,
+        l.connectionName || "",
+        l.detectedIntent || "",
+        l.promptTokens,
+        l.completionTokens,
+        l.estimatedCostUsd,
+        l.latencyMs,
+        l.errorMessage || "",
+      ]
+        .map(escapeCsv)
+        .join(",")
+    );
+    downloadBlob(
+      `as-router-logs-${new Date().toISOString().slice(0, 10)}.csv`,
+      [headers.join(","), ...rows].join("\n"),
+      "text/csv;charset=utf-8"
+    );
+  };
+
+  const handleExportJson = () => {
+    downloadBlob(
+      `as-router-logs-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify(filtered, null, 2),
+      "application/json"
+    );
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -102,6 +176,27 @@ export function LogsView({
               </>
             )}
           </button>
+
+          {filtered.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-400" />
+                <span>CSV</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleExportJson}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
+              >
+                <Download className="w-3.5 h-3.5 text-[#A1A1AA]" />
+                <span>JSON</span>
+              </button>
+            </>
+          )}
 
           {logs.length > 0 && (
             <button
@@ -331,6 +426,19 @@ export function LogsView({
           </>
         )}
       </div>
+
+      {hasMoreLogs && onLoadMoreLogs && (
+        <div className="flex justify-center pt-1">
+          <button
+            type="button"
+            onClick={onLoadMoreLogs}
+            disabled={loadingMoreLogs}
+            className="px-4 py-2 text-xs font-medium bg-[#111114] hover:bg-[#18181B] disabled:opacity-50 text-[#D4D4D8] hover:text-white border border-[#222227] rounded-lg transition-colors"
+          >
+            {loadingMoreLogs ? "Loading older logs..." : "Load More Logs"}
+          </button>
+        </div>
+      )}
 
       {/* Request Trace Drawer */}
       <AnimatePresence>

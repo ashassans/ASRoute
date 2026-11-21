@@ -11,7 +11,9 @@ import {
   wildcardRoutes,
 } from "../../db/schema.ts";
 import { type AuthedRequest, requireSession } from "../middleware/auth.ts";
+import { isGmailMailerConfigured } from "../mailer.ts";
 import { publishWorkspaceMutation, subscribeUserLogs } from "../sse.ts";
+import { isLocalProvidersAllowed } from "../urlSafety.ts";
 import { getGatewayBaseUrl, sanitizeConnection } from "../utils/connections.ts";
 
 export const analyticsRouter = Router();
@@ -43,6 +45,9 @@ analyticsRouter.get("/health", (_req: Request, res: Response) => {
       process.env.GOOGLE_CLIENT_ID?.trim() &&
         process.env.GOOGLE_CLIENT_SECRET?.trim()
     ),
+    emailVerificationEnabled: isGmailMailerConfigured(),
+    serverGeminiKeyAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    allowLocalProviders: isLocalProvidersAllowed(),
   });
 });
 
@@ -114,6 +119,24 @@ analyticsRouter.get(
         tiers: userTiers.filter((t) => t.comboId === combo.id),
       }));
 
+      const now = new Date();
+      const sanitizedKeys = keys.map((k) => {
+        const lastReset = k.quotaResetAt ? new Date(k.quotaResetAt) : new Date(0);
+        const resetDaily =
+          lastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+          lastReset.getUTCMonth() !== now.getUTCMonth() ||
+          lastReset.getUTCDate() !== now.getUTCDate();
+        const resetMonthly =
+          lastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+          lastReset.getUTCMonth() !== now.getUTCMonth();
+        return {
+          ...k,
+          keyHash: undefined,
+          usedTokensToday: resetDaily ? 0 : k.usedTokensToday,
+          usedCostMonth: resetMonthly ? 0 : k.usedCostMonth,
+        };
+      });
+
       return res.json({
         user: {
           ...req.authUser,
@@ -124,8 +147,11 @@ analyticsRouter.get(
           databaseMode,
           neonConfigured: isNeonConfigured,
           gatewayEndpoint: getGatewayBaseUrl(req, PORT),
+          serverGeminiKeyAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()),
+          emailVerificationEnabled: isGmailMailerConfigured(),
+          allowLocalProviders: isLocalProvidersAllowed(),
         },
-        keys: keys.map((k) => ({ ...k, keyHash: undefined })),
+        keys: sanitizedKeys,
         connections: sanitizedConnections,
         combos: combosWithTiers,
         wildcards,
@@ -144,13 +170,18 @@ analyticsRouter.get(
   async (req: AuthedRequest, res: Response) => {
     try {
       const userId = req.authUser!.id;
-      const logs = await db
+      const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+      const offset = Math.max(0, Number(req.query.offset) || 0);
+      const rows = await db
         .select()
         .from(requestLogs)
         .where(eq(requestLogs.userId, userId))
         .orderBy(desc(requestLogs.createdAt))
-        .limit(200);
-      return res.json({ logs });
+        .limit(limit + 1)
+        .offset(offset);
+      const hasMore = rows.length > limit;
+      const logs = hasMore ? rows.slice(0, limit) : rows;
+      return res.json({ logs, hasMore, nextOffset: offset + logs.length });
     } catch (err) {
       console.error("[AS ROUTER] Fetch logs error:", err);
       return res.status(500).json({ error: "Failed to load request logs" });

@@ -2,6 +2,17 @@ export interface GatewayEnvironment {
   databaseMode: "neon" | "embedded-pg";
   neonConfigured: boolean;
   gatewayEndpoint: string;
+  serverGeminiKeyAvailable?: boolean;
+  emailVerificationEnabled?: boolean;
+  allowLocalProviders?: boolean;
+}
+
+export interface KeyTestResult {
+  index: number;
+  maskedKey: string;
+  ok: boolean;
+  latencyMs: number;
+  detail: string;
 }
 
 export interface GatewayApiKey {
@@ -41,6 +52,7 @@ export interface ProviderConnection {
   defaultModel: string | null;
   availableModels: string[];
   maskedKey: string;
+  useServerKey?: boolean;
   poolKeyCount: number;
   maskedPoolKeys: string[];
   isActive: boolean;

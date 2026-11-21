@@ -6,6 +6,7 @@ import * as schema from "../db/schema.ts";
 import { getAuthSecret } from "./crypto.ts";
 import {
   isGmailMailerConfigured,
+  sendPasswordResetOtpEmail,
   sendVerificationOtpEmail,
 } from "./mailer.ts";
 
@@ -64,6 +65,8 @@ export const auth = betterAuth({
       async sendVerificationOTP({ email, otp, type }) {
         if (type === "email-verification") {
           await sendVerificationOtpEmail({ to: email, otp });
+        } else if (type === "forget-password") {
+          await sendPasswordResetOtpEmail({ to: email, otp });
         }
       },
     }),

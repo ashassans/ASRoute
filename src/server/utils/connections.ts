@@ -82,10 +82,14 @@ export function decryptConnectionAllKeys(
   conn: typeof providerConnections.$inferSelect
 ): string[] {
   const keys: string[] = [];
+  if (conn.useServerKey && conn.provider === "gemini") {
+    const serverKey = process.env.GEMINI_API_KEY?.trim();
+    if (serverKey) keys.push(serverKey);
+  }
   if (conn.encryptedApiKey) {
     try {
       const k = decryptSecret(conn.encryptedApiKey);
-      if (k) keys.push(k);
+      if (k && !keys.includes(k)) keys.push(k);
     } catch {
       // ignore
     }
@@ -115,7 +119,7 @@ export function decryptConnectionAllKeys(
 export function sanitizeConnection(
   c: typeof providerConnections.$inferSelect
 ) {
-  let maskedKey = "Not set";
+  let maskedKey = c.useServerKey ? "Server GEMINI_API_KEY" : "Not set";
   if (c.encryptedApiKey) {
     try {
       maskedKey = maskSecret(decryptSecret(c.encryptedApiKey));

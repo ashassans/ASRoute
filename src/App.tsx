@@ -114,6 +114,8 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [workspace, setWorkspace] = useState<BootstrapPayload | null>(null);
   const [loadingWorkspace, setLoadingWorkspace] = useState(false);
+  const [hasMoreLogs, setHasMoreLogs] = useState(false);
+  const [loadingMoreLogs, setLoadingMoreLogs] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sseConnected, setSseConnected] = useState(false);
   const [streamPaused, setStreamPaused] = useState(false);
@@ -202,6 +204,7 @@ export default function App() {
         }
         const data = (await res.json()) as BootstrapPayload;
         setWorkspace(data);
+        setHasMoreLogs(data.logs.length >= 100);
       } catch (err: unknown) {
         if (!opts?.silent) {
           setLoadError(
@@ -575,10 +578,44 @@ export default function App() {
       const res = await fetch("/api/logs", { method: "DELETE" });
       if (res.ok) {
         setWorkspace((prev) => (prev ? { ...prev, logs: [] } : prev));
+        setHasMoreLogs(false);
         notify("Request logs cleared.", "success");
       }
     } catch {
       notify("Failed to clear logs", "error");
+    }
+  };
+
+  const handleLoadMoreLogs = async () => {
+    if (!workspace || loadingMoreLogs) return;
+    setLoadingMoreLogs(true);
+    try {
+      const res = await fetch(
+        `/api/logs?limit=100&offset=${workspace.logs.length}`
+      );
+      if (!res.ok) {
+        notify("Failed to load older logs", "error");
+        return;
+      }
+      const data = (await res.json()) as {
+        logs?: RequestLog[];
+        hasMore?: boolean;
+      };
+      const incoming = Array.isArray(data.logs) ? data.logs : [];
+      setWorkspace((prev) => {
+        if (!prev) return prev;
+        const existingIds = new Set(prev.logs.map((l) => l.id));
+        const merged = [
+          ...prev.logs,
+          ...incoming.filter((l) => !existingIds.has(l.id)),
+        ];
+        return { ...prev, logs: merged };
+      });
+      setHasMoreLogs(Boolean(data.hasMore));
+    } catch {
+      notify("Network error loading logs", "error");
+    } finally {
+      setLoadingMoreLogs(false);
     }
   };
 
@@ -989,6 +1026,9 @@ export default function App() {
                 {activeTab === "providers" && (
                   <ProvidersView
                     connections={workspace.connections}
+                    serverGeminiKeyAvailable={Boolean(
+                      workspace.environment.serverGeminiKeyAvailable
+                    )}
                     onRefresh={refreshWorkspace}
                     onUpdateWorkspace={setWorkspace}
                     onNotify={notify}
@@ -1026,9 +1066,12 @@ export default function App() {
                 {activeTab === "logs" && (
                   <LogsView
                     logs={workspace.logs}
+                    hasMoreLogs={hasMoreLogs}
+                    loadingMoreLogs={loadingMoreLogs}
                     sseConnected={sseConnected}
                     streamPaused={streamPaused}
                     onTogglePause={() => setStreamPaused((p) => !p)}
+                    onLoadMoreLogs={handleLoadMoreLogs}
                     onClearLogs={handleClearLogs}
                     onOpenPlayground={() => navigateTab("playground")}
                   />

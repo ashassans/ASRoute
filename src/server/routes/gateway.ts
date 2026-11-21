@@ -16,10 +16,42 @@ import {
   type OpenAIToolDefinition,
   UpstreamHttpError,
 } from "../providers.ts";
-import { executeGatewayChatCompletion } from "../routerEngine.ts";
-import { parseAvailableModels } from "../utils/connections.ts";
+import {
+  executeGatewayChatCompletion,
+  resolveRoutingTarget,
+} from "../routerEngine.ts";
+import { validateOutboundUrlWithDns } from "../urlSafety.ts";
+import {
+  decryptConnectionAllKeys,
+  parseAvailableModels,
+} from "../utils/connections.ts";
+import { getProviderSpec } from "../../shared/catalog.ts";
 
 export const gatewayRouter = Router();
+
+export async function isModelAllowedForKey(
+  allowedCombo: string | null | undefined,
+  userId: string,
+  requestedModel: string
+): Promise<boolean> {
+  if (!allowedCombo || allowedCombo === "*") return true;
+  const normalizedAllowed = allowedCombo
+    .trim()
+    .replace(/^(as-router-combo|combo)\//i, "")
+    .toLowerCase();
+  const normalizedReq = requestedModel
+    .trim()
+    .replace(/^(as-router-combo|combo)\//i, "")
+    .toLowerCase();
+  if (normalizedAllowed === normalizedReq) return true;
+
+  const target = await resolveRoutingTarget(userId, requestedModel);
+  if (!target.combo) return false;
+  return (
+    target.combo.id.toLowerCase() === allowedCombo.trim().toLowerCase() ||
+    target.combo.name.trim().toLowerCase() === normalizedAllowed
+  );
+}
 
 async function authenticateGatewayKey(req: Request) {
   await ensureSchema();
@@ -206,11 +238,7 @@ gatewayRouter.post("/chat/completions", async (req: Request, res: Response) => {
       });
     }
 
-    if (
-      keyRow.allowedCombo &&
-      keyRow.allowedCombo !== "*" &&
-      keyRow.allowedCombo !== body.model
-    ) {
+    if (!(await isModelAllowedForKey(keyRow.allowedCombo, keyRow.userId, body.model))) {
       return res.status(403).json({
         error: {
           message: `This API key is scoped exclusively to combo "${keyRow.allowedCombo}".`,
@@ -225,6 +253,11 @@ gatewayRouter.post("/chat/completions", async (req: Request, res: Response) => {
       stream: Boolean(body.stream),
       temperature: body.temperature,
       max_tokens: body.max_tokens,
+      top_p: body.top_p,
+      stop: body.stop,
+      response_format: body.response_format,
+      presence_penalty: body.presence_penalty,
+      frequency_penalty: body.frequency_penalty,
       tools: Array.isArray(body.tools) ? body.tools : undefined,
       tool_choice: body.tool_choice,
     };
@@ -394,6 +427,8 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
       }>;
       max_tokens?: number;
       temperature?: number;
+      top_p?: number;
+      stop_sequences?: string[];
       stream?: boolean;
       tools?: Array<{
         name?: string;
@@ -413,11 +448,7 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
       });
     }
 
-    if (
-      keyRow.allowedCombo &&
-      keyRow.allowedCombo !== "*" &&
-      keyRow.allowedCombo !== body.model
-    ) {
+    if (!(await isModelAllowedForKey(keyRow.allowedCombo, keyRow.userId, body.model))) {
       return res.status(403).json({
         type: "error",
         error: {
@@ -552,6 +583,8 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
       stream: Boolean(body.stream),
       temperature: body.temperature,
       max_tokens: body.max_tokens ?? 2048,
+      top_p: body.top_p,
+      stop: Array.isArray(body.stop_sequences) ? body.stop_sequences : undefined,
       tools: translatedTools,
       tool_choice: translatedToolChoice,
     };
@@ -572,7 +605,12 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
       res.flushHeaders?.();
 
       const msgId = `msg_${crypto.randomBytes(10).toString("hex")}`;
-      let blockOpened = false;
+      let nextBlockIndex = 0;
+      let textBlockIdx: number | null = null;
+      const streamedToolBlocks = new Map<
+        number,
+        { blockIdx: number; id: string; name: string }
+      >();
 
       res.write(
         `event: message_start\ndata: ${JSON.stringify({
@@ -601,12 +639,12 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
           onStreamDelta: (delta) => {
             if (abortController.signal.aborted) return;
             if (delta.content) {
-              if (!blockOpened) {
-                blockOpened = true;
+              if (textBlockIdx === null) {
+                textBlockIdx = nextBlockIndex++;
                 res.write(
                   `event: content_block_start\ndata: ${JSON.stringify({
                     type: "content_block_start",
-                    index: 0,
+                    index: textBlockIdx,
                     content_block: { type: "text", text: "" },
                   })}\n\n`
                 );
@@ -614,10 +652,58 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
               res.write(
                 `event: content_block_delta\ndata: ${JSON.stringify({
                   type: "content_block_delta",
-                  index: 0,
+                  index: textBlockIdx,
                   delta: { type: "text_delta", text: delta.content },
                 })}\n\n`
               );
+            }
+            if (Array.isArray(delta.tool_calls)) {
+              if (textBlockIdx !== null) {
+                res.write(
+                  `event: content_block_stop\ndata: ${JSON.stringify({
+                    type: "content_block_stop",
+                    index: textBlockIdx,
+                  })}\n\n`
+                );
+                textBlockIdx = null;
+              }
+              for (const tc of delta.tool_calls) {
+                const tcIdx = typeof tc.index === "number" ? tc.index : 0;
+                let tracked = streamedToolBlocks.get(tcIdx);
+                if (!tracked) {
+                  const blockIdx = nextBlockIndex++;
+                  tracked = {
+                    blockIdx,
+                    id: tc.id || `toolu_${crypto.randomBytes(6).toString("hex")}`,
+                    name: tc.function?.name || "function",
+                  };
+                  streamedToolBlocks.set(tcIdx, tracked);
+                  res.write(
+                    `event: content_block_start\ndata: ${JSON.stringify({
+                      type: "content_block_start",
+                      index: tracked.blockIdx,
+                      content_block: {
+                        type: "tool_use",
+                        id: tracked.id,
+                        name: tracked.name,
+                        input: {},
+                      },
+                    })}\n\n`
+                  );
+                }
+                if (tc.function?.arguments) {
+                  res.write(
+                    `event: content_block_delta\ndata: ${JSON.stringify({
+                      type: "content_block_delta",
+                      index: tracked.blockIdx,
+                      delta: {
+                        type: "input_json_delta",
+                        partial_json: tc.function.arguments,
+                      },
+                    })}\n\n`
+                  );
+                }
+              }
             }
           },
         });
@@ -626,18 +712,28 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
           return res.end();
         }
 
-        if (blockOpened) {
+        if (textBlockIdx !== null) {
           res.write(
             `event: content_block_stop\ndata: ${JSON.stringify({
               type: "content_block_stop",
-              index: 0,
+              index: textBlockIdx,
             })}\n\n`
           );
+          textBlockIdx = null;
         }
 
-        if (result.toolCalls && result.toolCalls.length > 0) {
-          let blockIdx = blockOpened ? 1 : 0;
+        if (streamedToolBlocks.size > 0) {
+          for (const tracked of streamedToolBlocks.values()) {
+            res.write(
+              `event: content_block_stop\ndata: ${JSON.stringify({
+                type: "content_block_stop",
+                index: tracked.blockIdx,
+              })}\n\n`
+            );
+          }
+        } else if (result.toolCalls && result.toolCalls.length > 0) {
           for (const tc of result.toolCalls) {
+            const blockIdx = nextBlockIndex++;
             let parsedInput: Record<string, unknown> = {};
             try {
               parsedInput = JSON.parse(tc.function.arguments || "{}");
@@ -662,7 +758,6 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
                 index: blockIdx,
               })}\n\n`
             );
-            blockIdx++;
           }
         }
 
@@ -761,6 +856,163 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
         type: status === 429 ? "rate_limit_error" : "api_error",
         message,
       },
+    });
+  }
+});
+
+gatewayRouter.post("/embeddings", async (req: Request, res: Response) => {
+  try {
+    const keyRow = await authenticateGatewayKey(req);
+    const body = (req.body || {}) as {
+      model?: string;
+      input?: string | string[];
+      dimensions?: number;
+      encoding_format?: string;
+    };
+
+    if (!body.model || body.input === undefined) {
+      return res.status(400).json({
+        error: {
+          message: "Request must include 'model' and 'input'.",
+          type: "invalid_request_error",
+        },
+      });
+    }
+
+    const slashIdx = body.model.indexOf("/");
+    const providerHint =
+      slashIdx > 0
+        ? body.model.slice(0, slashIdx).toLowerCase()
+        : body.model.toLowerCase().includes("gemini") ||
+            body.model.toLowerCase().includes("embedding-001")
+          ? "gemini"
+          : "openai";
+    const cleanModel =
+      slashIdx > 0 ? body.model.slice(slashIdx + 1) : body.model;
+
+    const userConns = await db
+      .select()
+      .from(providerConnections)
+      .where(
+        and(
+          eq(providerConnections.userId, keyRow.userId),
+          eq(providerConnections.isActive, true)
+        )
+      );
+
+    const conn =
+      userConns.find((c) => c.provider === providerHint) ||
+      userConns.find((c) =>
+        [
+          "openai",
+          "openrouter",
+          "mistral",
+          "together",
+          "fireworks",
+          "custom",
+          "gemini",
+        ].includes(c.provider)
+      );
+
+    if (!conn) {
+      return res.status(404).json({
+        error: {
+          message: `No active embedding-compatible provider connection found for "${body.model}".`,
+          type: "invalid_request_error",
+        },
+      });
+    }
+
+    const keys = decryptConnectionAllKeys(conn);
+    const apiKey = keys[0];
+    if (!apiKey) {
+      return res.status(401).json({
+        error: {
+          message: "Selected provider connection has no usable API key.",
+          type: "auth_error",
+        },
+      });
+    }
+
+    if (conn.provider === "gemini") {
+      const inputs = Array.isArray(body.input) ? body.input : [String(body.input)];
+      const cleanBase = (
+        await validateOutboundUrlWithDns(
+          (conn.baseUrl || "https://generativelanguage.googleapis.com")
+            .trim()
+            .replace(/\/+$/, "")
+            .replace(/\/v1beta$/, ""),
+          "provider base URL"
+        )
+      )
+        .toString()
+        .replace(/\/+$/, "");
+
+      const data = await Promise.all(
+        inputs.map(async (text, index) => {
+          const r = await fetch(
+            `${cleanBase}/v1beta/models/${encodeURIComponent(cleanModel)}:embedContent?key=${encodeURIComponent(apiKey)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: `models/${cleanModel}`,
+                content: { parts: [{ text }] },
+              }),
+              signal: AbortSignal.timeout(15000),
+            }
+          );
+          if (!r.ok) {
+            throw new UpstreamHttpError(await r.text(), r.status, false);
+          }
+          const json = (await r.json()) as {
+            embedding?: { values?: number[] };
+          };
+          return {
+            object: "embedding",
+            index,
+            embedding: json.embedding?.values || [],
+          };
+        })
+      );
+
+      return res.json({
+        object: "list",
+        data,
+        model: cleanModel,
+        usage: { prompt_tokens: 0, total_tokens: 0 },
+      });
+    }
+
+    const spec = getProviderSpec(conn.provider);
+    const base = (conn.baseUrl || spec.defaultBaseUrl).replace(/\/+$/, "");
+    const endpoint = (
+      await validateOutboundUrlWithDns(`${base}/embeddings`, "provider base URL")
+    ).toString();
+    const upstreamRes = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: cleanModel,
+        input: body.input,
+        ...(body.dimensions ? { dimensions: body.dimensions } : {}),
+        ...(body.encoding_format
+          ? { encoding_format: body.encoding_format }
+          : {}),
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+
+    const payload = await upstreamRes.json();
+    return res.status(upstreamRes.status).json(payload);
+  } catch (err: unknown) {
+    const status = err instanceof UpstreamHttpError ? err.statusCode : 500;
+    const message = err instanceof Error ? err.message : "Embeddings failure";
+    return res.status(status).json({
+      error: { message, type: "gateway_error" },
     });
   }
 });

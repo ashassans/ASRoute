@@ -8,7 +8,7 @@ import {
   providerConnections,
   user,
 } from "../../db/schema.ts";
-import { isModelKnownFree } from "../../shared/catalog.ts";
+import { getProviderSpec, isModelKnownFree } from "../../shared/catalog.ts";
 import {
   decryptSecret,
   encryptSecret,
@@ -18,13 +18,16 @@ import {
 import { invokeUpstreamCompletion, UpstreamHttpError } from "../providers.ts";
 import {
   classifyRequestIntent,
+  clearGatewayResponseCache,
   evaluateTierEligibility,
   executeGatewayChatCompletion,
   globToRegex,
   orderTiersByStrategy,
   resolveRoutingTarget,
 } from "../routerEngine.ts";
+import { isModelAllowedForKey } from "../routes/gateway.ts";
 import { isBlockedHost, validateOutboundUrl } from "../urlSafety.ts";
+import { serializeEncryptedKeyPool } from "../utils/connections.ts";
 
 after(async () => {
   const g = globalThis as {
@@ -116,7 +119,7 @@ test("crypto encrypt/decrypt roundtrip and gateway API key hashing", () => {
   assert.equal(hashGatewayApiKey(generated.rawKey), generated.keyHash);
 });
 
-test("catalog isModelKnownFree checks explicit free suffixes and known free models", () => {
+test("catalog isModelKnownFree and Nov 2026 primary models are configured", () => {
   assert.equal(isModelKnownFree("openrouter", "openrouter/free"), true);
   assert.equal(
     isModelKnownFree("openrouter", "meta-llama/llama-4-scout:free"),
@@ -125,8 +128,17 @@ test("catalog isModelKnownFree checks explicit free suffixes and known free mode
   assert.equal(isModelKnownFree("gemini", "gemini-2.5-flash"), true);
   assert.equal(isModelKnownFree("gemini", "gemini-4-hydrogen"), true);
   assert.equal(isModelKnownFree("gemini", "gemini-2.5-pro"), false);
-  assert.equal(isModelKnownFree("openai", "gpt-4.1"), false);
-  assert.equal(isModelKnownFree("anthropic", "claude-sonnet-4-20250514"), false);
+  assert.equal(isModelKnownFree("openai", "gpt-6.2-sol"), false);
+  assert.equal(isModelKnownFree("anthropic", "claude-sonnet-5-5"), false);
+
+  assert.equal(getProviderSpec("gemini").models[0]?.id, "gemini-4-hydrogen");
+  assert.equal(getProviderSpec("openai").models[0]?.id, "gpt-6.2-sol");
+  assert.equal(getProviderSpec("anthropic").models[0]?.id, "claude-sonnet-5-5");
+  assert.equal(getProviderSpec("deepseek").models[0]?.id, "deepseek-flash");
+  assert.equal(
+    getProviderSpec("deepseek").models.some((m) => m.id === "deepseek-v4-pro"),
+    true
+  );
 });
 
 test("routerEngine globToRegex and classifyRequestIntent", () => {
@@ -617,4 +629,195 @@ test("invokeUpstreamCompletion aborts stalled SSE stream cleanly on timeoutMs", 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("routerEngine rotates pooled keys, retries tier 5xx, caches streaming responses, and enforces semantic API key scope", async () => {
+  await ensureSchema();
+  const uid = "user_pool_retry_test";
+  await db.delete(user).where(eq(user.id, uid));
+  await db.insert(user).values({
+    id: uid,
+    name: "Pool Retry Test",
+    email: "pool-retry@example.com",
+  });
+
+  await db.insert(providerConnections).values({
+    id: "conn_pool_1",
+    userId: uid,
+    provider: "openai",
+    name: "Pooled OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    encryptedApiKey: encryptSecret("sk-pool-primary"),
+    encryptedKeyPool: serializeEncryptedKeyPool(["sk-pool-secondary"]),
+    keyPoolCursor: 0,
+    isActive: true,
+  });
+
+  await db.insert(combos).values({
+    id: "combo_pool_1",
+    userId: uid,
+    name: "smart-pool",
+    strategy: "priority",
+    enableCache: true,
+    isActive: true,
+  });
+
+  await db.insert(comboTiers).values({
+    id: "tier_pool_1",
+    comboId: "combo_pool_1",
+    connectionId: "conn_pool_1",
+    upstreamModel: "gpt-6.2-sol",
+    priority: 0,
+    weight: 100,
+    maxRetries: 2,
+  });
+
+  assert.equal(
+    await isModelAllowedForKey("smart-pool", uid, "combo/smart-pool"),
+    true
+  );
+  assert.equal(
+    await isModelAllowedForKey("smart-pool", uid, "as-router-combo/smart-pool"),
+    true
+  );
+  assert.equal(
+    await isModelAllowedForKey("smart-pool", uid, "combo_pool_1"),
+    true
+  );
+  assert.equal(
+    await isModelAllowedForKey("smart-pool", uid, "other-combo"),
+    false
+  );
+
+  // Verify Mistral, xAI & Perplexity auto-inference from unprefixed model IDs
+  await db.insert(providerConnections).values([
+    {
+      id: "conn_mistral_auto",
+      userId: uid,
+      provider: "mistral",
+      name: "Mistral Auto",
+      encryptedApiKey: encryptSecret("sk-mistral-auto"),
+      isActive: true,
+    },
+    {
+      id: "conn_xai_auto",
+      userId: uid,
+      provider: "xai",
+      name: "xAI Auto",
+      encryptedApiKey: encryptSecret("sk-xai-auto"),
+      isActive: true,
+    },
+    {
+      id: "conn_pplx_auto",
+      userId: uid,
+      provider: "perplexity",
+      name: "Perplexity Auto",
+      encryptedApiKey: encryptSecret("sk-pplx-auto"),
+      isActive: true,
+    },
+  ]);
+  const mistralTarget = await resolveRoutingTarget(uid, "mistral-large-latest");
+  assert.equal(mistralTarget.tiers[0]?.connection.provider, "mistral");
+  const xaiTarget = await resolveRoutingTarget(uid, "grok-4.7");
+  assert.equal(xaiTarget.tiers[0]?.connection.provider, "xai");
+  const pplxTarget = await resolveRoutingTarget(uid, "sonar");
+  assert.equal(pplxTarget.tiers[0]?.connection.provider, "perplexity");
+  assert.equal(getProviderSpec("cerebras").defaultBaseUrl, "https://api.cerebras.ai/v1");
+  assert.equal(getProviderSpec("together").defaultBaseUrl, "https://api.together.xyz/v1");
+  assert.equal(getProviderSpec("fireworks").defaultBaseUrl, "https://api.fireworks.ai/inference/v1");
+
+  clearGatewayResponseCache(uid);
+  const originalFetch = globalThis.fetch;
+  const authHeaders: string[] = [];
+  let callCount = 0;
+
+  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    callCount += 1;
+    const headers = init?.headers as Record<string, string> | undefined;
+    authHeaders.push(headers?.Authorization || headers?.authorization || "");
+
+    // Call 1 (key 1): 429 -> rotate to key 2
+    // Call 2 (key 2): 503 -> triggers retry pass #2 (maxRetries=2)
+    // Call 3 (key 1): 200 OK
+    if (callCount === 1) {
+      return new Response(JSON.stringify({ error: { message: "Rate limit" } }), {
+        status: 429,
+      });
+    }
+    if (callCount === 2) {
+      return new Response(JSON.stringify({ error: { message: "Transient 503" } }), {
+        status: 503,
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { content: "Cached stream replay!" }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 10, completion_tokens: 4 },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }) as typeof fetch;
+
+  try {
+    const first = await executeGatewayChatCompletion({
+      userId: uid,
+      apiKeyId: null,
+      apiKeyPrefix: null,
+      request: {
+        model: "smart-pool",
+        messages: [{ role: "user", content: "Cache me please" }],
+        stream: false,
+        temperature: 0.2,
+      },
+    });
+    assert.equal(first.content, "Cached stream replay!");
+    assert.equal(callCount, 3);
+    assert.equal(authHeaders[0], "Bearer sk-pool-primary");
+    assert.equal(authHeaders[1], "Bearer sk-pool-secondary");
+
+    // Second identical call WITH stream=true should hit cache and replay chunks without upstream fetch
+    const streamDeltas: string[] = [];
+    const second = await executeGatewayChatCompletion({
+      userId: uid,
+      apiKeyId: null,
+      apiKeyPrefix: null,
+      request: {
+        model: "smart-pool",
+        messages: [{ role: "user", content: "Cache me please" }],
+        stream: true,
+        temperature: 0.2,
+      },
+      onStreamDelta: (d) => {
+        if (d.content) streamDeltas.push(d.content);
+      },
+    });
+    assert.equal(second.cached, true);
+    assert.equal(second.content, "Cached stream replay!");
+    assert.equal(streamDeltas.join(""), "Cached stream replay!");
+    assert.equal(callCount, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearGatewayResponseCache(uid);
+  }
+});
+
+test("urlSafety ALLOW_LOCAL_PROVIDERS permits localhost Ollama while still blocking cloud metadata", () => {
+  const prev = process.env.ALLOW_LOCAL_PROVIDERS;
+  process.env.ALLOW_LOCAL_PROVIDERS = "true";
+  try {
+    assert.equal(isBlockedHost("localhost"), false);
+    assert.equal(isBlockedHost("127.0.0.1"), false);
+    assert.equal(isBlockedHost("169.254.169.254"), true);
+    assert.equal(isBlockedHost("metadata.google.internal"), true);
+    assert.equal(validateOutboundUrl("http://localhost:11434/v1").port, "11434");
+    assert.throws(() => validateOutboundUrl("http://169.254.169.254/latest"));
+  } finally {
+    if (prev === undefined) {
+      delete process.env.ALLOW_LOCAL_PROVIDERS;
+    } else {
+      process.env.ALLOW_LOCAL_PROVIDERS = prev;
+    }
+  }
+});
+
 

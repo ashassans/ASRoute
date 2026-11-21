@@ -177,6 +177,11 @@ function buildCacheKey(params: {
   requestedModel: string;
   freeOnly: boolean;
   messages: OpenAIChatMessage[];
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  stop?: string | string[];
+  responseFormat?: Record<string, unknown>;
   tools?: NormalizedCompletionRequest["tools"];
   toolChoice?: NormalizedCompletionRequest["tool_choice"];
 }): string {
@@ -185,6 +190,11 @@ function buildCacheKey(params: {
     m: params.requestedModel,
     f: params.freeOnly,
     msgs: params.messages,
+    temp: params.temperature ?? null,
+    max: params.maxTokens ?? null,
+    tp: params.topP ?? null,
+    st: params.stop ?? null,
+    rf: params.responseFormat ?? null,
     t: params.tools || null,
     tc: params.toolChoice || null,
   });
@@ -219,29 +229,29 @@ function parseModelHealth(raw: string | null | undefined): Record<string, ModelH
   }
 }
 
-async function applyRpmPacing(
-  connection: ConnectionRow,
+async function applyRpmPacingForBucket(
+  bucketKey: string,
+  rpm: number | null,
   hasRemainingTier: boolean
 ): Promise<{ proceed: boolean; queuedMs: number }> {
-  const rpm = connection.rpmLimit;
   if (!rpm || rpm <= 0) {
     return { proceed: true, queuedMs: 0 };
   }
 
   const now = Date.now();
   const windowStart = now - 60_000;
-  if (rpmWindowMap.size > 200) {
-    for (const [connId, timestamps] of rpmWindowMap.entries()) {
+  if (rpmWindowMap.size > 300) {
+    for (const [k, timestamps] of rpmWindowMap.entries()) {
       const active = timestamps.filter((ts) => ts > windowStart);
-      if (active.length === 0) rpmWindowMap.delete(connId);
-      else rpmWindowMap.set(connId, active);
+      if (active.length === 0) rpmWindowMap.delete(k);
+      else rpmWindowMap.set(k, active);
     }
   }
-  const recent = (rpmWindowMap.get(connection.id) || []).filter((ts) => ts > windowStart);
+  const recent = (rpmWindowMap.get(bucketKey) || []).filter((ts) => ts > windowStart);
 
   if (recent.length < rpm) {
     recent.push(now);
-    rpmWindowMap.set(connection.id, recent);
+    rpmWindowMap.set(bucketKey, recent);
     return { proceed: true, queuedMs: 0 };
   }
 
@@ -250,17 +260,17 @@ async function applyRpmPacing(
   const maxQueueWait = hasRemainingTier ? 350 : 5000;
 
   if (waitMs > maxQueueWait) {
-    rpmWindowMap.set(connection.id, recent);
+    rpmWindowMap.set(bucketKey, recent);
     return { proceed: false, queuedMs: 0 };
   }
 
   await new Promise((resolve) => setTimeout(resolve, waitMs));
   const afterNow = Date.now();
-  const refreshed = (rpmWindowMap.get(connection.id) || []).filter(
+  const refreshed = (rpmWindowMap.get(bucketKey) || []).filter(
     (ts) => ts > afterNow - 60_000
   );
   refreshed.push(afterNow);
-  rpmWindowMap.set(connection.id, refreshed);
+  rpmWindowMap.set(bucketKey, refreshed);
   return { proceed: true, queuedMs: waitMs };
 }
 
@@ -291,20 +301,20 @@ function scoreTierForIntent(
   } else {
     // Capability-aware heuristics for custom / free aggregator models
     if (intent === "tools") {
-      if (/(flash|hydrogen|llama-4|llama-3\.3|llama-3\.1|qwen|mistral|deepseek-chat|deepseek-v3|gpt-6|gpt-5|gpt-4o|claude|step|command)/i.test(modelIdLower)) {
+      if (/(flash|hydrogen|llama-4|llama-3\.3|llama-3\.1|qwen|mistral|deepseek-chat|deepseek-v3|deepseek-v4|gpt-6|gpt-5|gpt-4o|gpt-oss|claude|grok|step|command)/i.test(modelIdLower)) {
         score += 35;
       }
       if (/(gemma|deepseek-r1|reasoner|:thinking|-thinking)/i.test(modelIdLower)) {
         score -= 45;
       }
     } else if (intent === "vision") {
-      if (/(flash|hydrogen|neon|argon|carbon|terra|sol|astra|gpt-6|gpt-5|gpt-4o|claude|llama-4|vision|-vl|pixtral|llava|gemini-3|gemini-4|gemini-2)/i.test(modelIdLower)) {
+      if (/(flash|hydrogen|neon|argon|carbon|terra|sol|astra|gpt-6|gpt-5|gpt-4o|claude|grok-4|llama-4|vision|-vl|pixtral|llava|gemini-3|gemini-4|gemini-2)/i.test(modelIdLower)) {
         score += 40;
       } else {
         score -= 20;
       }
     } else if (intent === "coding" || intent === "reasoning") {
-      if (/(sonnet|opus|fable|pro|neon|argon|carbon|astra|sol|gpt-6|gpt-5|qwen|coder|deepseek|r1|reasoner|o4|o3|o1|gpt-4\.5|gpt-4o(?!-mini)|llama-4-maverick|llama-3\.3-70b|mistral-large)/i.test(modelIdLower)) {
+      if (/(sonnet|opus|fable|pro|neon|argon|carbon|astra|sol|gpt-6|gpt-5|grok-4|sonar|qwen|coder|deepseek|r1|reasoner|o4|o3|o1|gpt-4\.5|gpt-4o(?!-mini)|llama-4-maverick|llama-3\.3-70b|mistral-large|kimi-k3)/i.test(modelIdLower)) {
         score += 35;
       }
     } else if (intent === "fast") {
@@ -336,10 +346,14 @@ function resolveConnectionApiKeys(conn: ConnectionRow): {
   cursor: number;
 } {
   const allKeys: string[] = [];
+  if (conn.useServerKey && conn.provider === "gemini") {
+    const serverKey = process.env.GEMINI_API_KEY?.trim();
+    if (serverKey) allKeys.push(serverKey);
+  }
   if (conn.encryptedApiKey) {
     try {
       const primary = decryptSecret(conn.encryptedApiKey);
-      if (primary) allKeys.push(primary);
+      if (primary && !allKeys.includes(primary)) allKeys.push(primary);
     } catch {
       // ignore corrupted entry
     }
@@ -628,9 +642,11 @@ export async function resolveRoutingTarget(
     }
   }
 
-  // 2. Check exact combo name (including optional combo/ prefix)
+  // 2. Check exact combo name or ID (including optional combo/ prefix)
   const exactCombo = userCombos.find(
     (c) =>
+      c.id.toLowerCase() === trimmedModel.toLowerCase() ||
+      c.id.toLowerCase() === comboLookupName.toLowerCase() ||
       c.name.trim().toLowerCase() === trimmedModel.toLowerCase() ||
       c.name.trim().toLowerCase() === comboLookupName.toLowerCase()
   );
@@ -677,15 +693,34 @@ export async function resolveRoutingTarget(
   }
 
   // 4. Auto-inferred provider (prefer connections owning the requested model)
-  const inferredProvider = requestedModel.startsWith("gemini")
+  const lowerRequested = trimmedModel.toLowerCase();
+  const inferredProvider = lowerRequested.startsWith("gemini")
     ? "gemini"
-    : requestedModel.startsWith("claude")
+    : lowerRequested.startsWith("claude")
       ? "anthropic"
-      : requestedModel.startsWith("deepseek")
-        ? "deepseek"
-        : requestedModel.startsWith("gpt") || requestedModel.startsWith("o3")
-          ? "openai"
-          : null;
+      : lowerRequested.startsWith("grok")
+        ? "xai"
+        : lowerRequested.startsWith("sonar")
+          ? "perplexity"
+          : lowerRequested.startsWith("accounts/fireworks")
+            ? "fireworks"
+            : lowerRequested.startsWith("deepseek")
+              ? "deepseek"
+              : lowerRequested.startsWith("mistral") ||
+                  lowerRequested.startsWith("ministral") ||
+                  lowerRequested.startsWith("codestral") ||
+                  lowerRequested.startsWith("pixtral")
+                ? "mistral"
+                : lowerRequested.startsWith("llama") ||
+                    lowerRequested.startsWith("qwen") ||
+                    lowerRequested.startsWith("openai/gpt-oss")
+                  ? "groq"
+                  : lowerRequested.startsWith("gpt") ||
+                      lowerRequested.startsWith("o4") ||
+                      lowerRequested.startsWith("o3") ||
+                      lowerRequested.startsWith("o1")
+                    ? "openai"
+                    : null;
 
   const providerMatches = inferredProvider
     ? userConns.filter((c) => c.provider === inferredProvider && c.isActive)
@@ -784,13 +819,17 @@ export async function executeGatewayChatCompletion(params: {
 
   const cacheKey =
     cacheEnabled &&
-    !request.stream &&
     (request.temperature === undefined || request.temperature <= 0.7)
       ? buildCacheKey({
           userId,
           requestedModel: request.model,
           freeOnly: enforceFreeOnly,
           messages: effectiveMessages,
+          temperature: request.temperature,
+          maxTokens: request.max_tokens,
+          topP: request.top_p,
+          stop: request.stop,
+          responseFormat: request.response_format,
           tools: request.tools,
           toolChoice: request.tool_choice,
         })
@@ -799,6 +838,27 @@ export async function executeGatewayChatCompletion(params: {
   if (cacheKey) {
     const cached = getCachedCompletion(cacheKey);
     if (cached) {
+      if (request.stream && onStreamDelta) {
+        if (cached.content) {
+          const chunkSize = 24;
+          for (let i = 0; i < cached.content.length; i += chunkSize) {
+            onStreamDelta({ content: cached.content.slice(i, i + chunkSize) });
+          }
+        }
+        if (cached.toolCalls && cached.toolCalls.length > 0) {
+          onStreamDelta({
+            tool_calls: cached.toolCalls.map((tc, index) => ({
+              index,
+              id: tc.id,
+              type: "function",
+              function: {
+                name: tc.function.name,
+                arguments: tc.function.arguments,
+              },
+            })),
+          });
+        }
+      }
       const totalLatency = Math.max(1, Date.now() - startedAt);
       const hitAttempts: FallbackHop[] = [
         {
@@ -951,21 +1011,13 @@ export async function executeGatewayChatCompletion(params: {
       return evaluateTierEligibility(nextItem.connection, now).eligible;
     });
 
-    const pacing = await applyRpmPacing(connection, hasRemainingTier);
-    if (!pacing.proceed) {
-      attempts.push({
-        tierId: tier.id,
-        connectionId: connection.id,
-        connectionName: connection.name,
-        provider: connection.provider,
-        model: tier.upstreamModel,
-        status: "skipped",
-        statusCode: 429,
-        reason: "rpm_window_busy_skipped",
-        latencyMs: 0,
-      });
-      continue;
-    }
+    const { keys: candidateKeys, cursor: startCursor } =
+      resolveConnectionApiKeys(connection);
+
+    let pacingQueuedMs = 0;
+    const maxRetryPasses = Math.min(3, Math.max(1, tier.maxRetries || 1));
+    const tierStart = Date.now();
+    const tierTimeoutMs = hasRemainingTier ? 9000 : 25000;
 
     if (eligibility.promotedToHalfOpen) {
       pendingDbWrites.push(
@@ -976,11 +1028,6 @@ export async function executeGatewayChatCompletion(params: {
       );
       publishCircuitUpdate(userId, connection.id, "half_open");
     }
-
-    const { keys: candidateKeys, cursor: startCursor } =
-      resolveConnectionApiKeys(connection);
-    const tierStart = Date.now();
-    const tierTimeoutMs = hasRemainingTier ? 9000 : 25000;
 
     publishRouteActivity(userId, {
       requestId,
@@ -995,82 +1042,110 @@ export async function executeGatewayChatCompletion(params: {
 
     let lastTierError: unknown = null;
     let tierSucceeded = false;
+    let rpmBusySkipped = false;
 
-    for (let keyIdx = 0; keyIdx < Math.max(1, candidateKeys.length); keyIdx++) {
-      if (signal?.aborted) break;
-      const upstreamKey = candidateKeys[keyIdx] || "";
-      try {
-        const result = await invokeUpstreamCompletion({
-          provider: connection.provider,
-          model: tier.upstreamModel,
-          apiKey: upstreamKey,
-          baseUrl: connection.baseUrl,
-          timeoutMs: tierTimeoutMs,
-          signal,
-          request: {
-            ...request,
-            messages: effectiveMessages,
-          },
-          onStreamDelta: onStreamDelta
-            ? (delta) => {
-                streamedAnyChunk = true;
-                onStreamDelta(delta);
-              }
-            : undefined,
-        });
+    for (let retryPass = 0; retryPass < maxRetryPasses && !tierSucceeded; retryPass++) {
+      if (retryPass > 0) {
+        if (signal?.aborted || streamedAnyChunk) break;
+        await new Promise((resolve) => setTimeout(resolve, 250 * retryPass));
+      }
 
-        tierSucceeded = true;
-        publishRouteActivity(userId, {
-          requestId,
-          phase: "end",
-          provider: connection.provider,
-          model: tier.upstreamModel,
-          connectionId: connection.id,
-          connectionName: connection.name,
-          requestedModel: request.model,
-          outcome: "success",
-          timestamp: new Date().toISOString(),
-        });
-
-        const tierLatency = Date.now() - tierStart;
-        const totalLatency = Date.now() - startedAt;
-        const hadPriorFailure = attempts.some((a) => a.status === "failed");
-
-        const reasonNotes: string[] = [];
-        if (hadPriorFailure) reasonNotes.push("fallback_recovered");
-        else if (strategy === "intent_auto") reasonNotes.push(`intent:${detectedIntent}`);
-        else reasonNotes.push("primary_ok");
-        if (keyIdx > 0) reasonNotes.push(`pool_key_${keyIdx + 1}`);
-        if (pacing.queuedMs > 0) reasonNotes.push(`queued_${pacing.queuedMs}ms`);
-
-        attempts.push({
-          tierId: tier.id,
-          connectionId: connection.id,
-          connectionName: connection.name,
-          provider: connection.provider,
-          model: tier.upstreamModel,
-          status: "success",
-          statusCode: 200,
-          reason: reasonNotes.join(" · "),
-          latencyMs: tierLatency,
-        });
-
-        const totalTokens = result.promptTokens + result.completionTokens;
-        const connLastReset = connection.quotaResetAt
-          ? new Date(connection.quotaResetAt)
-          : new Date(0);
-        const connResetDaily =
-          connLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
-          connLastReset.getUTCMonth() !== now.getUTCMonth() ||
-          connLastReset.getUTCDate() !== now.getUTCDate();
-        const connResetMonthly =
-          connLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
-          connLastReset.getUTCMonth() !== now.getUTCMonth();
-
-        const nextPoolCursor =
-          candidateKeys.length > 1
+      for (let keyIdx = 0; keyIdx < Math.max(1, candidateKeys.length); keyIdx++) {
+        if (signal?.aborted) break;
+        const upstreamKey = candidateKeys[keyIdx] || "";
+        const actualKeySlot =
+          candidateKeys.length > 0
             ? (startCursor + keyIdx) % candidateKeys.length
-            : connection.keyPoolCursor;
+            : 0;
+        const pacing = await applyRpmPacingForBucket(
+          `${connection.id}:k${actualKeySlot}`,
+          connection.rpmLimit,
+          hasRemainingTier || keyIdx + 1 < candidateKeys.length
+        );
+        if (!pacing.proceed) {
+          if (keyIdx + 1 < candidateKeys.length) {
+            continue;
+          }
+          if (!lastTierError) {
+            rpmBusySkipped = true;
+          }
+          break;
+        }
+        pacingQueuedMs += pacing.queuedMs;
+
+        try {
+          const result = await invokeUpstreamCompletion({
+            provider: connection.provider,
+            model: tier.upstreamModel,
+            apiKey: upstreamKey,
+            baseUrl: connection.baseUrl,
+            timeoutMs: tierTimeoutMs,
+            signal,
+            request: {
+              ...request,
+              messages: effectiveMessages,
+            },
+            onStreamDelta: onStreamDelta
+              ? (delta) => {
+                  streamedAnyChunk = true;
+                  onStreamDelta(delta);
+                }
+              : undefined,
+          });
+
+          tierSucceeded = true;
+          publishRouteActivity(userId, {
+            requestId,
+            phase: "end",
+            provider: connection.provider,
+            model: tier.upstreamModel,
+            connectionId: connection.id,
+            connectionName: connection.name,
+            requestedModel: request.model,
+            outcome: "success",
+            timestamp: new Date().toISOString(),
+          });
+
+          const tierLatency = Date.now() - tierStart;
+          const totalLatency = Date.now() - startedAt;
+          const hadPriorFailure = attempts.some((a) => a.status === "failed");
+
+          const reasonNotes: string[] = [];
+          if (hadPriorFailure) reasonNotes.push("fallback_recovered");
+          else if (strategy === "intent_auto") reasonNotes.push(`intent:${detectedIntent}`);
+          else reasonNotes.push("primary_ok");
+          if (keyIdx > 0) reasonNotes.push(`pool_key_${keyIdx + 1}`);
+          if (retryPass > 0) reasonNotes.push(`retry_${retryPass}`);
+          if (pacingQueuedMs > 0) reasonNotes.push(`queued_${pacingQueuedMs}ms`);
+
+          attempts.push({
+            tierId: tier.id,
+            connectionId: connection.id,
+            connectionName: connection.name,
+            provider: connection.provider,
+            model: tier.upstreamModel,
+            status: "success",
+            statusCode: 200,
+            reason: reasonNotes.join(" · "),
+            latencyMs: tierLatency,
+          });
+
+          const totalTokens = result.promptTokens + result.completionTokens;
+          const connLastReset = connection.quotaResetAt
+            ? new Date(connection.quotaResetAt)
+            : new Date(0);
+          const connResetDaily =
+            connLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+            connLastReset.getUTCMonth() !== now.getUTCMonth() ||
+            connLastReset.getUTCDate() !== now.getUTCDate();
+          const connResetMonthly =
+            connLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+            connLastReset.getUTCMonth() !== now.getUTCMonth();
+
+          const nextPoolCursor =
+            candidateKeys.length > 1
+              ? (startCursor + keyIdx + 1) % candidateKeys.length
+              : connection.keyPoolCursor;
 
         const nextHealth = parseModelHealth(connection.modelHealth);
         nextHealth[tier.upstreamModel] = {
@@ -1245,23 +1320,60 @@ export async function executeGatewayChatCompletion(params: {
           compressed,
           cached: false,
         };
-      } catch (err: unknown) {
-        lastTierError = err;
-        const sc = err instanceof UpstreamHttpError ? err.statusCode : 502;
-        const canRotatePoolKey =
-          !streamedAnyChunk &&
-          keyIdx + 1 < candidateKeys.length &&
-          (sc === 429 ||
-            sc === 408 ||
-            sc === 402 ||
-            sc === 401 ||
-            sc === 403 ||
-            sc >= 500);
-        if (canRotatePoolKey) {
-          continue;
+        } catch (err: unknown) {
+          lastTierError = err;
+          const sc = err instanceof UpstreamHttpError ? err.statusCode : 502;
+          const canRotatePoolKey =
+            !streamedAnyChunk &&
+            keyIdx + 1 < candidateKeys.length &&
+            (sc === 429 ||
+              sc === 408 ||
+              sc === 402 ||
+              sc === 401 ||
+              sc === 403 ||
+              sc >= 500);
+          if (canRotatePoolKey) {
+            continue;
+          }
+          break;
         }
+      }
+
+      if (tierSucceeded || streamedAnyChunk) break;
+      const sc =
+        lastTierError instanceof UpstreamHttpError
+          ? lastTierError.statusCode
+          : 502;
+      const isTransientRetryable = sc === 408 || sc >= 500;
+      if (!isTransientRetryable || retryPass + 1 >= maxRetryPasses) {
         break;
       }
+    }
+
+    if (!tierSucceeded && rpmBusySkipped && !lastTierError) {
+      publishRouteActivity(userId, {
+        requestId,
+        phase: "end",
+        provider: connection.provider,
+        model: tier.upstreamModel,
+        connectionId: connection.id,
+        connectionName: connection.name,
+        requestedModel: request.model,
+        outcome: "error",
+        timestamp: new Date().toISOString(),
+      });
+      attempts.push({
+        tierId: tier.id,
+        connectionId: connection.id,
+        connectionName: connection.name,
+        provider: connection.provider,
+        model: tier.upstreamModel,
+        status: "skipped",
+        statusCode: 429,
+        reason: "rpm_window_busy_skipped",
+        latencyMs: 0,
+      });
+      continue;
     }
 
     if (!tierSucceeded && lastTierError) {

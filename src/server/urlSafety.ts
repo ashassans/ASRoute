@@ -1,4 +1,10 @@
-export function isBlockedHost(hostname: string): boolean {
+import { lookup } from "node:dns/promises";
+
+export function isLocalProvidersAllowed(): boolean {
+  return process.env.ALLOW_LOCAL_PROVIDERS?.trim().toLowerCase() === "true";
+}
+
+function isPrivateOrLoopbackAddress(hostname: string): boolean {
   const host = hostname
     .toLowerCase()
     .trim()
@@ -22,7 +28,7 @@ export function isBlockedHost(hostname: string): boolean {
     return true;
   }
 
-  // Handle IPv4-mapped IPv6 like ::ffff:127.0.0.1 or ::ffff:7f00:1
+  // Handle IPv4-mapped IPv6 like ::ffff:127.0.0.1
   const ipv4Target = host.startsWith("::ffff:") ? host.slice(7) : host;
   const ipv4 = ipv4Target.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (ipv4) {
@@ -53,6 +59,28 @@ export function isBlockedHost(hostname: string): boolean {
   return false;
 }
 
+export function isBlockedHost(hostname: string): boolean {
+  const host = hostname
+    .toLowerCase()
+    .trim()
+    .replace(/^\[|\]$/g, "");
+
+  // Always block cloud metadata endpoints regardless of ALLOW_LOCAL_PROVIDERS
+  if (
+    host === "169.254.169.254" ||
+    host === "metadata.google.internal" ||
+    host === "metadata.goog"
+  ) {
+    return true;
+  }
+
+  if (isLocalProvidersAllowed()) {
+    return !host;
+  }
+
+  return isPrivateOrLoopbackAddress(host);
+}
+
 export function validateOutboundUrl(
   rawUrl: string,
   label = "URL"
@@ -78,5 +106,36 @@ export function validateOutboundUrl(
     );
   }
 
+  return parsed;
+}
+
+export async function validateOutboundUrlWithDns(
+  rawUrl: string,
+  label = "URL"
+): Promise<URL> {
+  const parsed = validateOutboundUrl(rawUrl, label);
+  if (isLocalProvidersAllowed()) {
+    return parsed;
+  }
+  const host = parsed.hostname.replace(/^\[|\]$/g, "");
+  // Skip DNS lookup if hostname is already an IP literal
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")) {
+    return parsed;
+  }
+  try {
+    const records = await lookup(host, { all: true });
+    for (const rec of records) {
+      if (isPrivateOrLoopbackAddress(rec.address)) {
+        throw new Error(
+          `Resolved IP address for ${label} points to a private or loopback network.`
+        );
+      }
+    }
+  } catch (err: any) {
+    if (err?.message?.includes("private or loopback")) {
+      throw err;
+    }
+    // If DNS cannot resolve yet or offline environment, let downstream fetch fail cleanly unless private
+  }
   return parsed;
 }
