@@ -333,6 +333,31 @@ export default function App() {
     }
   };
 
+  if (routeArea === "home") {
+    return (
+      <LandingPage
+        isAuthenticated={Boolean(session?.user)}
+        onOpenDashboard={() => navigateTo("/dashboard")}
+        onOpenAuth={(mode) => {
+          navigateTo(mode === "signup" ? "/signup" : "/login");
+        }}
+      />
+    );
+  }
+
+  if (!session?.user && (routeArea === "login" || routeArea === "signup")) {
+    return (
+      <AuthGate
+        initialMode={routeArea === "signup" ? "signup" : "signin"}
+        onBackHome={() => navigateTo("/")}
+        onAuthenticated={async () => {
+          navigateTo("/dashboard", true);
+          await refetch();
+        }}
+      />
+    );
+  }
+
   if (sessionLoading && !initialSessionChecked) {
     return (
       <div className="min-h-screen bg-[#09090B] text-[#A1A1AA] flex items-center justify-center text-sm">
@@ -342,34 +367,11 @@ export default function App() {
   }
 
   if (!session?.user) {
-    if (routeArea === "login" || routeArea === "signup") {
-      return (
-        <AuthGate
-          initialMode={routeArea === "signup" ? "signup" : "signin"}
-          onBackHome={() => navigateTo("/")}
-          onAuthenticated={async () => {
-            navigateTo("/dashboard", true);
-            await refetch();
-          }}
-        />
-      );
-    }
-
     return (
       <LandingPage
         onOpenAuth={(mode) => {
           navigateTo(mode === "signup" ? "/signup" : "/login");
         }}
-      />
-    );
-  }
-
-  if (routeArea === "home") {
-    return (
-      <LandingPage
-        isAuthenticated
-        onOpenDashboard={() => navigateTo("/dashboard")}
-        onOpenAuth={() => navigateTo("/dashboard")}
       />
     );
   }
