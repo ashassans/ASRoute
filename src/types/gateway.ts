@@ -218,6 +218,8 @@ export interface BootstrapPayload {
     id: string;
     email: string;
     name: string;
+    hasPassword?: boolean;
+    authProviders?: string[];
   };
   environment: GatewayEnvironment;
   keys: GatewayApiKey[];

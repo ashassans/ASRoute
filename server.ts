@@ -18,6 +18,7 @@ import {
   isNeonConfigured,
 } from "./src/db/index.ts";
 import {
+  account,
   combos,
   comboTiers,
   gatewayApiKeys,
@@ -1001,6 +1002,10 @@ app.get("/api/health", (_req: Request, res: Response) => {
     service: "AS ROUTER",
     databaseMode,
     neonConfigured: isNeonConfigured,
+    googleOAuthEnabled: Boolean(
+      process.env.GOOGLE_CLIENT_ID?.trim() &&
+        process.env.GOOGLE_CLIENT_SECRET?.trim()
+    ),
   });
 });
 
@@ -1011,7 +1016,7 @@ app.get(
     try {
       const userId = req.authUser!.id;
 
-      const [keys, conns, userCombos, tiers, wildcards, recentLogs] =
+      const [keys, conns, userCombos, tiers, wildcards, recentLogs, userAccounts] =
         await Promise.all([
           db
             .select()
@@ -1040,7 +1045,21 @@ app.get(
             .where(eq(requestLogs.userId, userId))
             .orderBy(desc(requestLogs.createdAt))
             .limit(150),
+          db
+            .select({
+              providerId: account.providerId,
+              password: account.password,
+            })
+            .from(account)
+            .where(eq(account.userId, userId)),
         ]);
+
+      const hasPassword = userAccounts.some(
+        (a) => a.providerId === "credential" || Boolean(a.password)
+      );
+      const authProviders = Array.from(
+        new Set(userAccounts.map((a) => a.providerId))
+      );
 
       const comboIdSet = new Set(userCombos.map((c) => c.id));
       const userTiers = tiers.filter((t) => comboIdSet.has(t.comboId));
@@ -1053,7 +1072,11 @@ app.get(
       }));
 
       return res.json({
-        user: req.authUser,
+        user: {
+          ...req.authUser,
+          hasPassword,
+          authProviders,
+        },
         environment: {
           databaseMode,
           neonConfigured: isNeonConfigured,

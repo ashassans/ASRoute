@@ -774,6 +774,8 @@ export default function App() {
           <AccountSettingsModal
             userName={session.user.name}
             userEmail={session.user.email}
+            hasPassword={workspace?.user?.hasPassword ?? false}
+            authProviders={workspace?.user?.authProviders ?? []}
             onClose={() => setSettingsOpen(false)}
             onUpdated={async () => {
               await refetch();
