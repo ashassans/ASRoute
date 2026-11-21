@@ -1,85 +1,120 @@
-# AS ROUTER — Unified AI Gateway
+# ASRoute
 
-**AS ROUTER** is a multi-provider AI gateway and intelligent routing platform. It unifies **Google Gemini, OpenAI, Anthropic, Groq, DeepSeek, Mistral, OpenRouter, and custom OpenAI-compatible endpoints** behind a single **OpenAI** and **Anthropic**-compatible API—complete with intent-based routing, automatic failover, circuit breakers, encrypted key storage, per-key spend budgets, and real-time telemetry.
+**ASRoute** is a unified, multi-provider AI gateway with a dashboard for routing, failover, observability, quotas, and API-key management.
 
----
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-asroute.vercel.app-111827?style=for-the-badge&logo=vercel)](https://asroute.vercel.app)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-Unlicensed-lightgrey?style=for-the-badge)](#license)
 
-## Core Services & Endpoints
+## Live application
 
-| Endpoint | Compatibility | Capabilities |
-| :--- | :--- | :--- |
-| `POST /v1/chat/completions` | **OpenAI API** (`openai` TS/Python, LangChain, Cursor, cURL) | Streaming SSE, tool/function calling, multimodal vision (`image_url` & base64), prompt compression |
-| `POST /v1/messages` | **Anthropic Messages API** (`@anthropic-ai/sdk`, Claude Code) | Full message & tool translation across non-Anthropic providers, streaming SSE |
-| `GET /v1/models` | **OpenAI Models API** | Dynamically lists connected models and custom routing combos scoped to the workspace |
-| `GET /api/logs/stream` | **Server-Sent Events (SSE)** | Real-time active routing status, live request logs, and circuit breaker state updates |
+- **Website:** https://asroute.vercel.app
+- **Health check:** https://asroute.vercel.app/api/health
+- **Gateway endpoint:** `https://asroute.vercel.app/v1`
 
----
+## Overview
 
-## Supported Providers
+ASRoute gives applications one consistent interface for many AI providers. It supports OpenAI-compatible and Anthropic-compatible requests, while the dashboard lets you manage provider credentials, model routing, fallback chains, usage limits, logs, and analytics.
 
-AS ROUTER supports **Bring Your Own Key (BYOK)** across 8 upstream provider types:
+## Features
 
-- **Google Gemini** (`@google/genai` native execution, multimodal vision & tool translation)
-- **OpenAI**
-- **Anthropic (Claude)**
-- **Groq**
-- **DeepSeek**
-- **Mistral AI**
-- **OpenRouter**
-- **Custom OpenAI-Compatible** (Ollama, vLLM, LM Studio, Together, Fireworks, LiteLLM, or any self-hosted endpoint)
+- **Unified OpenAI API** — compatible with `POST /v1/chat/completions` and `GET /v1/models`
+- **Anthropic Messages compatibility** — compatible with `POST /v1/messages`
+- **Multiple providers** — Google Gemini, OpenAI, Anthropic, Groq, DeepSeek, Mistral AI, OpenRouter, and custom OpenAI-compatible endpoints
+- **Intelligent routing** — intent-based automatic routing, priority, round-robin, weighted, least-used, and cost-optimized strategies
+- **Model combos** — combine multiple providers and models into reusable aliases with ordered fallback tiers
+- **Automatic failover** — retry rate limits, overload errors, and upstream failures on the next healthy route
+- **Circuit breakers** — isolate failing connections and provide manual reset controls
+- **Prompt and response controls** — optional prompt compression, caching, streaming, tools, and vision input
+- **BYOK provider keys** — encrypted provider credentials and support for multiple API keys
+- **Gateway key security** — scoped `sk-asr-*` keys with daily token limits, monthly budgets, allowed combos, and free-model restrictions
+- **Real-time observability** — SSE logs, provider health, latency, tokens, spend, routes, and analytics
+- **Authentication** — email/password, optional email OTP verification, Google OAuth, and isolated workspaces
+- **Dry-run simulator** — preview route selection without consuming upstream quota
 
----
+## Tech stack
 
-## Key Features
+- React 19 and TypeScript
+- Vite 8
+- Express 4
+- Tailwind CSS 4
+- Drizzle ORM
+- Better Auth
+- PostgreSQL / Neon
+- PGlite for local embedded PostgreSQL mode
+- Server-Sent Events (SSE)
+- Docker
 
-### 1. Intelligent Routing & Custom Combos
-- **Built-in `smart-auto` Router**: Analyzes incoming requests (`vision`, `tools`, `coding`, `reasoning`, or `fast` chat) and selects the best connected model automatically.
-- **6 Routing Strategies**:
-  - `intent_auto` — Capability-matched routing based on request intent
-  - `priority` — Deterministic ordered fallback chain
-  - `round_robin` — Even distribution across healthy targets
-  - `weighted` — Custom percentage traffic splitting
-  - `least_used` — Balances load across lower-usage connections
-  - `cost_optimized` — Prefers lowest-cost / free-tier eligible models first
-- **Multi-Model Combos**: Create custom aliases (e.g., `my-prod-stack`) with drag-and-drop fallback chains across different providers.
+## Quick start
 
-### 2. High Availability & Failover
-- **Automatic `429` & Error Failover**: Seamlessly retries rate-limited (`HTTP 429`), overloaded, or `5xx` responses onto the next healthy model in the chain before the client ever sees an error.
-- **Circuit Breakers**: Automatically places failing connections on a short cooldown to protect latency, with live circuit status monitoring and manual reset controls.
-- **Live Health Checks**: Test provider keys and inspect active health/cooldown state directly from the dashboard.
+### 1. Clone the repository
 
-### 3. API Key Management, Quotas & Guardrails
-- **Scoped Gateway Keys (`sk-asr-*`)**: Issue separate gateway keys for apps, scripts, or team members.
-- **Daily & Monthly Quotas**: Enforce per-key **Daily Token Caps** and **Monthly USD Spend Limits** with automatic UTC daily/monthly resets.
-- **Model & Cost Guardrails**: Restrict specific keys to an allowed model list or enable **Free Models Only** enforcement.
-- **AES-256-GCM Key Vault**: Upstream provider API keys are encrypted at rest before database persistence.
-- **SSRF Protection**: Validates remote `image_url` inputs and blocks private/loopback/metadata IP ranges during multimodal processing.
+```bash
+git clone https://github.com/ashassans/ASRoute.git
+cd ASRoute
+```
 
-### 4. Dashboard & Observability
-- **Overview**: Real-time request metrics, token consumption, estimated spend, latency stats, and provider distribution.
-- **Providers**: Add, test, enable/disable, prioritize, set daily token/request limits, and manage custom models per provider.
-- **Models Directory**: Unified searchable catalog of all connected providers and Model IDs with **1-click copy**.
-- **Combos**: Visual builder for multi-provider routing chains and fallback strategies.
-- **API Keys**: Create, revoke, copy, and configure budget/model limits for gateway keys.
-- **Live Logs**: Real-time SSE request inspector displaying status codes, intent classification, resolved provider/model, fallback hops, latency, tokens, and estimated USD cost.
-- **Interactive Playground & Dry-Run Simulator**: Test live chat completions, streaming responses, and preview exact routing paths without hitting upstream quotas.
+### 2. Install dependencies
 
-### 5. Workspace Authentication & Multi-Tenancy
-- **Isolated Workspaces**: Each account manages its own encrypted providers, models, combos, API keys, and request logs.
-- **Better Auth**: Supports Email/Password authentication, Google OAuth sign-in, optional Email OTP verification on account registration, and workspace account/password settings.
+```bash
+npm install --legacy-peer-deps
+```
 
----
+### 3. Configure environment variables
 
-## Drop-In SDK Usage
+```bash
+cp .env.example .env
+```
 
-Use any standard OpenAI or Anthropic client by pointing `baseURL` to your AS ROUTER instance and authenticating with a generated gateway key (`sk-asr-...`):
+| Variable | Required | Description |
+|---|---:|---|
+| `APP_URL` | Yes in production | Public application URL, for example `https://asroute.vercel.app` |
+| `BETTER_AUTH_URL` | Yes in production | Better Auth public base URL |
+| `BETTER_AUTH_SECRET` | Yes | Long random secret used for authentication |
+| `DATABASE_URL` | Recommended | PostgreSQL or Neon connection string |
+| `GOOGLE_CLIENT_ID` | No | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
+| `GMAIL_USER` | No | Gmail address for email OTP delivery |
+| `GMAIL_APP_PASSWORD` | No | Gmail app password for email OTP delivery |
+| `GEMINI_API_KEY` | No | Optional server-managed Gemini key |
 
-### OpenAI SDK (TypeScript / JavaScript)
+For local development, ASRoute can use PGlite when `DATABASE_URL` is not configured. PGlite data is stored in `.asrouter-pgdata`.
+
+Generate an authentication secret:
+
+```bash
+openssl rand -base64 32
+```
+
+### 4. Start locally
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+The development server serves both the React application and the API.
+
+## API usage
+
+First, register or sign in to ASRoute, then add a provider and create a gateway key in the dashboard. Provider keys belong to your workspace; the generated gateway key is what your applications use.
+
+### OpenAI-compatible API
+
+Set the base URL to:
+
+```text
+https://asroute.vercel.app/v1
+```
+
+#### JavaScript / TypeScript
+
 ```ts
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  baseURL: "https://your-gateway-domain/v1",
+  baseURL: "https://asroute.vercel.app/v1",
   apiKey: "sk-asr-YOUR_GATEWAY_KEY",
 });
 
@@ -87,38 +122,194 @@ const response = await client.chat.completions.create({
   model: "smart-auto",
   messages: [{ role: "user", content: "Explain circuit breakers concisely." }],
 });
+
+console.log(response.choices[0].message.content);
 ```
 
-### OpenAI SDK (Python)
+#### Python
+
 ```python
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://your-gateway-domain/v1",
+    base_url="https://asroute.vercel.app/v1",
     api_key="sk-asr-YOUR_GATEWAY_KEY",
 )
 
-res = client.chat.completions.create(
+response = client.chat.completions.create(
     model="smart-auto",
-    messages=[{"role": "user", "content": "Refactor this SQL query."}],
+    messages=[{"role": "user", "content": "Explain circuit breakers concisely."}],
 )
-print(res.choices[0].message.content)
+
+print(response.choices[0].message.content)
 ```
 
-### Anthropic Claude SDK
+#### cURL
+
+```bash
+curl https://asroute.vercel.app/v1/chat/completions \
+  -H "Authorization: Bearer sk-asr-YOUR_GATEWAY_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "smart-auto",
+    "messages": [{"role":"user","content":"Hello!"}],
+    "stream": false
+  }'
+```
+
+Streaming is supported by adding `"stream": true`.
+
+### Anthropic Messages API
+
 ```ts
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
-  baseURL: "https://your-gateway-domain",
+  baseURL: "https://asroute.vercel.app",
   apiKey: "sk-asr-YOUR_GATEWAY_KEY",
 });
 
-const msg = await client.messages.create({
+const message = await client.messages.create({
   model: "smart-auto",
   max_tokens: 1024,
   messages: [{ role: "user", content: "Review this TypeScript module." }],
 });
+
+console.log(message.content);
 ```
 
----
+### List models
+
+```bash
+curl https://asroute.vercel.app/v1/models \
+  -H "Authorization: Bearer sk-asr-YOUR_GATEWAY_KEY"
+```
+
+## Routing
+
+Use a provider/model pair such as `gemini/gemini-model-name`, or create a named combo and use its alias, such as `smart-auto` or `free-auto`.
+
+Available routing strategies include:
+
+| Strategy | Behavior |
+|---|---|
+| `intent_auto` | Selects routes based on detected request intent and capabilities |
+| `priority` | Uses an ordered fallback chain |
+| `round_robin` | Distributes requests evenly across healthy targets |
+| `weighted` | Uses configured weights for traffic distribution |
+| `least_used` | Prefers targets with lower usage |
+| `cost_optimized` | Prefers lower-cost or eligible free targets |
+
+## Dashboard
+
+- **Overview** — request volume, success rate, spend, latency, and provider distribution
+- **Providers** — add and test providers, synchronize models, configure quotas, and manage circuit breakers
+- **Models** — search and copy available model identifiers
+- **Combos** — build visual multi-provider fallback routes
+- **API Keys** — create, scope, revoke, and limit gateway keys
+- **Logs** — inspect live routing decisions and request outcomes through SSE
+- **Playground** — test chat completions and dry-run routing
+
+## Production build
+
+```bash
+npm run build
+npm start
+```
+
+`npm run build` creates the Vite `dist` directory. In production, Express serves the built application and API from the same server.
+
+Run checks:
+
+```bash
+npm run lint
+```
+
+## Docker
+
+```bash
+docker build -t asroute .
+
+docker run --rm -p 3000:3000 \
+  -e APP_URL=http://localhost:3000 \
+  -e BETTER_AUTH_URL=http://localhost:3000 \
+  -e BETTER_AUTH_SECRET="replace-with-a-long-random-secret" \
+  -e DATABASE_URL="postgresql://user:password@host:5432/database" \
+  asroute
+```
+
+The container exposes port `3000`.
+
+## Deployment
+
+### Vercel
+
+The repository includes `vercel.json` and can be deployed as a Vercel project.
+
+Set these environment variables in the deployment:
+
+```text
+APP_URL=https://asroute.vercel.app
+BETTER_AUTH_URL=https://asroute.vercel.app
+BETTER_AUTH_SECRET=<long-random-secret>
+DATABASE_URL=<postgres-or-neon-url>
+```
+
+Add the Google OAuth and Gmail variables only when those integrations are required.
+
+For authentication cookies and OAuth redirects, production URLs must match `APP_URL` and `BETTER_AUTH_URL`.
+
+## Security
+
+- Provider API keys are encrypted with AES-256-GCM before database storage
+- Gateway keys are stored as hashes rather than raw values
+- Workspace data is isolated by authenticated user ID
+- Gateway keys can be restricted by combo and usage limits
+- Remote image URLs are validated against private, loopback, and metadata networks
+- API responses should never expose provider secrets
+
+## Environment notes
+
+- If no database URL is provided, ASRoute uses embedded PGlite storage
+- PGlite is convenient for local development but PostgreSQL/Neon is recommended for production
+- Provider credentials are workspace-specific
+- The optional Gemini server key is not the primary provider-connection flow
+
+## Scripts
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start Express with Vite middleware |
+| `npm start` | Start the application server |
+| `npm run build` | Build the React frontend |
+| `npm run preview` | Preview the Vite build |
+| `npm run lint` | Run TypeScript type checking |
+| `npm run clean` | Remove generated build output |
+
+## API endpoints
+
+| Endpoint | Method | Authentication | Purpose |
+|---|---|---|---|
+| `/api/health` | `GET` | None | Service and database health |
+| `/v1/models` | `GET` | Gateway key | List available models |
+| `/v1/chat/completions` | `POST` | Gateway key | OpenAI-compatible chat completions |
+| `/v1/messages` | `POST` | Gateway key | Anthropic-compatible messages |
+| `/api/bootstrap` | `GET` | Session | Load dashboard workspace |
+| `/api/providers` | CRUD | Session | Manage provider connections |
+| `/api/combos` | CRUD | Session | Manage routing combos |
+| `/api/keys` | CRUD | Session | Manage gateway keys |
+| `/api/analytics` | `GET` | Session | Workspace analytics |
+| `/api/logs/stream` | `GET` | Session (SSE) | Live request logs |
+| `/api/playground/chat` | `POST` | Session | Execute playground chat |
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Keep changes isolated and well documented
+4. Run `npm run lint` and `npm run build`
+5. Open a pull request
+
+## License
+
+No license file is currently included in this repository. Add a `LICENSE` file before applying a public software license.
