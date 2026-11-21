@@ -122,10 +122,3 @@ const msg = await client.messages.create({
 ```
 
 ---
-
-## Tech Stack
-
-- **Frontend**: React 19, TypeScript, Tailwind CSS v4, Motion, Lucide Icons
-- **Backend**: Node.js, Express, Server-Sent Events (SSE)
-- **Database & ORM**: PostgreSQL / PGlite with Drizzle ORM
-- **Authentication**: Better Auth
