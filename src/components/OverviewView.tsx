@@ -487,7 +487,7 @@ export function OverviewView({
     return indices;
   }, [buckets]);
 
-  const defaultModelAlias = combos[0]?.name || "gemini-2.5-flash";
+  const defaultModelAlias = combos[0]?.name || "gemini-4-hydrogen";
   const curlSnippet = `curl ${environment.gatewayEndpoint}/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer ${keys[0]?.keyPrefix || "sk-asr-YOUR_KEY"}" \\
@@ -552,13 +552,20 @@ export function OverviewView({
               key={value}
               type="button"
               onClick={() => setRange(value)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
+              className={`relative px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
                 range === value
-                  ? "bg-[#18181B] text-[#FAFAFA]"
+                  ? "text-[#FAFAFA]"
                   : "text-[#A1A1AA] hover:text-[#FAFAFA]"
               }`}
             >
-              {label}
+              {range === value && (
+                <motion.span
+                  layoutId="overview-range-pill"
+                  transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                  className="absolute inset-0 bg-[#18181B] rounded-md"
+                />
+              )}
+              <span className="relative z-10">{label}</span>
             </button>
           ))}
         </div>
@@ -1351,13 +1358,20 @@ export function OverviewView({
                   key={m}
                   type="button"
                   onClick={() => setChartMetric(m)}
-                  className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
+                  className={`relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
                     chartMetric === m
-                      ? "bg-[#18181B] text-[#FAFAFA]"
-                      : "text-[#71717A] hover:text-[#D4D4D8]"
+                      ? "text-[#FAFAFA]"
+                      : "text-[#8B8B95] hover:text-[#D4D4D8]"
                   }`}
                 >
-                  {label}
+                  {chartMetric === m && (
+                    <motion.span
+                      layoutId="overview-metric-pill"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      className="absolute inset-0 bg-[#18181B] rounded"
+                    />
+                  )}
+                  <span className="relative z-10">{label}</span>
                 </button>
               ))}
             </div>
@@ -1436,12 +1450,15 @@ export function OverviewView({
                       key={`${bucket.label}-${bIdx}`}
                       onMouseEnter={() => setHoveredBucketIdx(bIdx)}
                       onMouseLeave={() => setHoveredBucketIdx(null)}
-                      className="flex-1 h-full flex items-end justify-center border-r border-dashed border-[#1B1B20] last:border-r-0 group relative"
+                      onClick={() =>
+                        setHoveredBucketIdx((prev) => (prev === bIdx ? null : bIdx))
+                      }
+                      className="flex-1 h-full flex items-end justify-center border-r border-dashed border-[#1B1B20] last:border-r-0 group relative cursor-pointer"
                     >
                       {heightPct > 0 && segTotal > 0 ? (
                         <div
                           style={{ height: `${heightPct}%` }}
-                          className="w-[74%] max-w-[26px] flex flex-col-reverse rounded-t-[2px] overflow-hidden transition-opacity group-hover:opacity-100 opacity-95"
+                          className="w-[74%] max-w-[26px] flex flex-col-reverse rounded-t-[2px] overflow-hidden transition-[height,opacity] duration-300 ease-out group-hover:opacity-100 opacity-95"
                         >
                           {segments.map((seg) => (
                             <div
@@ -1460,7 +1477,7 @@ export function OverviewView({
                       ) : totalMetric > 0 ? (
                         <div
                           style={{ height: `${heightPct}%` }}
-                          className="w-[74%] max-w-[26px] bg-amber-400 rounded-t-[2px]"
+                          className="w-[74%] max-w-[26px] bg-amber-400 rounded-t-[2px] transition-[height] duration-300 ease-out"
                         />
                       ) : null}
                     </div>

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowDown,
   ArrowUp,
@@ -6,6 +7,7 @@ import {
   Pencil,
   Play,
   Plus,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -14,6 +16,7 @@ import {
   ROUTING_STRATEGIES,
   getProviderSpec,
 } from "../shared/catalog.ts";
+import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import type {
   Combo,
   ProviderConnection,
@@ -58,10 +61,22 @@ export function CombosView({
   const [description, setDescription] = useState("");
   const [strategy, setStrategy] = useState("priority");
   const [compressPrompt, setCompressPrompt] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(false);
+  const [enableCache, setEnableCache] = useState(false);
+  const [buildingFreeAuto, setBuildingFreeAuto] = useState(false);
   const [tiers, setTiers] = useState<DraftTier[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showBuilder) setShowBuilder(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showBuilder]);
 
   // Wildcard form
   const [wcPattern, setWcPattern] = useState("");
@@ -74,6 +89,7 @@ export function CombosView({
   );
   const [simHasTools, setSimHasTools] = useState(false);
   const [simHasImage, setSimHasImage] = useState(false);
+  const [simFreeOnly, setSimFreeOnly] = useState(false);
   const [faultIds, setFaultIds] = useState<string[]>([]);
   const [simRunning, setSimRunning] = useState(false);
   const [simResult, setSimResult] = useState<{
@@ -98,6 +114,8 @@ export function CombosView({
     setDescription("");
     setStrategy("priority");
     setCompressPrompt(false);
+    setFreeOnly(false);
+    setEnableCache(false);
     setTiers(
       firstConn
         ? [
@@ -106,7 +124,7 @@ export function CombosView({
               upstreamModel:
                 firstConn.defaultModel ||
                 firstSpec.models[0]?.id ||
-                "gemini-2.5-flash",
+                "gemini-4-hydrogen",
               weight: 100,
             },
           ]
@@ -121,6 +139,8 @@ export function CombosView({
     setDescription(combo.description || "");
     setStrategy(combo.strategy);
     setCompressPrompt(combo.compressPrompt);
+    setFreeOnly(Boolean(combo.freeOnly));
+    setEnableCache(Boolean(combo.enableCache));
     setTiers(
       combo.tiers.map((t) => ({
         connectionId: t.connectionId,
@@ -140,7 +160,7 @@ export function CombosView({
       {
         connectionId: conn.id,
         upstreamModel:
-          conn.defaultModel || spec.models[0]?.id || "gpt-4o-mini",
+          conn.defaultModel || spec.models[0]?.id || "gpt-6-luna",
         weight: 50,
       },
     ]);
@@ -181,6 +201,8 @@ export function CombosView({
           description: description.trim() || null,
           strategy,
           compressPrompt,
+          freeOnly,
+          enableCache,
           tiers: tiers.map((t, i) => ({
             ...t,
             priority: i,
@@ -232,6 +254,30 @@ export function CombosView({
     }
   };
 
+  const handleAutoBuildFreeCombo = async () => {
+    setBuildingFreeAuto(true);
+    try {
+      const res = await fetch("/api/combos/free-auto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        onNotify(data.error || "Unable to build free-auto combo", "error");
+        return;
+      }
+      await onRefresh();
+      onNotify(
+        `Built "${data.combo?.name || "free-auto"}" with ${data.tierCount ?? 0} verified free tier(s).`,
+        "success"
+      );
+    } catch {
+      onNotify("Network error building free-auto combo", "error");
+    } finally {
+      setBuildingFreeAuto(false);
+    }
+  };
+
   const handleAddWildcard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!wcPattern.trim() || !wcComboId) return;
@@ -280,6 +326,7 @@ export function CombosView({
           samplePrompt: simPrompt,
           hasTools: simHasTools,
           hasImage: simHasImage,
+          freeOnly: simFreeOnly,
           simulatedFaultConnectionIds: faultIds,
         }),
       });
@@ -306,30 +353,37 @@ export function CombosView({
         <h2 className="font-display text-lg font-semibold text-white">
           Combos
         </h2>
-        <button
-          type="button"
-          onClick={openCreateBuilder}
-          disabled={connections.length === 0}
-          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Combo</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handleAutoBuildFreeCombo}
+            disabled={connections.length === 0 || buildingFreeAuto}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#111114] hover:bg-[#18181B] disabled:opacity-50 text-[#D4D4D8] hover:text-white border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <span>
+              {buildingFreeAuto ? "Building..." : "Auto-Build Free"}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={openCreateBuilder}
+            disabled={connections.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Combo</span>
+          </button>
+        </div>
       </div>
 
       {/* Combos List */}
       {combos.length === 0 ? (
         <div className="bg-[#111114] border border-[#222227] rounded-lg p-10 text-center">
-          <p className="text-sm font-medium text-white">No combos</p>
-          {connections.length > 0 && (
-            <button
-              type="button"
-              onClick={openCreateBuilder}
-              className="mt-4 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap"
-            >
-              New Combo
-            </button>
-          )}
+          <p className="text-sm font-medium text-white">No combos yet</p>
+          <p className="mt-1 text-xs text-[#71717A]">
+            Create a routing combo or auto-build one from your connected free models.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -348,43 +402,74 @@ export function CombosView({
                       <div className="font-mono text-base font-semibold text-white">
                         {combo.name}
                       </div>
-                      <div className="mt-1 text-xs text-[#A1A1AA]">
+                      <div className="mt-1 text-xs text-[#A1A1AA] flex flex-wrap items-center gap-x-1.5">
                         <span>{stratSpec?.label || combo.strategy}</span>
-                        <span className="mx-1.5">·</span>
+                        <span>·</span>
                         <span>{combo.tiers.length} tiers</span>
                         {combo.compressPrompt && (
                           <>
-                            <span className="mx-1.5">·</span>
+                            <span>·</span>
                             <span className="text-emerald-400">
-                              Compression on
+                              Compression
                             </span>
+                          </>
+                        )}
+                        {combo.freeOnly && (
+                          <>
+                            <span>·</span>
+                            <span className="text-emerald-400">Free-only</span>
+                          </>
+                        )}
+                        {combo.enableCache && (
+                          <>
+                            <span>·</span>
+                            <span className="text-sky-400">Cached</span>
                           </>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-3 shrink-0">
                       <button
                         type="button"
                         onClick={() => openEditBuilder(combo)}
                         title="Edit combo"
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-[#09090B] border border-[#222227] rounded-md text-[#D4D4D8] hover:text-white whitespace-nowrap"
+                        className="p-1 text-[#A1A1AA] hover:text-white transition-colors"
                       >
-                        <Pencil className="w-3 h-3" />
-                        <span>Edit</span>
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleToggleCombo(combo)}
-                        className="px-2.5 py-1 text-xs font-medium bg-[#09090B] border border-[#222227] rounded-md text-[#D4D4D8] hover:text-white whitespace-nowrap"
+                        className={`text-xs font-medium transition-colors whitespace-nowrap ${
+                          combo.isActive
+                            ? "text-emerald-400 hover:text-emerald-300"
+                            : "text-[#A1A1AA] hover:text-white"
+                        }`}
                       >
                         {combo.isActive ? "Active" : "Paused"}
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDeleteCombo(combo.id)}
-                        className="p-1.5 text-[#A1A1AA] hover:text-red-400 transition-colors"
+                        onClick={() => {
+                          if (confirmDeleteId === combo.id) {
+                            setConfirmDeleteId(null);
+                            handleDeleteCombo(combo.id);
+                          } else {
+                            setConfirmDeleteId(combo.id);
+                          }
+                        }}
+                        title="Delete combo"
+                        className={`p-1 transition-colors ${
+                          confirmDeleteId === combo.id
+                            ? "text-xs font-medium text-red-300 underline underline-offset-2"
+                            : "text-[#A1A1AA] hover:text-red-400"
+                        }`}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {confirmDeleteId === combo.id ? (
+                          <span>Confirm?</span>
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -444,10 +529,10 @@ export function CombosView({
           <form onSubmit={handleAddWildcard} className="mt-4 flex gap-2">
             <input
               type="text"
+              aria-label="Wildcard model pattern"
               value={wcPattern}
               onChange={(e) => setWcPattern(e.target.value)}
-              placeholder="gpt-4*"
-              className="w-36 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-amber-400"
+              className="w-36 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
             />
             <select
               value={wcComboId}
@@ -511,58 +596,81 @@ export function CombosView({
           </h3>
 
           <form onSubmit={runDrySimulation} className="space-y-3">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={simModel}
-                onChange={(e) => setSimModel(e.target.value)}
-                placeholder={combos[0]?.name || "Enter combo or model name"}
-                className="flex-1 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-amber-400"
-              />
-              <button
-                type="submit"
-                disabled={simRunning}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg whitespace-nowrap"
-              >
-                <Play className="w-3.5 h-3.5" />
-                <span>{simRunning ? "Simulating..." : "Run Dry-Run"}</span>
-              </button>
+            <div>
+              <label className="block text-xs text-[#A1A1AA] mb-1.5">
+                Combo or model alias
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={simModel}
+                  onChange={(e) => setSimModel(e.target.value)}
+                  className="flex-1 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  type="submit"
+                  disabled={simRunning}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#18181B] hover:bg-[#222227] border border-[#27272A] text-white rounded-lg whitespace-nowrap transition-colors"
+                >
+                  <Play className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{simRunning ? "Simulating..." : "Run"}</span>
+                </button>
+              </div>
             </div>
 
-            <input
-              type="text"
-              value={simPrompt}
-              onChange={(e) => setSimPrompt(e.target.value)}
-              placeholder="Sample prompt for intent_auto classifier..."
-              className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs text-white placeholder-[#6B7280] focus:outline-none focus:border-amber-400"
-            />
+            <div>
+              <label className="block text-xs text-[#A1A1AA] mb-1.5">
+                Sample prompt
+              </label>
+              <input
+                type="text"
+                value={simPrompt}
+                onChange={(e) => setSimPrompt(e.target.value)}
+                className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+              />
+            </div>
 
-            <div className="flex flex-wrap items-center gap-4 text-xs text-[#D4D4D8]">
-              <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={simHasTools}
-                  onChange={(e) => setSimHasTools(e.target.checked)}
-                  className="rounded border-[#222227] bg-[#09090B]"
-                />
-                <span>Includes tools[]</span>
-              </label>
-              <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={simHasImage}
-                  onChange={(e) => setSimHasImage(e.target.checked)}
-                  className="rounded border-[#222227] bg-[#09090B]"
-                />
-                <span>Includes image_url</span>
-              </label>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setSimHasTools((v) => !v)}
+                className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                  simHasTools
+                    ? "bg-[#18181B] border-amber-400/50 text-amber-300"
+                    : "bg-[#09090B] border-[#222227] text-[#A1A1AA] hover:text-white"
+                }`}
+              >
+                Tools
+              </button>
+              <button
+                type="button"
+                onClick={() => setSimHasImage((v) => !v)}
+                className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                  simHasImage
+                    ? "bg-[#18181B] border-amber-400/50 text-amber-300"
+                    : "bg-[#09090B] border-[#222227] text-[#A1A1AA] hover:text-white"
+                }`}
+              >
+                Image
+              </button>
+              <button
+                type="button"
+                onClick={() => setSimFreeOnly((v) => !v)}
+                className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                  simFreeOnly
+                    ? "bg-[#18181B] border-emerald-500/50 text-emerald-300"
+                    : "bg-[#09090B] border-[#222227] text-[#A1A1AA] hover:text-white"
+                }`}
+              >
+                Free only
+              </button>
             </div>
           </form>
 
           {connections.length > 0 && (
-            <div>
+            <div className="pt-1">
               <div className="text-xs text-[#A1A1AA] mb-1.5">
-                Inject simulated 429 rate-limit faults:
+                Simulate 429 faults:
               </div>
               <div className="flex flex-wrap gap-2">
                 {connections.map((c) => {
@@ -578,13 +686,13 @@ export function CombosView({
                             : [...prev, c.id]
                         )
                       }
-                      className={`px-2.5 py-1 text-xs rounded-md border transition-colors whitespace-nowrap ${
+                      className={`px-2.5 py-1 text-xs rounded-lg border transition-colors whitespace-nowrap ${
                         active
                           ? "bg-red-500/15 border-red-500/40 text-red-300"
                           : "bg-[#09090B] border-[#222227] text-[#A1A1AA] hover:text-white"
                       }`}
                     >
-                      {active ? `429 Fault: ${c.name}` : c.name}
+                      {c.name}
                     </button>
                   );
                 })}
@@ -592,8 +700,15 @@ export function CombosView({
             </div>
           )}
 
-          {simResult && (
-            <div className="pt-3 border-t border-[#222227] space-y-2">
+          <AnimatePresence>
+            {simResult && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                className="pt-3 border-t border-[#222227] space-y-2"
+              >
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-[#A1A1AA]">
                   Strategy{" "}
@@ -642,15 +757,31 @@ export function CombosView({
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
       {/* Create / Edit Combo Builder Modal with Drag-and-Drop Tiers */}
-      {showBuilder && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl bg-[#111114] border border-[#222227] rounded-xl p-6 max-h-[90vh] overflow-y-auto">
+      <AnimatePresence>
+        {showBuilder && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={() => setShowBuilder(false)}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-2xl bg-[#111114] border border-[#222227] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
+            >
             <div className="flex items-center justify-between pb-4 border-b border-[#222227]">
               <h3 className="font-display text-base font-semibold text-white">
                 {editingComboId
@@ -677,8 +808,7 @@ export function CombosView({
                     required
                     value={comboName}
                     onChange={(e) => setComboName(e.target.value)}
-                    placeholder="e.g. smart-auto"
-                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-amber-400"
+                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
@@ -714,22 +844,30 @@ export function CombosView({
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Routes coding/reasoning to flagship tier and fast chat to lite tier"
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
                 />
               </div>
 
-              <label className="flex items-center gap-2.5 text-xs text-[#D4D4D8] cursor-pointer">
-                <input
-                  type="checkbox"
+              <div className="divide-y divide-[#1D1D22] border-y border-[#1D1D22] py-1">
+                <ToggleSwitch
                   checked={compressPrompt}
-                  onChange={(e) => setCompressPrompt(e.target.checked)}
-                  className="rounded border-[#222227] bg-[#09090B]"
+                  onChange={setCompressPrompt}
+                  label="Prompt compression"
+                  hint="Trim redundant whitespace to reduce input tokens"
                 />
-                <span>
-                  Enable whitespace & prompt compression to reduce input tokens
-                </span>
-              </label>
+                <ToggleSwitch
+                  checked={freeOnly}
+                  onChange={setFreeOnly}
+                  label="Strict Free-Only Lock"
+                  hint="Block paid models even on fallback"
+                />
+                <ToggleSwitch
+                  checked={enableCache}
+                  onChange={setEnableCache}
+                  label="Response caching"
+                  hint="Cache identical requests for 10m to save quota"
+                />
+              </div>
 
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-2">
@@ -823,16 +961,17 @@ export function CombosView({
                             onChange={(e) =>
                               updateTier(idx, { upstreamModel: e.target.value })
                             }
-                            placeholder="Upstream model ID"
                             className="w-full bg-[#111114] border border-[#222227] rounded-md px-2.5 py-1.5 text-xs font-mono text-white"
                           />
                           <datalist id={`models-${idx}`}>
-                            {conn?.defaultModel &&
-                              !spec.models.some(
-                                (m) => m.id === conn.defaultModel
-                              ) && <option value={conn.defaultModel} />}
-                            {spec.models.map((m) => (
-                              <option key={m.id} value={m.id} />
+                            {Array.from(
+                              new Set([
+                                ...(conn?.defaultModel ? [conn.defaultModel] : []),
+                                ...(conn?.availableModels || []),
+                                ...spec.models.map((m) => m.id),
+                              ])
+                            ).map((modelId) => (
+                              <option key={modelId} value={modelId} />
                             ))}
                           </datalist>
                         </div>
@@ -912,9 +1051,10 @@ export function CombosView({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

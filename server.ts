@@ -39,15 +39,18 @@ import {
   type OpenAIChatMessage,
   type OpenAIContentPart,
   type OpenAIToolDefinition,
+  probeProviderFreeModels,
   testProviderConnection,
   UpstreamHttpError,
 } from "./src/server/providers.ts";
 import {
+  clearGatewayResponseCache,
   executeGatewayChatCompletion,
   simulateComboRoute,
 } from "./src/server/routerEngine.ts";
 import { subscribeUserLogs } from "./src/server/sse.ts";
-import { PROVIDER_CATALOG } from "./src/shared/catalog.ts";
+import { isModelKnownFree, PROVIDER_CATALOG } from "./src/shared/catalog.ts";
+import type { ModelHealthEntry } from "./src/types/gateway.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -111,25 +114,162 @@ async function requireSession(
   }
 }
 
-async function seedServerGeminiIfEmpty(userId: string) {
-  if (!process.env.GEMINI_API_KEY?.trim()) return;
-  const existing = await db
-    .select({ id: providerConnections.id })
-    .from(providerConnections)
-    .where(eq(providerConnections.userId, userId));
-  if (existing.length > 0) return;
+function parseAvailableModels(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return Array.from(
+      new Set(
+        parsed
+          .filter((item): item is string => typeof item === "string")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    );
+  } catch {
+    return [];
+  }
+}
 
-  await db.insert(providerConnections).values({
-    id: `conn_${crypto.randomBytes(8).toString("hex")}`,
-    userId,
-    provider: "gemini",
-    name: "Server Gemini (Default)",
-    baseUrl: "https://generativelanguage.googleapis.com",
-    encryptedApiKey: null,
-    useServerKey: true,
-    isActive: true,
-    circuitStatus: "healthy",
-  });
+function serializeAvailableModels(input: unknown): string | null {
+  if (!Array.isArray(input)) return null;
+  const cleaned = Array.from(
+    new Set(
+      input
+        .filter((item): item is string => typeof item === "string")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    )
+  );
+  return cleaned.length > 0 ? JSON.stringify(cleaned) : null;
+}
+
+function parseModelHealth(raw: string | null | undefined): Record<string, ModelHealthEntry> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, ModelHealthEntry>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function parseExtraApiKeyInput(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return Array.from(
+      new Set(
+        input
+          .filter((item): item is string => typeof item === "string")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    );
+  }
+  if (typeof input === "string") {
+    return Array.from(
+      new Set(
+        input
+          .split(/[\n,]+/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    );
+  }
+  return [];
+}
+
+function serializeEncryptedKeyPool(rawKeys: string[]): string | null {
+  if (rawKeys.length === 0) return null;
+  const encrypted = rawKeys.map((k) => encryptSecret(k));
+  return JSON.stringify(encrypted);
+}
+
+function decryptConnectionAllKeys(conn: typeof providerConnections.$inferSelect): string[] {
+  const keys: string[] = [];
+  if (conn.encryptedApiKey) {
+    try {
+      const k = decryptSecret(conn.encryptedApiKey);
+      if (k) keys.push(k);
+    } catch {
+      // ignore
+    }
+  }
+  if (conn.encryptedKeyPool) {
+    try {
+      const parsed = JSON.parse(conn.encryptedKeyPool);
+      if (Array.isArray(parsed)) {
+        for (const enc of parsed) {
+          if (typeof enc === "string" && enc) {
+            try {
+              const dec = decryptSecret(enc);
+              if (dec && !keys.includes(dec)) keys.push(dec);
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return keys;
+}
+
+function sanitizeConnection(c: typeof providerConnections.$inferSelect) {
+  let maskedKey = "Not set";
+  if (c.encryptedApiKey) {
+    try {
+      maskedKey = maskSecret(decryptSecret(c.encryptedApiKey));
+    } catch {
+      maskedKey = "Encrypted";
+    }
+  }
+
+  const maskedPoolKeys: string[] = [];
+  if (c.encryptedKeyPool) {
+    try {
+      const parsed = JSON.parse(c.encryptedKeyPool);
+      if (Array.isArray(parsed)) {
+        for (const enc of parsed) {
+          if (typeof enc === "string" && enc) {
+            try {
+              maskedPoolKeys.push(maskSecret(decryptSecret(enc)));
+            } catch {
+              maskedPoolKeys.push("Encrypted");
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const now = new Date();
+  const lastReset = c.quotaResetAt ? new Date(c.quotaResetAt) : new Date(0);
+  const resetDaily =
+    lastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+    lastReset.getUTCMonth() !== now.getUTCMonth() ||
+    lastReset.getUTCDate() !== now.getUTCDate();
+  const resetMonthly =
+    lastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+    lastReset.getUTCMonth() !== now.getUTCMonth();
+
+  return {
+    ...c,
+    availableModels: parseAvailableModels(c.availableModels),
+    modelHealth: parseModelHealth(c.modelHealth),
+    encryptedApiKey: undefined,
+    encryptedKeyPool: undefined,
+    maskedKey,
+    poolKeyCount: maskedPoolKeys.length,
+    maskedPoolKeys,
+    usedRequestsToday: resetDaily ? 0 : c.usedRequestsToday,
+    usedTokensToday: resetDaily ? 0 : c.usedTokensToday,
+    usedCostMonth: resetMonthly ? 0 : c.usedCostMonth,
+  };
 }
 
 function getGatewayBaseUrl(req: Request): string {
@@ -259,6 +399,7 @@ app.get("/v1/models", async (req: Request, res: Response) => {
     }> = [];
 
     for (const c of userCombos) {
+      if (keyRow.freeOnly && !c.freeOnly) continue;
       if (!seenIds.has(c.name)) {
         seenIds.add(c.name);
         models.push({
@@ -271,8 +412,15 @@ app.get("/v1/models", async (req: Request, res: Response) => {
     }
 
     for (const conn of userConns) {
-      if (conn.defaultModel) {
-        const modelKey = `${conn.provider}/${conn.defaultModel}`;
+      const connModels = Array.from(
+        new Set([
+          ...(conn.defaultModel ? [conn.defaultModel] : []),
+          ...parseAvailableModels(conn.availableModels),
+        ])
+      );
+      for (const m of connModels) {
+        if (keyRow.freeOnly && !isModelKnownFree(conn.provider, m)) continue;
+        const modelKey = `${conn.provider}/${m}`;
         if (!seenIds.has(modelKey)) {
           seenIds.add(modelKey);
           models.push({
@@ -287,6 +435,7 @@ app.get("/v1/models", async (req: Request, res: Response) => {
 
     for (const p of PROVIDER_CATALOG) {
       for (const m of p.models) {
+        if (keyRow.freeOnly && !isModelKnownFree(p.id, m.id)) continue;
         const modelKey = `${p.id}/${m.id}`;
         if (!seenIds.has(modelKey)) {
           seenIds.add(modelKey);
@@ -360,6 +509,7 @@ app.post("/v1/chat/completions", async (req: Request, res: Response) => {
           apiKeyId: keyRow.id,
           apiKeyPrefix: keyRow.keyPrefix,
           request: requestPayload,
+          freeOnly: Boolean(keyRow.freeOnly),
           onStreamDelta: (delta) => {
             const chunk = {
               id: streamId,
@@ -414,6 +564,7 @@ app.post("/v1/chat/completions", async (req: Request, res: Response) => {
       apiKeyId: keyRow.id,
       apiKeyPrefix: keyRow.keyPrefix,
       request: requestPayload,
+      freeOnly: Boolean(keyRow.freeOnly),
     });
 
     return res.json({
@@ -444,6 +595,7 @@ app.post("/v1/chat/completions", async (req: Request, res: Response) => {
         detected_intent: result.detectedIntent,
         latency_ms: result.latencyMs,
         compressed: result.compressed,
+        cached: Boolean(result.cached),
         fallback_hops: result.fallbackAttempts,
       },
     });
@@ -681,6 +833,7 @@ app.post("/v1/messages", async (req: Request, res: Response) => {
           apiKeyId: keyRow.id,
           apiKeyPrefix: keyRow.keyPrefix,
           request: requestPayload,
+          freeOnly: Boolean(keyRow.freeOnly),
           onStreamDelta: (delta) => {
             if (delta.content) {
               if (!blockOpened) {
@@ -778,6 +931,7 @@ app.post("/v1/messages", async (req: Request, res: Response) => {
       apiKeyId: keyRow.id,
       apiKeyPrefix: keyRow.keyPrefix,
       request: requestPayload,
+      freeOnly: Boolean(keyRow.freeOnly),
     });
 
     const contentBlocks: Array<Record<string, unknown>> = [];
@@ -847,7 +1001,6 @@ app.get("/api/health", (_req: Request, res: Response) => {
     service: "AS ROUTER",
     databaseMode,
     neonConfigured: isNeonConfigured,
-    serverGeminiAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()),
   });
 });
 
@@ -857,7 +1010,6 @@ app.get(
   async (req: AuthedRequest, res: Response) => {
     try {
       const userId = req.authUser!.id;
-      await seedServerGeminiIfEmpty(userId);
 
       const [keys, conns, userCombos, tiers, wildcards, recentLogs] =
         await Promise.all([
@@ -893,23 +1045,7 @@ app.get(
       const comboIdSet = new Set(userCombos.map((c) => c.id));
       const userTiers = tiers.filter((t) => comboIdSet.has(t.comboId));
 
-      const sanitizedConnections = conns.map((c) => {
-        let maskedKey = "Not set";
-        if (c.useServerKey) {
-          maskedKey = "Built-in Gemini Key";
-        } else if (c.encryptedApiKey) {
-          try {
-            maskedKey = maskSecret(decryptSecret(c.encryptedApiKey));
-          } catch {
-            maskedKey = "Encrypted";
-          }
-        }
-        return {
-          ...c,
-          encryptedApiKey: undefined,
-          maskedKey,
-        };
-      });
+      const sanitizedConnections = conns.map((c) => sanitizeConnection(c));
 
       const combosWithTiers = userCombos.map((combo) => ({
         ...combo,
@@ -921,7 +1057,6 @@ app.get(
         environment: {
           databaseMode,
           neonConfigured: isNeonConfigured,
-          serverGeminiAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()),
           gatewayEndpoint: getGatewayBaseUrl(req),
         },
         keys: keys.map((k) => ({ ...k, keyHash: undefined })),
@@ -945,7 +1080,7 @@ app.post(
   async (req: AuthedRequest, res: Response) => {
     try {
       const userId = req.authUser!.id;
-      const { name, allowedCombo, dailyTokenLimit, monthlyUsdLimit } =
+      const { name, allowedCombo, freeOnly, dailyTokenLimit, monthlyUsdLimit } =
         req.body || {};
 
       if (!name || typeof name !== "string" || !name.trim()) {
@@ -968,6 +1103,7 @@ app.post(
             allowedCombo && String(allowedCombo).trim()
               ? String(allowedCombo).trim()
               : null,
+          freeOnly: Boolean(freeOnly),
           dailyTokenLimit:
             dailyTokenLimit && Number(dailyTokenLimit) > 0
               ? Number(dailyTokenLimit)
@@ -997,14 +1133,23 @@ app.patch(
     try {
       const userId = req.authUser!.id;
       const { id } = req.params;
-      const { isActive, name, allowedCombo, dailyTokenLimit, monthlyUsdLimit } =
-        req.body || {};
+      const {
+        isActive,
+        name,
+        allowedCombo,
+        freeOnly,
+        dailyTokenLimit,
+        monthlyUsdLimit,
+      } = req.body || {};
 
       const updates: Partial<typeof gatewayApiKeys.$inferInsert> = {};
       if (typeof isActive === "boolean") updates.isActive = isActive;
       if (typeof name === "string" && name.trim()) updates.name = name.trim();
       if (allowedCombo !== undefined) {
         updates.allowedCombo = allowedCombo ? String(allowedCombo).trim() : null;
+      }
+      if (typeof freeOnly === "boolean") {
+        updates.freeOnly = freeOnly;
       }
       if (dailyTokenLimit !== undefined) {
         updates.dailyTokenLimit =
@@ -1066,7 +1211,7 @@ app.post(
   async (req: AuthedRequest, res: Response) => {
     try {
       const userId = req.authUser!.id;
-      const { connectionId, provider, baseUrl, apiKey, useServerKey } =
+      const { connectionId, provider, baseUrl, apiKey, freeOnly } =
         req.body || {};
 
       let resolvedProvider = typeof provider === "string" ? provider : "openai";
@@ -1092,21 +1237,9 @@ app.post(
         }
         if (!provider) resolvedProvider = existingConn.provider;
         if (baseUrl === undefined) resolvedBaseUrl = existingConn.baseUrl;
-        if (!resolvedApiKey) {
-          if (existingConn.useServerKey) {
-            resolvedApiKey = process.env.GEMINI_API_KEY?.trim() || "";
-          } else if (existingConn.encryptedApiKey) {
-            resolvedApiKey = decryptSecret(existingConn.encryptedApiKey);
-          }
+        if (!resolvedApiKey && existingConn.encryptedApiKey) {
+          resolvedApiKey = decryptSecret(existingConn.encryptedApiKey);
         }
-      }
-
-      if (
-        !resolvedApiKey &&
-        Boolean(useServerKey) &&
-        resolvedProvider === "gemini"
-      ) {
-        resolvedApiKey = process.env.GEMINI_API_KEY?.trim() || "";
       }
 
       if (!resolvedApiKey) {
@@ -1119,7 +1252,22 @@ app.post(
         provider: resolvedProvider,
         apiKey: resolvedApiKey,
         baseUrl: resolvedBaseUrl,
+        freeOnly: Boolean(freeOnly),
       });
+
+      if (typeof connectionId === "string" && connectionId.trim()) {
+        await db
+          .update(providerConnections)
+          .set({
+            availableModels: JSON.stringify(models),
+          })
+          .where(
+            and(
+              eq(providerConnections.id, connectionId.trim()),
+              eq(providerConnections.userId, userId)
+            )
+          );
+      }
 
       return res.json({ models });
     } catch (err: unknown) {
@@ -1141,8 +1289,11 @@ app.post(
         name,
         baseUrl,
         defaultModel,
+        availableModels,
         apiKey,
-        useServerKey,
+        extraApiKeys,
+        rpmLimit,
+        rpdLimit,
         dailyTokenQuota,
         monthlyUsdQuota,
       } = req.body || {};
@@ -1153,12 +1304,14 @@ app.post(
           .json({ error: "Provider type and connection name are required." });
       }
 
-      const usingServerKey = Boolean(useServerKey) && provider === "gemini";
-      if (!usingServerKey && (!apiKey || !String(apiKey).trim())) {
+      if (!apiKey || !String(apiKey).trim()) {
         return res.status(400).json({ error: "Provider API key is required." });
       }
 
-      const rawSecret = usingServerKey ? "" : String(apiKey).trim();
+      const rawSecret = String(apiKey).trim();
+      const parsedPoolKeys = parseExtraApiKeyInput(extraApiKeys).filter(
+        (k) => k !== rawSecret
+      );
       const id = `conn_${crypto.randomBytes(8).toString("hex")}`;
 
       const [created] = await db
@@ -1173,9 +1326,15 @@ app.post(
             defaultModel && String(defaultModel).trim()
               ? String(defaultModel).trim()
               : null,
-          encryptedApiKey: usingServerKey ? null : encryptSecret(rawSecret),
-          useServerKey: usingServerKey,
+          availableModels: serializeAvailableModels(availableModels),
+          encryptedApiKey: encryptSecret(rawSecret),
+          encryptedKeyPool: serializeEncryptedKeyPool(parsedPoolKeys),
+          useServerKey: false,
           isActive: true,
+          rpmLimit:
+            rpmLimit && Number(rpmLimit) > 0 ? Math.round(Number(rpmLimit)) : null,
+          rpdLimit:
+            rpdLimit && Number(rpdLimit) > 0 ? Math.round(Number(rpdLimit)) : null,
           dailyTokenQuota:
             dailyTokenQuota && Number(dailyTokenQuota) > 0
               ? Number(dailyTokenQuota)
@@ -1189,13 +1348,7 @@ app.post(
         .returning();
 
       return res.status(201).json({
-        connection: {
-          ...created,
-          encryptedApiKey: undefined,
-          maskedKey: usingServerKey
-            ? "Built-in Gemini Key"
-            : maskSecret(rawSecret),
-        },
+        connection: sanitizeConnection(created),
       });
     } catch (err) {
       console.error("[AS ROUTER] Create provider error:", err);
@@ -1216,8 +1369,12 @@ app.patch(
         name,
         baseUrl,
         defaultModel,
+        availableModels,
         apiKey,
-        useServerKey,
+        extraApiKeys,
+        clearKeyPool,
+        rpmLimit,
+        rpdLimit,
         dailyTokenQuota,
         monthlyUsdQuota,
       } = req.body || {};
@@ -1234,15 +1391,30 @@ app.patch(
             ? String(defaultModel).trim()
             : null;
       }
-      if (typeof useServerKey === "boolean") {
-        updates.useServerKey = useServerKey;
-        if (useServerKey) {
-          updates.encryptedApiKey = null;
-        }
+      if (Array.isArray(availableModels)) {
+        updates.availableModels = serializeAvailableModels(availableModels);
       }
       if (typeof apiKey === "string" && apiKey.trim()) {
         updates.encryptedApiKey = encryptSecret(apiKey.trim());
         updates.useServerKey = false;
+      }
+      if (clearKeyPool === true) {
+        updates.encryptedKeyPool = null;
+        updates.keyPoolCursor = 0;
+      } else if (extraApiKeys !== undefined) {
+        const parsedPool = parseExtraApiKeyInput(extraApiKeys);
+        if (parsedPool.length > 0) {
+          updates.encryptedKeyPool = serializeEncryptedKeyPool(parsedPool);
+          updates.keyPoolCursor = 0;
+        }
+      }
+      if (rpmLimit !== undefined) {
+        updates.rpmLimit =
+          rpmLimit && Number(rpmLimit) > 0 ? Math.round(Number(rpmLimit)) : null;
+      }
+      if (rpdLimit !== undefined) {
+        updates.rpdLimit =
+          rpdLimit && Number(rpdLimit) > 0 ? Math.round(Number(rpdLimit)) : null;
       }
       if (dailyTokenQuota !== undefined) {
         updates.dailyTokenQuota =
@@ -1272,19 +1444,8 @@ app.patch(
         return res.status(404).json({ error: "Provider connection not found" });
       }
 
-      let maskedKey = "Not set";
-      if (updated.useServerKey) {
-        maskedKey = "Built-in Gemini Key";
-      } else if (updated.encryptedApiKey) {
-        maskedKey = maskSecret(decryptSecret(updated.encryptedApiKey));
-      }
-
       return res.json({
-        connection: {
-          ...updated,
-          encryptedApiKey: undefined,
-          maskedKey,
-        },
+        connection: sanitizeConnection(updated),
       });
     } catch (err) {
       console.error("[AS ROUTER] Update provider error:", err);
@@ -1315,11 +1476,8 @@ app.post(
         return res.status(404).json({ error: "Provider connection not found" });
       }
 
-      const apiKey = conn.useServerKey
-        ? process.env.GEMINI_API_KEY?.trim() || ""
-        : conn.encryptedApiKey
-          ? decryptSecret(conn.encryptedApiKey)
-          : "";
+      const keys = decryptConnectionAllKeys(conn);
+      const apiKey = keys[0] || "";
 
       const result = await testProviderConnection({
         provider: conn.provider,
@@ -1342,6 +1500,74 @@ app.post(
     } catch (err) {
       console.error("[AS ROUTER] Test provider error:", err);
       return res.status(500).json({ error: "Failed to test provider connection" });
+    }
+  }
+);
+
+app.post(
+  "/api/providers/:id/probe-free",
+  requireSession,
+  async (req: AuthedRequest, res: Response) => {
+    try {
+      const userId = req.authUser!.id;
+      const { id } = req.params;
+
+      const [conn] = await db
+        .select()
+        .from(providerConnections)
+        .where(
+          and(
+            eq(providerConnections.id, id),
+            eq(providerConnections.userId, userId)
+          )
+        );
+
+      if (!conn) {
+        return res.status(404).json({ error: "Provider connection not found" });
+      }
+
+      const keys = decryptConnectionAllKeys(conn);
+      if (keys.length === 0) {
+        return res
+          .status(400)
+          .json({ error: "No API key configured for this connection." });
+      }
+
+      const candidateModels = Array.from(
+        new Set([
+          ...(conn.defaultModel ? [conn.defaultModel] : []),
+          ...parseAvailableModels(conn.availableModels),
+          ...(conn.provider === "gemini"
+            ? ["gemini-4-hydrogen", "gemini-3.1-flash-lite"]
+            : []),
+        ])
+      );
+
+      const probeResult = await probeProviderFreeModels({
+        provider: conn.provider,
+        apiKeys: keys,
+        baseUrl: conn.baseUrl,
+        candidateModels,
+        existingHealth: parseModelHealth(conn.modelHealth),
+      });
+
+      const fastestHealthy = probeResult.probedModels
+        .map((m) => probeResult.healthMap[m])
+        .filter((h) => h && h.ok)
+        .sort((a, b) => a.latencyMs - b.latencyMs)[0];
+
+      await db
+        .update(providerConnections)
+        .set({
+          modelHealth: JSON.stringify(probeResult.healthMap),
+          ...(fastestHealthy ? { lastLatencyMs: fastestHealthy.latencyMs } : {}),
+        })
+        .where(eq(providerConnections.id, conn.id));
+
+      return res.json(probeResult);
+    } catch (err) {
+      console.error("[AS ROUTER] Probe free models error:", err);
+      return res.status(500).json({ error: "Failed to probe free models" });
     }
   }
 );
@@ -1412,8 +1638,15 @@ app.post(
   async (req: AuthedRequest, res: Response) => {
     try {
       const userId = req.authUser!.id;
-      const { name, description, strategy, compressPrompt, tiers } =
-        req.body || {};
+      const {
+        name,
+        description,
+        strategy,
+        compressPrompt,
+        freeOnly,
+        enableCache,
+        tiers,
+      } = req.body || {};
 
       if (!name || typeof name !== "string" || !name.trim()) {
         return res.status(400).json({ error: "Combo alias name is required." });
@@ -1434,6 +1667,8 @@ app.post(
           description: description ? String(description).trim() : null,
           strategy: strategy || "priority",
           compressPrompt: Boolean(compressPrompt),
+          freeOnly: Boolean(freeOnly),
+          enableCache: Boolean(enableCache),
           isActive: true,
         })
         .returning();
@@ -1466,6 +1701,141 @@ app.post(
   }
 );
 
+app.post(
+  "/api/combos/free-auto",
+  requireSession,
+  async (req: AuthedRequest, res: Response) => {
+    try {
+      const userId = req.authUser!.id;
+      const activeConns = await db
+        .select()
+        .from(providerConnections)
+        .where(
+          and(
+            eq(providerConnections.userId, userId),
+            eq(providerConnections.isActive, true)
+          )
+        );
+
+      const candidates: Array<{
+        connectionId: string;
+        upstreamModel: string;
+        healthOk: boolean;
+        latencyMs: number;
+      }> = [];
+      const seen = new Set<string>();
+
+      for (const conn of activeConns) {
+        const healthMap = parseModelHealth(conn.modelHealth);
+        const connModels = Array.from(
+          new Set([
+            ...(conn.defaultModel ? [conn.defaultModel] : []),
+            ...parseAvailableModels(conn.availableModels),
+            ...(conn.provider === "gemini"
+              ? ["gemini-4-hydrogen", "gemini-3.1-flash-lite"]
+              : []),
+          ])
+        ).filter((m) => isModelKnownFree(conn.provider, m));
+
+        for (const modelId of connModels) {
+          const dedupKey = `${conn.id}:${modelId}`;
+          if (seen.has(dedupKey)) continue;
+          seen.add(dedupKey);
+          const health = healthMap[modelId];
+          candidates.push({
+            connectionId: conn.id,
+            upstreamModel: modelId,
+            healthOk: health ? health.ok : true,
+            latencyMs: health?.latencyMs ?? conn.lastLatencyMs ?? 1500,
+          });
+        }
+      }
+
+      if (candidates.length === 0) {
+        return res.status(400).json({
+          error:
+            "No free models found across active providers. Run 'Sync Free' on a provider first.",
+        });
+      }
+
+      candidates.sort((a, b) => {
+        if (a.healthOk !== b.healthOk) return a.healthOk ? -1 : 1;
+        return a.latencyMs - b.latencyMs;
+      });
+
+      const pickedTiers = candidates.slice(0, 20);
+      const userCombos = await db
+        .select()
+        .from(combos)
+        .where(eq(combos.userId, userId));
+      const existing = userCombos.find(
+        (c) => c.name.toLowerCase() === "free-auto"
+      );
+
+      let comboRow: typeof combos.$inferSelect;
+      if (existing) {
+        const [updated] = await db
+          .update(combos)
+          .set({
+            description: "Auto-built failover pool across all connected free models",
+            strategy: "intent_auto",
+            compressPrompt: true,
+            freeOnly: true,
+            enableCache: true,
+            isActive: true,
+          })
+          .where(eq(combos.id, existing.id))
+          .returning();
+        comboRow = updated;
+        await db.delete(comboTiers).where(eq(comboTiers.comboId, existing.id));
+      } else {
+        const [created] = await db
+          .insert(combos)
+          .values({
+            id: `combo_${crypto.randomBytes(8).toString("hex")}`,
+            userId,
+            name: "free-auto",
+            description: "Auto-built failover pool across all connected free models",
+            strategy: "intent_auto",
+            compressPrompt: true,
+            freeOnly: true,
+            enableCache: true,
+            isActive: true,
+          })
+          .returning();
+        comboRow = created;
+      }
+
+      const insertedTiers = [];
+      for (let i = 0; i < pickedTiers.length; i++) {
+        const item = pickedTiers[i];
+        const [tierRow] = await db
+          .insert(comboTiers)
+          .values({
+            id: `tier_${crypto.randomBytes(8).toString("hex")}`,
+            comboId: comboRow.id,
+            connectionId: item.connectionId,
+            upstreamModel: item.upstreamModel,
+            priority: i,
+            weight: 100,
+            maxRetries: 1,
+          })
+          .returning();
+        insertedTiers.push(tierRow);
+      }
+
+      return res.json({
+        combo: { ...comboRow, tiers: insertedTiers },
+        tierCount: insertedTiers.length,
+        updated: Boolean(existing),
+      });
+    } catch (err) {
+      console.error("[AS ROUTER] Build free-auto combo error:", err);
+      return res.status(500).json({ error: "Failed to build free-auto combo" });
+    }
+  }
+);
+
 app.patch(
   "/api/combos/:id",
   requireSession,
@@ -1473,8 +1843,16 @@ app.patch(
     try {
       const userId = req.authUser!.id;
       const { id } = req.params;
-      const { name, description, strategy, compressPrompt, isActive, tiers } =
-        req.body || {};
+      const {
+        name,
+        description,
+        strategy,
+        compressPrompt,
+        freeOnly,
+        enableCache,
+        isActive,
+        tiers,
+      } = req.body || {};
 
       const [existing] = await db
         .select()
@@ -1493,6 +1871,12 @@ app.patch(
       if (strategy) updates.strategy = String(strategy);
       if (typeof compressPrompt === "boolean") {
         updates.compressPrompt = compressPrompt;
+      }
+      if (typeof freeOnly === "boolean") {
+        updates.freeOnly = freeOnly;
+      }
+      if (typeof enableCache === "boolean") {
+        updates.enableCache = enableCache;
       }
       if (typeof isActive === "boolean") updates.isActive = isActive;
 
@@ -1566,6 +1950,7 @@ app.post(
         samplePrompt,
         hasTools,
         hasImage,
+        freeOnly,
         simulatedFaultConnectionIds,
       } = req.body || {};
       if (!requestedModel || typeof requestedModel !== "string") {
@@ -1580,6 +1965,7 @@ app.post(
           typeof samplePrompt === "string" ? samplePrompt : undefined,
         hasTools: Boolean(hasTools),
         hasImage: Boolean(hasImage),
+        freeOnly: Boolean(freeOnly),
         simulatedFaultConnectionIds: Array.isArray(simulatedFaultConnectionIds)
           ? simulatedFaultConnectionIds
           : [],
@@ -1589,6 +1975,15 @@ app.post(
       console.error("[AS ROUTER] Simulate combo error:", err);
       return res.status(500).json({ error: "Simulation failed" });
     }
+  }
+);
+
+app.post(
+  "/api/cache/clear",
+  requireSession,
+  (req: AuthedRequest, res: Response) => {
+    const cleared = clearGatewayResponseCache(req.authUser!.id);
+    return res.json({ ok: true, cleared });
   }
 );
 
@@ -2084,8 +2479,16 @@ app.post(
   async (req: AuthedRequest, res: Response) => {
     try {
       const userId = req.authUser!.id;
-      const { model, messages, temperature, max_tokens, tools, tool_choice } =
-        req.body || {};
+      const {
+        model,
+        messages,
+        temperature,
+        max_tokens,
+        tools,
+        tool_choice,
+        freeOnly,
+        useCache,
+      } = req.body || {};
 
       if (!model || !Array.isArray(messages)) {
         return res
@@ -2097,6 +2500,8 @@ app.post(
         userId,
         apiKeyId: null,
         apiKeyPrefix: "dashboard-playground",
+        freeOnly: Boolean(freeOnly),
+        useCache: Boolean(useCache),
         request: {
           model: String(model),
           messages,
@@ -2126,11 +2531,63 @@ async function startServer() {
   const httpServer = http.createServer(app);
 
   if (process.env.NODE_ENV !== "production") {
+    const hmrDisabled = process.env.DISABLE_HMR === "true";
+    if (hmrDisabled) {
+      app.get("/@vite/client", (_req: Request, res: Response) => {
+        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store");
+        res.send(`
+const sheetsMap = new Map();
+export function updateStyle(id, content) {
+  let style = sheetsMap.get(id);
+  if (!style) {
+    style = document.createElement("style");
+    style.setAttribute("type", "text/css");
+    style.setAttribute("data-vite-dev-id", id);
+    style.textContent = content;
+    document.head.appendChild(style);
+    sheetsMap.set(id, style);
+  } else if (style.textContent !== content) {
+    style.textContent = content;
+  }
+}
+export function removeStyle(id) {
+  const style = sheetsMap.get(id);
+  if (style && style.parentNode) {
+    style.parentNode.removeChild(style);
+  }
+  sheetsMap.delete(id);
+}
+export function createHotContext() {
+  return {
+    data: {},
+    accept() {},
+    acceptExports() {},
+    dispose() {},
+    prune() {},
+    decline() {},
+    invalidate() {},
+    on() {},
+    off() {},
+    send() {},
+  };
+}
+export function injectQuery(url, queryToInject) {
+  if (url[0] !== "." && url[0] !== "/") return url;
+  const pathname = url.replace(/[?#].*$/, "");
+  const { search, hash } = new URL(url, "http://vite.dev");
+  return pathname + "?" + queryToInject + (search ? "&" + search.slice(1) : "") + (hash || "");
+}
+export class ErrorOverlay {}
+`);
+      });
+    }
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: { server: httpServer },
+        hmr: hmrDisabled ? false : { server: httpServer },
+        ws: hmrDisabled ? false : undefined,
         watch: null,
       },
       appType: "spa",

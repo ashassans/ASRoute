@@ -24,7 +24,7 @@ const ORBIT_PROVIDERS = [
     color: "#60A5FA",
     angle: 35,
     ring: 1,
-    models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
+    models: ["gemini-4-hydrogen", "gemini-4-neon", "gemini-3.1-flash-lite"],
   },
   {
     id: "openai",
@@ -33,7 +33,7 @@ const ORBIT_PROVIDERS = [
     color: "#FAFAFA",
     angle: 115,
     ring: 2,
-    models: ["gpt-4o", "gpt-4o-mini", "o3-mini"],
+    models: ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6-luna"],
   },
   {
     id: "anthropic",
@@ -42,7 +42,7 @@ const ORBIT_PROVIDERS = [
     color: "#FBBF24",
     angle: 205,
     ring: 1,
-    models: ["claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"],
+    models: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
   },
   {
     id: "deepseek",
@@ -51,7 +51,7 @@ const ORBIT_PROVIDERS = [
     color: "#38BDF8",
     angle: 295,
     ring: 2,
-    models: ["deepseek-chat", "deepseek-reasoner"],
+    models: ["deepseek-v3.2", "deepseek-chat", "deepseek-reasoner"],
   },
   {
     id: "groq",
@@ -60,7 +60,7 @@ const ORBIT_PROVIDERS = [
     color: "#F97316",
     angle: 162,
     ring: 3,
-    models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+    models: ["llama-4-scout-17b", "llama-4-maverick-17b"],
   },
   {
     id: "mistral",
@@ -69,7 +69,7 @@ const ORBIT_PROVIDERS = [
     color: "#F59E0B",
     angle: 342,
     ring: 3,
-    models: ["mistral-large-latest", "mistral-small-latest"],
+    models: ["mistral-large-latest", "mistral-medium-latest"],
   },
   {
     id: "openrouter",
@@ -78,7 +78,7 @@ const ORBIT_PROVIDERS = [
     color: "#EC4899",
     angle: 78,
     ring: 3,
-    models: ["google/gemini-2.5-flash", "anthropic/claude-3.5-sonnet"],
+    models: ["google/gemini-4-hydrogen", "openai/gpt-6.2-sol"],
   },
 ];
 
@@ -93,46 +93,46 @@ const INTENT_ROUTING_PRESETS: Record<
 > = {
   coding: {
     label: "Coding & Debug",
-    winner: "Claude 3.7 Sonnet",
+    winner: "Claude Opus 5.5",
     savings: "Zero manual switching",
     branches: [
-      { model: "Claude 3.7 Sonnet", provider: "Anthropic", tag: "A", pct: 55 },
-      { model: "DeepSeek R1", provider: "DeepSeek", tag: "D", pct: 25 },
-      { model: "Gemini 4 Neon", provider: "Gemini", tag: "G", pct: 15 },
-      { model: "GPT-4o Mini", provider: "OpenAI", tag: "O", pct: 5 },
+      { model: "Claude Opus 5.5", provider: "Anthropic", tag: "A", pct: 55 },
+      { model: "Gemini 4 Carbon", provider: "Gemini", tag: "G", pct: 25 },
+      { model: "GPT-6.2 Astra", provider: "OpenAI", tag: "O", pct: 15 },
+      { model: "DeepSeek V3.2", provider: "DeepSeek", tag: "D", pct: 5 },
     ],
   },
   vision: {
     label: "Multimodal Vision",
-    winner: "Gemini 4 Hydrogen",
+    winner: "Gemini 4 Neon",
     savings: "Native image_url translation",
     branches: [
-      { model: "Gemini 4 Hydrogen", provider: "Gemini", tag: "G", pct: 50 },
-      { model: "GPT-4o", provider: "OpenAI", tag: "O", pct: 25 },
-      { model: "Claude 3.7 Sonnet", provider: "Anthropic", tag: "A", pct: 20 },
-      { model: "Gemini 3.1 Flash Lite", provider: "Gemini", tag: "G", pct: 5 },
+      { model: "Gemini 4 Neon", provider: "Gemini", tag: "G", pct: 50 },
+      { model: "GPT-6.1 Terra", provider: "OpenAI", tag: "O", pct: 25 },
+      { model: "Claude Sonnet 5.5", provider: "Anthropic", tag: "A", pct: 20 },
+      { model: "Llama 4 Maverick", provider: "Groq", tag: "Q", pct: 5 },
     ],
   },
   tools: {
     label: "Function Calling",
-    winner: "GPT-4o Mini",
+    winner: "GPT-6.2 Sol",
     savings: "Unified tools[] schema",
     branches: [
-      { model: "GPT-4o Mini", provider: "OpenAI", tag: "O", pct: 45 },
-      { model: "Gemini 3.1 Flash Lite", provider: "Gemini", tag: "G", pct: 35 },
-      { model: "Claude 3.5 Haiku", provider: "Anthropic", tag: "A", pct: 15 },
-      { model: "Llama 3.3 70B", provider: "Groq", tag: "Q", pct: 5 },
+      { model: "GPT-6.2 Sol", provider: "OpenAI", tag: "O", pct: 45 },
+      { model: "Gemini 4 Hydrogen", provider: "Gemini", tag: "G", pct: 35 },
+      { model: "Claude Sonnet 5.5", provider: "Anthropic", tag: "A", pct: 15 },
+      { model: "Llama 4 Scout", provider: "Groq", tag: "Q", pct: 5 },
     ],
   },
   fast: {
     label: "Fast Chat",
-    winner: "Gemini 3.1 Flash Lite",
+    winner: "Gemini 4 Hydrogen",
     savings: "Up to 80% lower token spend",
     branches: [
-      { model: "Gemini 3.1 Flash Lite", provider: "Gemini", tag: "G", pct: 60 },
-      { model: "Llama 3.1 8B Instant", provider: "Groq", tag: "Q", pct: 25 },
-      { model: "GPT-4o Mini", provider: "OpenAI", tag: "O", pct: 10 },
-      { model: "DeepSeek V3", provider: "DeepSeek", tag: "D", pct: 5 },
+      { model: "Gemini 4 Hydrogen", provider: "Gemini", tag: "G", pct: 60 },
+      { model: "Claude Haiku 5.5", provider: "Anthropic", tag: "A", pct: 20 },
+      { model: "GPT-6 Luna", provider: "OpenAI", tag: "O", pct: 12 },
+      { model: "Gemini 3.1 Flash Lite", provider: "Gemini", tag: "G", pct: 8 },
     ],
   },
 };
@@ -581,23 +581,24 @@ const msg = await client.messages.create({
 
         {/* Supported Provider Strip */}
         <div className="max-w-[1280px] mx-auto px-5 sm:px-8 pb-10">
-          <div className="pt-6 border-t border-[#1C1C21] flex flex-wrap items-center justify-between gap-6 text-xs font-display font-semibold tracking-wide text-[#71717A]">
-            {[
-              "Google Gemini",
-              "OpenAI",
-              "Anthropic",
-              "Groq",
-              "DeepSeek",
-              "Mistral AI",
-              "Custom Endpoints",
-            ].map((brand) => (
-              <span
-                key={brand}
-                className="hover:text-[#D4D4D8] transition-colors"
-              >
-                {brand}
-              </span>
-            ))}
+          <div className="pt-6 border-t border-[#1C1C21] flex flex-wrap items-center justify-between gap-4 sm:gap-6 text-xs font-display font-semibold tracking-wide">
+            {ORBIT_PROVIDERS.map((p) => {
+              const isSelected = hoveredProvider.id === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setHoveredProvider(p)}
+                  className={`transition-colors ${
+                    isSelected
+                      ? "text-amber-400"
+                      : "text-[#8B8B95] hover:text-[#FAFAFA]"
+                  }`}
+                >
+                  {p.name}
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -649,21 +650,28 @@ const msg = await client.messages.create({
                     key={key}
                     type="button"
                     onClick={() => setActiveIntent(key)}
-                    className={`px-2 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
+                    className={`relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
                       activeIntent === key
-                        ? "bg-[#18181B] text-amber-400"
-                        : "text-[#71717A] hover:text-[#D4D4D8]"
+                        ? "text-amber-400"
+                        : "text-[#8B8B95] hover:text-[#D4D4D8]"
                     }`}
                   >
-                    {label}
+                    {activeIntent === key && (
+                      <motion.span
+                        layoutId="landing-intent-pill"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                        className="absolute inset-0 bg-[#18181B] rounded"
+                      />
+                    )}
+                    <span className="relative z-10">{label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="px-5 py-6 grid grid-cols-12 items-center gap-2">
+            <div className="px-4 sm:px-5 py-6 grid grid-cols-12 items-center gap-2">
               {/* Animated SVG Curves + <animateMotion> Packets */}
-              <div className="col-span-5 sm:col-span-6 relative h-[210px]">
+              <div className="col-span-4 sm:col-span-6 relative h-[210px]">
                 <svg
                   viewBox="0 0 260 210"
                   className="w-full h-full overflow-visible"
@@ -721,7 +729,7 @@ const msg = await client.messages.create({
               </div>
 
               {/* Right Target Models */}
-              <div className="col-span-7 sm:col-span-6 h-[210px] flex flex-col justify-between py-1">
+              <div className="col-span-8 sm:col-span-6 h-[210px] flex flex-col justify-between py-1">
                 {currentPreset.branches.map((b, idx) => (
                   <motion.div
                     key={`${activeIntent}-${b.model}`}

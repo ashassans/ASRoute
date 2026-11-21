@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { X } from "lucide-react";
 import { authClient } from "../lib/auth-client.ts";
 
@@ -25,6 +26,14 @@ export function AccountSettingsModal({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,8 +90,22 @@ export function AccountSettingsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-[#111114] border border-[#222227] rounded-xl p-6 max-h-[90vh] overflow-y-auto">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22, ease: "easeOut" }}
+      className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-[#111114] border border-[#222227] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between pb-4 border-b border-[#222227]">
           <h3 className="font-display text-base font-semibold text-white">
             Account Settings
@@ -168,8 +191,7 @@ export function AccountSettingsModal({
               minLength={6}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Min 6 characters"
-              className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white placeholder-[#52525B] focus:outline-none focus:border-amber-400"
+              className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
             />
           </div>
 
@@ -204,7 +226,7 @@ export function AccountSettingsModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

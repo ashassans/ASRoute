@@ -6,7 +6,12 @@ import {
   type FunctionDeclaration,
   type Part,
 } from "@google/genai";
-import { getProviderSpec, estimateModelCostUsd } from "../shared/catalog.ts";
+import {
+  estimateModelCostUsd,
+  getProviderSpec,
+  isModelKnownFree,
+} from "../shared/catalog.ts";
+import type { ModelHealthEntry } from "../types/gateway.ts";
 
 export type OpenAIContentPart =
   | { type: "text"; text: string }
@@ -1133,7 +1138,7 @@ export async function testProviderConnection(params: {
         },
       });
       const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-4-hydrogen",
         contents: "Reply with OK.",
       });
       return {
@@ -1153,7 +1158,7 @@ export async function testProviderConnection(params: {
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-3-5-haiku-latest",
+          model: "claude-haiku-5-5",
           max_tokens: 8,
           messages: [{ role: "user", content: "OK" }],
         }),
@@ -1207,12 +1212,45 @@ export async function testProviderConnection(params: {
   }
 }
 
+function isUpstreamModelFree(
+  id: string,
+  entry?: Record<string, unknown> | null
+): boolean {
+  if (entry && typeof entry === "object") {
+    if (entry.free === true || entry.is_free === true) return true;
+    if (typeof entry.tier === "string" && entry.tier.toLowerCase() === "free") {
+      return true;
+    }
+    if (entry.pricing && typeof entry.pricing === "object") {
+      const p = entry.pricing as Record<string, unknown>;
+      if (
+        p.prompt !== undefined &&
+        p.prompt !== null &&
+        String(p.prompt).trim() !== ""
+      ) {
+        const promptCost = Number(p.prompt);
+        const compCost =
+          p.completion !== undefined &&
+          p.completion !== null &&
+          String(p.completion).trim() !== ""
+            ? Number(p.completion)
+            : 0;
+        if (!Number.isNaN(promptCost) && !Number.isNaN(compCost)) {
+          return promptCost === 0 && compCost === 0;
+        }
+      }
+    }
+  }
+  return /(^|[:/._-])free([:/._-]|$)/i.test(id);
+}
+
 export async function fetchProviderModels(params: {
   provider: string;
   apiKey: string;
   baseUrl?: string | null;
+  freeOnly?: boolean;
 }): Promise<string[]> {
-  const { provider, apiKey, baseUrl } = params;
+  const { provider, apiKey, baseUrl, freeOnly } = params;
   const spec = getProviderSpec(provider);
 
   if (!apiKey) {
@@ -1249,7 +1287,7 @@ export async function fetchProviderModels(params: {
     );
     const list = (filtered.length > 0 ? filtered : rawModels)
       .map((m) => (m.name || "").replace(/^models\//, "").trim())
-      .filter(Boolean);
+      .filter((id) => Boolean(id) && (!freeOnly || isUpstreamModelFree(id) || /flash|gemma/i.test(id)));
     return Array.from(new Set(list)).sort();
   }
 
@@ -1270,11 +1308,14 @@ export async function fetchProviderModels(params: {
       throw new Error(`Anthropic HTTP ${res.status}: ${errText.slice(0, 140)}`);
     }
     const json = (await res.json()) as {
-      data?: Array<{ id?: string }>;
+      data?: Array<Record<string, unknown> & { id?: string }>;
     };
     const list = (Array.isArray(json.data) ? json.data : [])
-      .map((m) => (m.id || "").trim())
-      .filter(Boolean);
+      .filter((m) => {
+        const id = (m.id || "").trim();
+        return Boolean(id) && (!freeOnly || isUpstreamModelFree(id, m));
+      })
+      .map((m) => (m.id || "").trim());
     return Array.from(new Set(list)).sort();
   }
 
@@ -1292,14 +1333,15 @@ export async function fetchProviderModels(params: {
     throw new Error(`${spec.label} HTTP ${res.status}: ${errText.slice(0, 140)}`);
   }
 
+  type RawModelEntry = string | (Record<string, unknown> & { id?: string; name?: string });
   const json = (await res.json()) as
-    | Array<{ id?: string; name?: string }>
+    | RawModelEntry[]
     | {
-        data?: Array<{ id?: string; name?: string }>;
-        models?: Array<{ id?: string; name?: string }>;
+        data?: RawModelEntry[];
+        models?: RawModelEntry[];
       };
 
-  const rows = Array.isArray(json)
+  const rows: RawModelEntry[] = Array.isArray(json)
     ? json
     : Array.isArray(json.data)
       ? json.data
@@ -1308,8 +1350,91 @@ export async function fetchProviderModels(params: {
         : [];
 
   const list = rows
-    .map((m) => (m.id || m.name || "").trim())
-    .filter(Boolean);
+    .filter((m) => {
+      const id = typeof m === "string" ? m.trim() : String(m?.id || m?.name || "").trim();
+      if (!id) return false;
+      if (!freeOnly) return true;
+      return isUpstreamModelFree(id, typeof m === "string" ? null : m);
+    })
+    .map((m) =>
+      typeof m === "string" ? m.trim() : String(m?.id || m?.name || "").trim()
+    );
 
   return Array.from(new Set(list)).sort();
+}
+
+export async function probeProviderFreeModels(params: {
+  provider: string;
+  apiKeys: string[];
+  baseUrl?: string | null;
+  candidateModels: string[];
+  existingHealth?: Record<string, ModelHealthEntry>;
+}): Promise<{
+  healthMap: Record<string, ModelHealthEntry>;
+  probedModels: string[];
+  healthyCount: number;
+}> {
+  const { provider, apiKeys, baseUrl, candidateModels, existingHealth } = params;
+  const activeKey = apiKeys.find((k) => Boolean(k?.trim())) || "";
+  const healthMap: Record<string, ModelHealthEntry> = {
+    ...(existingHealth || {}),
+  };
+
+  const freeTargets = Array.from(
+    new Set(
+      candidateModels
+        .map((m) => m.trim())
+        .filter((m) => Boolean(m) && isModelKnownFree(provider, m))
+    )
+  ).slice(0, 12);
+
+  if (!activeKey || freeTargets.length === 0) {
+    return { healthMap, probedModels: [], healthyCount: 0 };
+  }
+
+  let healthyCount = 0;
+  const batchSize = 3;
+
+  for (let i = 0; i < freeTargets.length; i += batchSize) {
+    const batch = freeTargets.slice(i, i + batchSize);
+    await Promise.all(
+      batch.map(async (modelId, idx) => {
+        const keyToUse = apiKeys[(i + idx) % apiKeys.length] || activeKey;
+        const t0 = Date.now();
+        try {
+          await invokeUpstreamCompletion({
+            provider,
+            model: modelId,
+            apiKey: keyToUse,
+            baseUrl,
+            request: {
+              model: modelId,
+              messages: [{ role: "user", content: "OK" }],
+              max_tokens: 4,
+              temperature: 0,
+              stream: false,
+            },
+          });
+          const latencyMs = Date.now() - t0;
+          healthyCount += 1;
+          healthMap[modelId] = {
+            ok: true,
+            latencyMs,
+            testedAt: new Date().toISOString(),
+          };
+        } catch (err: unknown) {
+          const latencyMs = Date.now() - t0;
+          const msg = err instanceof Error ? err.message : String(err);
+          healthMap[modelId] = {
+            ok: false,
+            latencyMs,
+            testedAt: new Date().toISOString(),
+            error: msg.slice(0, 140),
+          };
+        }
+      })
+    );
+  }
+
+  return { healthMap, probedModels: freeTargets, healthyCount };
 }

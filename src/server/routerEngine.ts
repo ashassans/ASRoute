@@ -12,9 +12,11 @@ import {
 import {
   getModelSpec,
   getModelUnitCost,
+  isModelKnownFree,
   type DetectedIntent,
   type RoutingStrategy,
 } from "../shared/catalog.ts";
+import type { ModelHealthEntry } from "../types/gateway.ts";
 import { decryptSecret } from "./crypto.ts";
 import {
   extractTextContent,
@@ -128,12 +130,140 @@ export function classifyRequestIntent(
   return "fast";
 }
 
+// ---------------------------------------------------------------------------
+// In-Memory RPM Pacing Queue & Exact Response Cache
+// ---------------------------------------------------------------------------
+
+const rpmWindowMap = new Map<string, number[]>();
+
+interface CachedCompletionEntry {
+  key: string;
+  userId: string;
+  resolvedProvider: string;
+  resolvedModel: string;
+  comboName: string | null;
+  detectedIntent: DetectedIntent;
+  content: string;
+  toolCalls?: OpenAIToolCall[];
+  promptTokens: number;
+  completionTokens: number;
+  finishReason: string;
+  expiresAt: number;
+}
+
+const RESPONSE_CACHE_TTL_MS = 10 * 60 * 1000;
+const RESPONSE_CACHE_MAX = 400;
+const responseCache = new Map<string, CachedCompletionEntry>();
+
+export function clearGatewayResponseCache(userId?: string): number {
+  if (!userId) {
+    const count = responseCache.size;
+    responseCache.clear();
+    return count;
+  }
+  let cleared = 0;
+  for (const [key, entry] of responseCache.entries()) {
+    if (entry.userId === userId) {
+      responseCache.delete(key);
+      cleared += 1;
+    }
+  }
+  return cleared;
+}
+
+function buildCacheKey(params: {
+  userId: string;
+  requestedModel: string;
+  freeOnly: boolean;
+  messages: OpenAIChatMessage[];
+  tools?: NormalizedCompletionRequest["tools"];
+  toolChoice?: NormalizedCompletionRequest["tool_choice"];
+}): string {
+  const payload = JSON.stringify({
+    u: params.userId,
+    m: params.requestedModel,
+    f: params.freeOnly,
+    msgs: params.messages,
+    t: params.tools || null,
+    tc: params.toolChoice || null,
+  });
+  return crypto.createHash("sha256").update(payload).digest("hex");
+}
+
+function getCachedCompletion(key: string): CachedCompletionEntry | null {
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    responseCache.delete(key);
+    return null;
+  }
+  return entry;
+}
+
+function setCachedCompletion(entry: CachedCompletionEntry) {
+  if (responseCache.size >= RESPONSE_CACHE_MAX) {
+    const firstKey = responseCache.keys().next().value;
+    if (firstKey) responseCache.delete(firstKey);
+  }
+  responseCache.set(entry.key, entry);
+}
+
+function parseModelHealth(raw: string | null | undefined): Record<string, ModelHealthEntry> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, ModelHealthEntry>) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function applyRpmPacing(
+  connection: ConnectionRow,
+  hasRemainingTier: boolean
+): Promise<{ proceed: boolean; queuedMs: number }> {
+  const rpm = connection.rpmLimit;
+  if (!rpm || rpm <= 0) {
+    return { proceed: true, queuedMs: 0 };
+  }
+
+  const now = Date.now();
+  const windowStart = now - 60_000;
+  const recent = (rpmWindowMap.get(connection.id) || []).filter((ts) => ts > windowStart);
+
+  if (recent.length < rpm) {
+    recent.push(now);
+    rpmWindowMap.set(connection.id, recent);
+    return { proceed: true, queuedMs: 0 };
+  }
+
+  const oldestTs = recent[0];
+  const waitMs = Math.max(50, oldestTs + 60_050 - now);
+  const maxQueueWait = hasRemainingTier ? 2500 : 7000;
+
+  if (waitMs > maxQueueWait) {
+    rpmWindowMap.set(connection.id, recent);
+    return { proceed: false, queuedMs: 0 };
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, waitMs));
+  const afterNow = Date.now();
+  const refreshed = (rpmWindowMap.get(connection.id) || []).filter(
+    (ts) => ts > afterNow - 60_000
+  );
+  refreshed.push(afterNow);
+  rpmWindowMap.set(connection.id, refreshed);
+  return { proceed: true, queuedMs: waitMs };
+}
+
 function scoreTierForIntent(
   item: EnrichedTier,
   intent: DetectedIntent
 ): number {
   const modelSpec = getModelSpec(item.connection.provider, item.tier.upstreamModel);
   const modelIdLower = item.tier.upstreamModel.toLowerCase();
+  const healthMap = parseModelHealth(item.connection.modelHealth);
+  const health = healthMap[item.tier.upstreamModel];
   let score = 0;
 
   if (modelSpec) {
@@ -151,32 +281,152 @@ function scoreTierForIntent(
       else if (modelSpec.tierRank === "flagship") score += 10;
     }
   } else {
-    // Heuristic scoring for custom / unlisted model IDs
-    if (intent === "coding" || intent === "reasoning") {
-      if (/sonnet|opus|pro|neon|carbon|r1|reasoner|o3|o1|gpt-4.5|gpt-4o(?!-mini)/.test(modelIdLower)) {
+    // Capability-aware heuristics for custom / free aggregator models
+    if (intent === "tools") {
+      if (/(flash|hydrogen|llama-4|llama-3\.3|llama-3\.1|qwen|mistral|deepseek-chat|deepseek-v3|gpt-6|gpt-5|gpt-4o|claude|step|command)/i.test(modelIdLower)) {
+        score += 35;
+      }
+      if (/(gemma|deepseek-r1|reasoner|:thinking|-thinking)/i.test(modelIdLower)) {
+        score -= 45;
+      }
+    } else if (intent === "vision") {
+      if (/(flash|hydrogen|neon|argon|carbon|terra|sol|astra|gpt-6|gpt-5|gpt-4o|claude|llama-4|vision|-vl|pixtral|llava|gemini-3|gemini-4|gemini-2)/i.test(modelIdLower)) {
+        score += 40;
+      } else {
+        score -= 20;
+      }
+    } else if (intent === "coding" || intent === "reasoning") {
+      if (/(sonnet|opus|fable|pro|neon|argon|carbon|astra|sol|gpt-6|gpt-5|qwen|coder|deepseek|r1|reasoner|o4|o3|o1|gpt-4\.5|gpt-4o(?!-mini)|llama-4-maverick|llama-3\.3-70b|mistral-large)/i.test(modelIdLower)) {
         score += 35;
       }
     } else if (intent === "fast") {
-      if (/mini|lite|haiku|flash|hydrogen|8b|small|instant/.test(modelIdLower)) {
+      if (/(mini|lite|haiku|flash|hydrogen|luna|8b|small|instant|nano)/i.test(modelIdLower)) {
         score += 35;
       }
     }
   }
 
-  // Slight tie-breaker by configured priority & weight
+  // Model-level uptime & tool capability feedback
+  if (health) {
+    const testedAgeMs = Date.now() - new Date(health.testedAt).getTime();
+    if (testedAgeMs < 15 * 60 * 1000) {
+      if (!health.ok) score -= 65;
+      else if (health.latencyMs > 0 && health.latencyMs < 1800) score += 12;
+    }
+    if (intent === "tools" && health.supportsTools === false) {
+      score -= 75;
+    }
+  }
+
+  // Slight tie-breaker by configured priority
   score += Math.max(0, 10 - item.tier.priority);
   return score;
 }
 
-function resolveConnectionApiKey(conn: ConnectionRow): string {
-  if (conn.useServerKey && conn.provider === "gemini") {
-    return process.env.GEMINI_API_KEY?.trim() || "";
+function resolveConnectionApiKeys(conn: ConnectionRow): {
+  keys: string[];
+  cursor: number;
+} {
+  const allKeys: string[] = [];
+  if (conn.encryptedApiKey) {
+    try {
+      const primary = decryptSecret(conn.encryptedApiKey);
+      if (primary) allKeys.push(primary);
+    } catch {
+      // ignore corrupted entry
+    }
   }
-  if (!conn.encryptedApiKey) return "";
+  if (conn.encryptedKeyPool) {
+    try {
+      const parsed = JSON.parse(conn.encryptedKeyPool);
+      if (Array.isArray(parsed)) {
+        for (const enc of parsed) {
+          if (typeof enc === "string" && enc) {
+            try {
+              const dec = decryptSecret(enc);
+              if (dec && !allKeys.includes(dec)) allKeys.push(dec);
+            } catch {
+              // skip invalid encrypted pool item
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore malformed JSON
+    }
+  }
+
+  if (allKeys.length <= 1) {
+    return { keys: allKeys, cursor: 0 };
+  }
+  const cursor = ((conn.keyPoolCursor || 0) % allKeys.length + allKeys.length) % allKeys.length;
+  const rotated = [...allKeys.slice(cursor), ...allKeys.slice(0, cursor)];
+  return { keys: rotated, cursor };
+}
+
+function isCapabilityMismatchError(
+  statusCode: number,
+  errMessage: string,
+  hasTools: boolean
+): boolean {
+  if (statusCode !== 400 && statusCode !== 404 && statusCode !== 422) return false;
+  if (hasTools && /tool|function|tool_choice|tools is not supported/i.test(errMessage)) {
+    return true;
+  }
+  return /developer instruction|system instruction|image|multimodal|vision|response_format/i.test(
+    errMessage
+  );
+}
+
+function buildToolEmulatedMessages(
+  messages: OpenAIChatMessage[],
+  tools: NonNullable<NormalizedCompletionRequest["tools"]>
+): OpenAIChatMessage[] {
+  const toolSpecText = JSON.stringify(
+    tools.map((t) => ({
+      name: t.function.name,
+      description: t.function.description || "",
+      parameters: t.function.parameters || {},
+    })),
+    null,
+    2
+  );
+  const instruction =
+    `You have access to the following tools:\n${toolSpecText}\n\n` +
+    `If a tool call is needed to answer accurately, respond ONLY with valid JSON in this exact format:\n` +
+    `{"tool_calls":[{"name":"<tool_name>","arguments":{...}}]}\n` +
+    `Otherwise answer the user directly in plain text.`;
+
+  return [{ role: "system", content: instruction }, ...messages];
+}
+
+function parseEmulatedToolCalls(text: string): OpenAIToolCall[] | undefined {
+  const trimmed = (text || "").trim();
+  const jsonMatch = trimmed.match(/\{[\s\S]*"tool_calls"[\s\S]*\}/);
+  if (!jsonMatch) return undefined;
   try {
-    return decryptSecret(conn.encryptedApiKey);
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      tool_calls?: Array<{ name?: string; arguments?: unknown }>;
+    };
+    if (!Array.isArray(parsed.tool_calls) || parsed.tool_calls.length === 0) {
+      return undefined;
+    }
+    const calls: OpenAIToolCall[] = parsed.tool_calls
+      .filter((tc) => Boolean(tc?.name))
+      .map((tc) => ({
+        id: `call_${crypto.randomBytes(6).toString("hex")}`,
+        type: "function" as const,
+        function: {
+          name: String(tc.name),
+          arguments:
+            typeof tc.arguments === "string"
+              ? tc.arguments
+              : JSON.stringify(tc.arguments || {}),
+        },
+      }));
+    return calls.length > 0 ? calls : undefined;
   } catch {
-    return "";
+    return undefined;
   }
 }
 
@@ -199,9 +449,17 @@ function evaluateTierEligibility(
     lastReset.getUTCFullYear() !== now.getUTCFullYear() ||
     lastReset.getUTCMonth() !== now.getUTCMonth();
 
+  const effectiveRequestsToday = resetDaily ? 0 : conn.usedRequestsToday;
   const effectiveTokensToday = resetDaily ? 0 : conn.usedTokensToday;
   const effectiveCostMonth = resetMonthly ? 0 : conn.usedCostMonth;
 
+  if (
+    conn.rpdLimit !== null &&
+    conn.rpdLimit > 0 &&
+    effectiveRequestsToday >= conn.rpdLimit
+  ) {
+    return { eligible: false, reason: "daily_request_quota_exceeded" };
+  }
   if (
     conn.dailyTokenQuota !== null &&
     conn.dailyTokenQuota > 0 &&
@@ -289,6 +547,17 @@ function orderTiersByStrategy(
   }
 }
 
+function connHasModel(conn: ConnectionRow, modelName: string): boolean {
+  if (conn.defaultModel === modelName) return true;
+  if (!conn.availableModels) return false;
+  try {
+    const parsed = JSON.parse(conn.availableModels);
+    return Array.isArray(parsed) && parsed.includes(modelName);
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveRoutingTarget(
   userId: string,
   requestedModel: string
@@ -354,9 +623,13 @@ export async function resolveRoutingTarget(
   if (slashIdx > 0) {
     const providerPrefix = requestedModel.slice(0, slashIdx).toLowerCase();
     const modelName = requestedModel.slice(slashIdx + 1);
-    const matchingConns = userConns.filter(
-      (c) => c.provider.toLowerCase() === providerPrefix && c.isActive
-    );
+    const matchingConns = userConns
+      .filter((c) => c.provider.toLowerCase() === providerPrefix && c.isActive)
+      .sort((a, b) => {
+        const aOwns = connHasModel(a, modelName) ? 1 : 0;
+        const bOwns = connHasModel(b, modelName) ? 1 : 0;
+        return bOwns - aOwns;
+      });
     if (matchingConns.length > 0) {
       return {
         combo: null,
@@ -419,6 +692,8 @@ export async function executeGatewayChatCompletion(params: {
   apiKeyId: string | null;
   apiKeyPrefix: string | null;
   request: NormalizedCompletionRequest;
+  freeOnly?: boolean;
+  useCache?: boolean;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<{
   id: string;
@@ -436,6 +711,7 @@ export async function executeGatewayChatCompletion(params: {
   finishReason: string;
   fallbackAttempts: FallbackHop[];
   compressed: boolean;
+  cached?: boolean;
 }> {
   const startedAt = Date.now();
   const requestId = `chatcmpl-${crypto.randomBytes(8).toString("hex")}`;
@@ -445,6 +721,8 @@ export async function executeGatewayChatCompletion(params: {
   const target = await resolveRoutingTarget(userId, request.model);
   const strategy = (target.combo?.strategy || "priority") as RoutingStrategy;
   const cursor = target.combo?.roundRobinCursor ?? 0;
+  const enforceFreeOnly = Boolean(params.freeOnly || target.combo?.freeOnly);
+  const cacheEnabled = Boolean(target.combo?.enableCache || params.useCache);
 
   if (target.combo && strategy === "round_robin") {
     await db
@@ -459,6 +737,78 @@ export async function executeGatewayChatCompletion(params: {
     const result = compressMessages(request.messages);
     effectiveMessages = result.messages;
     compressed = result.savedChars > 0;
+  }
+
+  const cacheKey =
+    cacheEnabled &&
+    !request.stream &&
+    (request.temperature === undefined || request.temperature <= 0.7)
+      ? buildCacheKey({
+          userId,
+          requestedModel: request.model,
+          freeOnly: enforceFreeOnly,
+          messages: effectiveMessages,
+          tools: request.tools,
+          toolChoice: request.tool_choice,
+        })
+      : null;
+
+  if (cacheKey) {
+    const cached = getCachedCompletion(cacheKey);
+    if (cached) {
+      const totalLatency = Math.max(1, Date.now() - startedAt);
+      const hitAttempts: FallbackHop[] = [
+        {
+          tierId: "cache",
+          connectionId: "cache",
+          connectionName: "Response Cache",
+          provider: cached.resolvedProvider,
+          model: cached.resolvedModel,
+          status: "success",
+          statusCode: 200,
+          reason: "exact_response_cache_hit",
+          latencyMs: totalLatency,
+        },
+      ];
+      await recordRequestLog({
+        userId,
+        apiKeyId,
+        apiKeyPrefix,
+        comboName: target.combo?.name ?? cached.comboName,
+        requestedModel: request.model,
+        resolvedProvider: cached.resolvedProvider,
+        resolvedModel: cached.resolvedModel,
+        connectionName: "Response Cache",
+        statusCode: 200,
+        outcome: "cache_hit",
+        fallbackAttempts: hitAttempts,
+        promptTokens: 0,
+        completionTokens: 0,
+        estimatedCostUsd: 0,
+        latencyMs: totalLatency,
+        compressed,
+        detectedIntent,
+        errorMessage: null,
+      });
+      return {
+        id: requestId,
+        model: request.model,
+        resolvedProvider: cached.resolvedProvider,
+        resolvedModel: cached.resolvedModel,
+        comboName: target.combo?.name ?? cached.comboName,
+        detectedIntent,
+        content: cached.content,
+        toolCalls: cached.toolCalls,
+        promptTokens: cached.promptTokens,
+        completionTokens: cached.completionTokens,
+        estimatedCostUsd: 0,
+        latencyMs: totalLatency,
+        finishReason: cached.finishReason,
+        fallbackAttempts: hitAttempts,
+        compressed,
+        cached: true,
+      };
+    }
   }
 
   const orderedTiers = orderTiersByStrategy(
@@ -500,8 +850,32 @@ export async function executeGatewayChatCompletion(params: {
   }
 
   let streamedAnyChunk = false;
+  let blockedByFreeOnlyCount = 0;
+  let toolFallbackCandidate: {
+    tier: TierRow;
+    connection: ConnectionRow;
+    apiKey: string;
+  } | null = null;
 
-  for (const { tier, connection } of orderedTiers) {
+  for (let tierIdx = 0; tierIdx < orderedTiers.length; tierIdx++) {
+    const { tier, connection } = orderedTiers[tierIdx];
+
+    if (enforceFreeOnly && !isModelKnownFree(connection.provider, tier.upstreamModel)) {
+      blockedByFreeOnlyCount += 1;
+      attempts.push({
+        tierId: tier.id,
+        connectionId: connection.id,
+        connectionName: connection.name,
+        provider: connection.provider,
+        model: tier.upstreamModel,
+        status: "skipped",
+        statusCode: 403,
+        reason: "blocked_by_free_only_lock",
+        latencyMs: 0,
+      });
+      continue;
+    }
+
     const eligibility = evaluateTierEligibility(connection, now);
     if (!eligibility.eligible) {
       attempts.push({
@@ -517,6 +891,32 @@ export async function executeGatewayChatCompletion(params: {
       continue;
     }
 
+    const hasRemainingTier = orderedTiers.slice(tierIdx + 1).some((nextItem) => {
+      if (
+        enforceFreeOnly &&
+        !isModelKnownFree(nextItem.connection.provider, nextItem.tier.upstreamModel)
+      ) {
+        return false;
+      }
+      return evaluateTierEligibility(nextItem.connection, now).eligible;
+    });
+
+    const pacing = await applyRpmPacing(connection, hasRemainingTier);
+    if (!pacing.proceed) {
+      attempts.push({
+        tierId: tier.id,
+        connectionId: connection.id,
+        connectionName: connection.name,
+        provider: connection.provider,
+        model: tier.upstreamModel,
+        status: "skipped",
+        statusCode: 429,
+        reason: "rpm_window_busy_skipped",
+        latencyMs: 0,
+      });
+      continue;
+    }
+
     if (eligibility.promotedToHalfOpen) {
       await db
         .update(providerConnections)
@@ -525,7 +925,8 @@ export async function executeGatewayChatCompletion(params: {
       publishCircuitUpdate(userId, connection.id, "half_open");
     }
 
-    const upstreamKey = resolveConnectionApiKey(connection);
+    const { keys: candidateKeys, cursor: startCursor } =
+      resolveConnectionApiKeys(connection);
     const tierStart = Date.now();
 
     publishRouteActivity(userId, {
@@ -539,156 +940,216 @@ export async function executeGatewayChatCompletion(params: {
       timestamp: new Date().toISOString(),
     });
 
-    try {
-      const result = await invokeUpstreamCompletion({
-        provider: connection.provider,
-        model: tier.upstreamModel,
-        apiKey: upstreamKey,
-        baseUrl: connection.baseUrl,
-        request: {
-          ...request,
-          messages: effectiveMessages,
-        },
-        onStreamDelta: onStreamDelta
-          ? (delta) => {
-              streamedAnyChunk = true;
-              onStreamDelta(delta);
-            }
-          : undefined,
-      });
+    let lastTierError: unknown = null;
+    let tierSucceeded = false;
 
-      publishRouteActivity(userId, {
-        requestId,
-        phase: "end",
-        provider: connection.provider,
-        model: tier.upstreamModel,
-        connectionId: connection.id,
-        connectionName: connection.name,
-        requestedModel: request.model,
-        outcome: "success",
-        timestamp: new Date().toISOString(),
-      });
+    for (let keyIdx = 0; keyIdx < Math.max(1, candidateKeys.length); keyIdx++) {
+      const upstreamKey = candidateKeys[keyIdx] || "";
+      try {
+        const result = await invokeUpstreamCompletion({
+          provider: connection.provider,
+          model: tier.upstreamModel,
+          apiKey: upstreamKey,
+          baseUrl: connection.baseUrl,
+          request: {
+            ...request,
+            messages: effectiveMessages,
+          },
+          onStreamDelta: onStreamDelta
+            ? (delta) => {
+                streamedAnyChunk = true;
+                onStreamDelta(delta);
+              }
+            : undefined,
+        });
 
-      const tierLatency = Date.now() - tierStart;
-      const totalLatency = Date.now() - startedAt;
-      const hadPriorFailure = attempts.some((a) => a.status === "failed");
+        tierSucceeded = true;
+        publishRouteActivity(userId, {
+          requestId,
+          phase: "end",
+          provider: connection.provider,
+          model: tier.upstreamModel,
+          connectionId: connection.id,
+          connectionName: connection.name,
+          requestedModel: request.model,
+          outcome: "success",
+          timestamp: new Date().toISOString(),
+        });
 
-      attempts.push({
-        tierId: tier.id,
-        connectionId: connection.id,
-        connectionName: connection.name,
-        provider: connection.provider,
-        model: tier.upstreamModel,
-        status: "success",
-        statusCode: 200,
-        reason: hadPriorFailure
-          ? "fallback_recovered"
-          : strategy === "intent_auto"
-            ? `intent:${detectedIntent}`
-            : "primary_ok",
-        latencyMs: tierLatency,
-      });
+        const tierLatency = Date.now() - tierStart;
+        const totalLatency = Date.now() - startedAt;
+        const hadPriorFailure = attempts.some((a) => a.status === "failed");
 
-      const totalTokens = result.promptTokens + result.completionTokens;
+        const reasonNotes: string[] = [];
+        if (hadPriorFailure) reasonNotes.push("fallback_recovered");
+        else if (strategy === "intent_auto") reasonNotes.push(`intent:${detectedIntent}`);
+        else reasonNotes.push("primary_ok");
+        if (keyIdx > 0) reasonNotes.push(`pool_key_${keyIdx + 1}`);
+        if (pacing.queuedMs > 0) reasonNotes.push(`queued_${pacing.queuedMs}ms`);
 
-      const connLastReset = connection.quotaResetAt
-        ? new Date(connection.quotaResetAt)
-        : new Date(0);
-      const connResetDaily =
-        connLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
-        connLastReset.getUTCMonth() !== now.getUTCMonth() ||
-        connLastReset.getUTCDate() !== now.getUTCDate();
+        attempts.push({
+          tierId: tier.id,
+          connectionId: connection.id,
+          connectionName: connection.name,
+          provider: connection.provider,
+          model: tier.upstreamModel,
+          status: "success",
+          statusCode: 200,
+          reason: reasonNotes.join(" · "),
+          latencyMs: tierLatency,
+        });
 
-      const connResetMonthly =
-        connLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
-        connLastReset.getUTCMonth() !== now.getUTCMonth();
+        const totalTokens = result.promptTokens + result.completionTokens;
+        const connLastReset = connection.quotaResetAt
+          ? new Date(connection.quotaResetAt)
+          : new Date(0);
+        const connResetDaily =
+          connLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+          connLastReset.getUTCMonth() !== now.getUTCMonth() ||
+          connLastReset.getUTCDate() !== now.getUTCDate();
+        const connResetMonthly =
+          connLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+          connLastReset.getUTCMonth() !== now.getUTCMonth();
 
-      await db
-        .update(providerConnections)
-        .set({
-          circuitStatus: "healthy",
-          failureCount: 0,
-          cooldownUntil: null,
-          lastLatencyMs: tierLatency,
-          lastError: null,
-          usedTokensToday: connResetDaily
-            ? totalTokens
-            : sql`${providerConnections.usedTokensToday} + ${totalTokens}`,
-          usedCostMonth: connResetMonthly
-            ? result.estimatedCostUsd
-            : sql`${providerConnections.usedCostMonth} + ${result.estimatedCostUsd}`,
-          ...(connResetDaily || connResetMonthly ? { quotaResetAt: now } : {}),
-        })
-        .where(eq(providerConnections.id, connection.id));
+        const nextPoolCursor =
+          candidateKeys.length > 1
+            ? (startCursor + keyIdx) % candidateKeys.length
+            : connection.keyPoolCursor;
 
-      if (connection.circuitStatus !== "healthy") {
-        publishCircuitUpdate(userId, connection.id, "healthy");
-      }
+        const nextHealth = parseModelHealth(connection.modelHealth);
+        nextHealth[tier.upstreamModel] = {
+          ok: true,
+          latencyMs: tierLatency,
+          supportsTools:
+            request.tools && request.tools.length > 0
+              ? true
+              : nextHealth[tier.upstreamModel]?.supportsTools,
+          testedAt: now.toISOString(),
+        };
 
-      if (
-        target.combo &&
-        !tier.id.startsWith("direct-") &&
-        !tier.id.startsWith("auto-")
-      ) {
         await db
-          .update(comboTiers)
-          .set({ requestCount: sql`${comboTiers.requestCount} + 1` })
-          .where(eq(comboTiers.id, tier.id));
-      }
-
-      if (apiKeyId) {
-        await db
-          .update(gatewayApiKeys)
+          .update(providerConnections)
           .set({
-            totalRequests: sql`${gatewayApiKeys.totalRequests} + 1`,
-            totalTokens: sql`${gatewayApiKeys.totalTokens} + ${totalTokens}`,
-            totalCostUsd: sql`${gatewayApiKeys.totalCostUsd} + ${result.estimatedCostUsd}`,
-            usedTokensToday: sql`${gatewayApiKeys.usedTokensToday} + ${totalTokens}`,
-            usedCostMonth: sql`${gatewayApiKeys.usedCostMonth} + ${result.estimatedCostUsd}`,
-            lastUsedAt: new Date(),
+            circuitStatus: "healthy",
+            failureCount: 0,
+            cooldownUntil: null,
+            lastLatencyMs: tierLatency,
+            lastError: null,
+            keyPoolCursor: nextPoolCursor,
+            modelHealth: JSON.stringify(nextHealth),
+            usedRequestsToday: connResetDaily
+              ? 1
+              : sql`${providerConnections.usedRequestsToday} + 1`,
+            usedTokensToday: connResetDaily
+              ? totalTokens
+              : sql`${providerConnections.usedTokensToday} + ${totalTokens}`,
+            usedCostMonth: connResetMonthly
+              ? result.estimatedCostUsd
+              : sql`${providerConnections.usedCostMonth} + ${result.estimatedCostUsd}`,
+            ...(connResetDaily || connResetMonthly ? { quotaResetAt: now } : {}),
           })
-          .where(eq(gatewayApiKeys.id, apiKeyId));
+          .where(eq(providerConnections.id, connection.id));
+
+        if (connection.circuitStatus !== "healthy") {
+          publishCircuitUpdate(userId, connection.id, "healthy");
+        }
+
+        if (
+          target.combo &&
+          !tier.id.startsWith("direct-") &&
+          !tier.id.startsWith("auto-")
+        ) {
+          await db
+            .update(comboTiers)
+            .set({ requestCount: sql`${comboTiers.requestCount} + 1` })
+            .where(eq(comboTiers.id, tier.id));
+        }
+
+        if (apiKeyId) {
+          await db
+            .update(gatewayApiKeys)
+            .set({
+              totalRequests: sql`${gatewayApiKeys.totalRequests} + 1`,
+              totalTokens: sql`${gatewayApiKeys.totalTokens} + ${totalTokens}`,
+              totalCostUsd: sql`${gatewayApiKeys.totalCostUsd} + ${result.estimatedCostUsd}`,
+              usedTokensToday: sql`${gatewayApiKeys.usedTokensToday} + ${totalTokens}`,
+              usedCostMonth: sql`${gatewayApiKeys.usedCostMonth} + ${result.estimatedCostUsd}`,
+              lastUsedAt: new Date(),
+            })
+            .where(eq(gatewayApiKeys.id, apiKeyId));
+        }
+
+        if (cacheKey) {
+          setCachedCompletion({
+            key: cacheKey,
+            userId,
+            resolvedProvider: connection.provider,
+            resolvedModel: tier.upstreamModel,
+            comboName: target.combo?.name ?? null,
+            detectedIntent,
+            content: result.content,
+            toolCalls: result.toolCalls,
+            promptTokens: result.promptTokens,
+            completionTokens: result.completionTokens,
+            finishReason: result.finishReason,
+            expiresAt: Date.now() + RESPONSE_CACHE_TTL_MS,
+          });
+        }
+
+        await recordRequestLog({
+          userId,
+          apiKeyId,
+          apiKeyPrefix,
+          comboName: target.combo?.name ?? null,
+          requestedModel: request.model,
+          resolvedProvider: connection.provider,
+          resolvedModel: tier.upstreamModel,
+          connectionName: connection.name,
+          statusCode: 200,
+          outcome: hadPriorFailure ? "fallback_success" : "success",
+          fallbackAttempts: attempts,
+          promptTokens: result.promptTokens,
+          completionTokens: result.completionTokens,
+          estimatedCostUsd: result.estimatedCostUsd,
+          latencyMs: totalLatency,
+          compressed,
+          detectedIntent,
+          errorMessage: null,
+        });
+
+        return {
+          id: requestId,
+          model: request.model,
+          resolvedProvider: connection.provider,
+          resolvedModel: tier.upstreamModel,
+          comboName: target.combo?.name ?? null,
+          detectedIntent,
+          content: result.content,
+          toolCalls: result.toolCalls,
+          promptTokens: result.promptTokens,
+          completionTokens: result.completionTokens,
+          estimatedCostUsd: result.estimatedCostUsd,
+          latencyMs: totalLatency,
+          finishReason: result.finishReason,
+          fallbackAttempts: attempts,
+          compressed,
+          cached: false,
+        };
+      } catch (err: unknown) {
+        lastTierError = err;
+        const sc = err instanceof UpstreamHttpError ? err.statusCode : 502;
+        const canRotatePoolKey =
+          !streamedAnyChunk &&
+          keyIdx + 1 < candidateKeys.length &&
+          (sc === 429 || sc === 401 || sc === 403 || sc >= 500);
+        if (canRotatePoolKey) {
+          continue;
+        }
+        break;
       }
+    }
 
-      await recordRequestLog({
-        userId,
-        apiKeyId,
-        apiKeyPrefix,
-        comboName: target.combo?.name ?? null,
-        requestedModel: request.model,
-        resolvedProvider: connection.provider,
-        resolvedModel: tier.upstreamModel,
-        connectionName: connection.name,
-        statusCode: 200,
-        outcome: hadPriorFailure ? "fallback_success" : "success",
-        fallbackAttempts: attempts,
-        promptTokens: result.promptTokens,
-        completionTokens: result.completionTokens,
-        estimatedCostUsd: result.estimatedCostUsd,
-        latencyMs: totalLatency,
-        compressed,
-        detectedIntent,
-        errorMessage: null,
-      });
-
-      return {
-        id: requestId,
-        model: request.model,
-        resolvedProvider: connection.provider,
-        resolvedModel: tier.upstreamModel,
-        comboName: target.combo?.name ?? null,
-        detectedIntent,
-        content: result.content,
-        toolCalls: result.toolCalls,
-        promptTokens: result.promptTokens,
-        completionTokens: result.completionTokens,
-        estimatedCostUsd: result.estimatedCostUsd,
-        latencyMs: totalLatency,
-        finishReason: result.finishReason,
-        fallbackAttempts: attempts,
-        compressed,
-      };
-    } catch (err: unknown) {
+    if (!tierSucceeded && lastTierError) {
       publishRouteActivity(userId, {
         requestId,
         phase: "end",
@@ -702,34 +1163,67 @@ export async function executeGatewayChatCompletion(params: {
       });
       const tierLatency = Date.now() - tierStart;
       const statusCode =
-        err instanceof UpstreamHttpError ? err.statusCode : 502;
-      const errMessage = err instanceof Error ? err.message : String(err);
+        lastTierError instanceof UpstreamHttpError ? lastTierError.statusCode : 502;
+      const errMessage =
+        lastTierError instanceof Error
+          ? lastTierError.message
+          : String(lastTierError);
 
-      const newFailureCount = connection.failureCount + 1;
-      const shouldOpenCircuit =
-        statusCode === 429 ||
-        statusCode === 401 ||
-        statusCode === 403 ||
-        newFailureCount >= 2;
+      const hasTools = Boolean(request.tools && request.tools.length > 0);
+      const capabilityMismatch = isCapabilityMismatchError(
+        statusCode,
+        errMessage,
+        hasTools
+      );
 
-      const nextStatus = shouldOpenCircuit ? "open" : connection.circuitStatus;
-      const cooldownUntil = shouldOpenCircuit
-        ? new Date(Date.now() + (statusCode === 429 ? 30_000 : 45_000))
-        : connection.cooldownUntil;
+      if (capabilityMismatch && hasTools && !toolFallbackCandidate && candidateKeys[0]) {
+        toolFallbackCandidate = {
+          tier,
+          connection,
+          apiKey: candidateKeys[0],
+        };
+      }
 
-      await db
-        .update(providerConnections)
-        .set({
-          failureCount: newFailureCount,
-          circuitStatus: nextStatus,
-          cooldownUntil,
-          lastLatencyMs: tierLatency,
-          lastError: errMessage.slice(0, 300),
-        })
-        .where(eq(providerConnections.id, connection.id));
+      if (capabilityMismatch && hasTools) {
+        const nextHealth = parseModelHealth(connection.modelHealth);
+        const existing = nextHealth[tier.upstreamModel];
+        nextHealth[tier.upstreamModel] = {
+          ok: existing?.ok ?? true,
+          latencyMs: existing?.latencyMs ?? tierLatency,
+          supportsTools: false,
+          testedAt: now.toISOString(),
+        };
+        await db
+          .update(providerConnections)
+          .set({ modelHealth: JSON.stringify(nextHealth) })
+          .where(eq(providerConnections.id, connection.id));
+      } else {
+        const newFailureCount = connection.failureCount + 1;
+        const shouldOpenCircuit =
+          statusCode === 429 ||
+          statusCode === 401 ||
+          statusCode === 403 ||
+          newFailureCount >= 2;
 
-      if (shouldOpenCircuit) {
-        publishCircuitUpdate(userId, connection.id, "open");
+        const nextStatus = shouldOpenCircuit ? "open" : connection.circuitStatus;
+        const cooldownUntil = shouldOpenCircuit
+          ? new Date(Date.now() + (statusCode === 429 ? 30_000 : 45_000))
+          : connection.cooldownUntil;
+
+        await db
+          .update(providerConnections)
+          .set({
+            failureCount: newFailureCount,
+            circuitStatus: nextStatus,
+            cooldownUntil,
+            lastLatencyMs: tierLatency,
+            lastError: errMessage.slice(0, 300),
+          })
+          .where(eq(providerConnections.id, connection.id));
+
+        if (shouldOpenCircuit) {
+          publishCircuitUpdate(userId, connection.id, "open");
+        }
       }
 
       attempts.push({
@@ -740,7 +1234,9 @@ export async function executeGatewayChatCompletion(params: {
         model: tier.upstreamModel,
         status: "failed",
         statusCode,
-        reason: errMessage.slice(0, 180),
+        reason: capabilityMismatch
+          ? `capability_mismatch: ${errMessage.slice(0, 140)}`
+          : errMessage.slice(0, 180),
         latencyMs: tierLatency,
       });
 
@@ -750,12 +1246,124 @@ export async function executeGatewayChatCompletion(params: {
     }
   }
 
+  // Tool-Call Fallback Adapter: emulate tools via prompt if upstream rejected native tools[]
+  if (
+    toolFallbackCandidate &&
+    request.tools &&
+    request.tools.length > 0 &&
+    !streamedAnyChunk
+  ) {
+    const adapterStart = Date.now();
+    try {
+      const emulatedMessages = buildToolEmulatedMessages(
+        effectiveMessages,
+        request.tools
+      );
+      const adapterResult = await invokeUpstreamCompletion({
+        provider: toolFallbackCandidate.connection.provider,
+        model: toolFallbackCandidate.tier.upstreamModel,
+        apiKey: toolFallbackCandidate.apiKey,
+        baseUrl: toolFallbackCandidate.connection.baseUrl,
+        request: {
+          model: request.model,
+          messages: emulatedMessages,
+          stream: false,
+          temperature: request.temperature,
+          max_tokens: request.max_tokens,
+        },
+      });
+
+      const emulatedCalls = parseEmulatedToolCalls(adapterResult.content);
+      const finalContent = emulatedCalls ? "" : adapterResult.content;
+      const finalFinish = emulatedCalls ? "tool_calls" : adapterResult.finishReason;
+
+      if (onStreamDelta && finalContent) {
+        onStreamDelta({ content: finalContent });
+      }
+
+      const adapterLatency = Date.now() - adapterStart;
+      const totalLatency = Date.now() - startedAt;
+      attempts.push({
+        tierId: toolFallbackCandidate.tier.id,
+        connectionId: toolFallbackCandidate.connection.id,
+        connectionName: toolFallbackCandidate.connection.name,
+        provider: toolFallbackCandidate.connection.provider,
+        model: toolFallbackCandidate.tier.upstreamModel,
+        status: "success",
+        statusCode: 200,
+        reason: "tool_adapter_emulated",
+        latencyMs: adapterLatency,
+      });
+
+      const totalTokens =
+        adapterResult.promptTokens + adapterResult.completionTokens;
+      await db
+        .update(providerConnections)
+        .set({
+          usedRequestsToday: sql`${providerConnections.usedRequestsToday} + 1`,
+          usedTokensToday: sql`${providerConnections.usedTokensToday} + ${totalTokens}`,
+          lastLatencyMs: adapterLatency,
+        })
+        .where(eq(providerConnections.id, toolFallbackCandidate.connection.id));
+
+      await recordRequestLog({
+        userId,
+        apiKeyId,
+        apiKeyPrefix,
+        comboName: target.combo?.name ?? null,
+        requestedModel: request.model,
+        resolvedProvider: toolFallbackCandidate.connection.provider,
+        resolvedModel: toolFallbackCandidate.tier.upstreamModel,
+        connectionName: toolFallbackCandidate.connection.name,
+        statusCode: 200,
+        outcome: "fallback_success",
+        fallbackAttempts: attempts,
+        promptTokens: adapterResult.promptTokens,
+        completionTokens: adapterResult.completionTokens,
+        estimatedCostUsd: adapterResult.estimatedCostUsd,
+        latencyMs: totalLatency,
+        compressed,
+        detectedIntent,
+        errorMessage: null,
+      });
+
+      return {
+        id: requestId,
+        model: request.model,
+        resolvedProvider: toolFallbackCandidate.connection.provider,
+        resolvedModel: toolFallbackCandidate.tier.upstreamModel,
+        comboName: target.combo?.name ?? null,
+        detectedIntent,
+        content: finalContent,
+        toolCalls: emulatedCalls,
+        promptTokens: adapterResult.promptTokens,
+        completionTokens: adapterResult.completionTokens,
+        estimatedCostUsd: adapterResult.estimatedCostUsd,
+        latencyMs: totalLatency,
+        finishReason: finalFinish,
+        fallbackAttempts: attempts,
+        compressed,
+        cached: false,
+      };
+    } catch {
+      // fall through to standard failure recording
+    }
+  }
+
   const totalLatency = Date.now() - startedAt;
   const lastFailure = [...attempts].reverse().find((a) => a.status === "failed");
-  const finalStatus = lastFailure?.statusCode || 503;
-  const finalReason =
-    lastFailure?.reason ||
-    "All candidate tiers skipped due to circuit breakers or exhausted quotas.";
+  const allBlockedFreeOnly =
+    enforceFreeOnly &&
+    blockedByFreeOnlyCount > 0 &&
+    blockedByFreeOnlyCount === orderedTiers.length;
+
+  const finalStatus = allBlockedFreeOnly
+    ? 403
+    : lastFailure?.statusCode || 503;
+  const finalReason = allBlockedFreeOnly
+    ? `Blocked by Strict Free-Only Lock: "${request.model}" does not resolve to a verified free model.`
+    : lastFailure?.reason ||
+      "All candidate tiers skipped due to circuit breakers or exhausted quotas.";
 
   await recordRequestLog({
     userId,
@@ -842,6 +1450,7 @@ export async function simulateComboRoute(params: {
   samplePrompt?: string;
   hasTools?: boolean;
   hasImage?: boolean;
+  freeOnly?: boolean;
   simulatedFaultConnectionIds?: string[];
 }) {
   const target = await resolveRoutingTarget(
@@ -849,6 +1458,7 @@ export async function simulateComboRoute(params: {
     params.requestedModel
   );
   const strategy = (target.combo?.strategy || "priority") as RoutingStrategy;
+  const enforceFreeOnly = Boolean(params.freeOnly || target.combo?.freeOnly);
 
   const syntheticRequest: Partial<NormalizedCompletionRequest> = {
     messages: [
@@ -894,6 +1504,20 @@ export async function simulateComboRoute(params: {
   let winner: string | null = null;
 
   ordered.forEach(({ tier, connection }, index) => {
+    if (enforceFreeOnly && !isModelKnownFree(connection.provider, tier.upstreamModel)) {
+      steps.push({
+        order: index + 1,
+        connectionId: connection.id,
+        connectionName: connection.name,
+        provider: connection.provider,
+        model: tier.upstreamModel,
+        weight: tier.weight,
+        decision: "skipped",
+        reason: "blocked_by_free_only_lock",
+      });
+      return;
+    }
+
     const elig = evaluateTierEligibility(connection, now);
     if (!elig.eligible) {
       steps.push({

@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import {
   Activity,
+  Check,
+  Copy,
   Home,
   KeyRound,
   Layers,
@@ -99,6 +102,7 @@ export default function App() {
   const [streamPaused, setStreamPaused] = useState(false);
   const [activeRoutes, setActiveRoutes] = useState<LiveRouteActivity[]>([]);
   const [openCreateKeyCounter, setOpenCreateKeyCounter] = useState(0);
+  const [copiedBaseUrl, setCopiedBaseUrl] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     tone: "success" | "error";
@@ -134,6 +138,17 @@ export default function App() {
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (mobileMenuOpen) setMobileMenuOpen(false);
+        if (settingsOpen) setSettingsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileMenuOpen, settingsOpen]);
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -351,6 +366,7 @@ export default function App() {
     NAV_ITEMS.find((n) => n.id === activeTab)?.label || "Overview";
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-[#09090B] text-[#F3F4F6] flex">
       {/* Sidebar Navigation (Desktop 248px) */}
       <aside className="hidden md:flex md:w-[248px] md:flex-col md:fixed md:inset-y-0 bg-[#09090B] border-r border-[#222227]">
@@ -369,13 +385,20 @@ export default function App() {
                 key={item.id}
                 type="button"
                 onClick={() => navigateTab(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                className={`relative w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive
-                    ? "bg-[#111114] text-white border border-[#222227]"
-                    : "text-[#A1A1AA] hover:text-white hover:bg-[#111114]/60 border border-transparent"
+                    ? "text-white"
+                    : "text-[#A1A1AA] hover:text-white hover:bg-[#111114]/60"
                 }`}
               >
-                <span className="flex items-center gap-2.5">
+                {isActive && (
+                  <motion.span
+                    layoutId="sidebar-nav-pill"
+                    transition={{ type: "spring", stiffness: 360, damping: 32 }}
+                    className="absolute inset-0 bg-[#111114] border border-[#222227] rounded-lg"
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-2.5">
                   <Icon
                     className={`w-4 h-4 ${
                       isActive ? "text-amber-400" : "text-[#A1A1AA]"
@@ -384,7 +407,7 @@ export default function App() {
                   <span>{item.label}</span>
                 </span>
                 {item.id === "logs" && workspace && (
-                  <span className="font-mono text-xs text-[#A1A1AA] tabular-nums">
+                  <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
                     {workspace.logs.length}
                   </span>
                 )}
@@ -433,9 +456,24 @@ export default function App() {
       </aside>
 
       {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden bg-black/70 flex">
-          <div className="w-64 bg-[#09090B] border-r border-[#222227] h-full flex flex-col justify-between p-4">
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 z-50 md:hidden bg-black/70 flex"
+          >
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-64 bg-[#09090B] border-r border-[#222227] h-full flex flex-col justify-between p-4"
+            >
             <div>
               <div className="flex items-center justify-between pb-4 border-b border-[#222227]">
                 <span className="font-display text-base font-bold text-white">
@@ -461,14 +499,25 @@ export default function App() {
                         navigateTab(item.id);
                         setMobileMenuOpen(false);
                       }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium rounded-lg whitespace-nowrap ${
+                      className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium rounded-lg whitespace-nowrap ${
                         isActive
-                          ? "bg-[#111114] text-white border border-[#222227]"
+                          ? "text-white"
                           : "text-[#A1A1AA] hover:text-white"
                       }`}
                     >
-                      <Icon className="w-4 h-4" />
-                      <span>{item.label}</span>
+                      {isActive && (
+                        <motion.span
+                          layoutId="mobile-nav-pill"
+                          transition={{ type: "spring", stiffness: 360, damping: 32 }}
+                          className="absolute inset-0 bg-[#111114] border border-[#222227] rounded-lg"
+                        />
+                      )}
+                      <Icon
+                        className={`relative z-10 w-4 h-4 ${
+                          isActive ? "text-amber-400" : "text-[#A1A1AA]"
+                        }`}
+                      />
+                      <span className="relative z-10">{item.label}</span>
                     </button>
                   );
                 })}
@@ -519,9 +568,10 @@ export default function App() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content Area */}
       <div className="flex-1 md:pl-[248px] flex flex-col min-w-0">
@@ -547,40 +597,80 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => {
-                navigateTab("keys");
-                setOpenCreateKeyCounter((c) => c + 1);
+              onClick={async () => {
+                const baseUrl =
+                  workspace?.environment.gatewayEndpoint ||
+                  (typeof window !== "undefined"
+                    ? `${window.location.origin}/v1`
+                    : "");
+                if (!baseUrl) return;
+                await navigator.clipboard.writeText(baseUrl);
+                setCopiedBaseUrl(true);
+                notify("Base URL copied.", "success");
+                setTimeout(() => setCopiedBaseUrl(false), 1800);
               }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Create API Key</span>
+              {copiedBaseUrl ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-[#A1A1AA]" />
+                  <span className="sm:hidden">Copy URL</span>
+                  <span className="hidden sm:inline">Copy Base URL</span>
+                </>
+              )}
             </button>
+
+            {activeTab !== "keys" && (
+              <button
+                type="button"
+                onClick={() => {
+                  navigateTab("keys");
+                  setOpenCreateKeyCounter((c) => c + 1);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5 text-amber-400" />
+                <span className="sm:hidden">New Key</span>
+                <span className="hidden sm:inline">New API Key</span>
+              </button>
+            )}
           </div>
         </header>
 
         <main className="flex-1 px-4 sm:px-8 py-6 max-w-[1280px] w-full mx-auto">
-          {toast && (
-            <div
-              className={`mb-5 px-4 py-3 rounded-lg border text-xs flex items-center justify-between ${
-                toast.tone === "error"
-                  ? "bg-red-500/10 border-red-500/30 text-red-300"
-                  : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-              }`}
-            >
-              <span>{toast.message}</span>
-              <button
-                type="button"
-                onClick={() => setToast(null)}
-                className="text-current opacity-70 hover:opacity-100"
+          <AnimatePresence>
+            {toast && (
+              <motion.div
+                key={toast.message}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                className={`mb-5 px-4 py-3 rounded-lg border text-xs flex items-center justify-between ${
+                  toast.tone === "error"
+                    ? "bg-red-500/10 border-red-500/30 text-red-300"
+                    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                }`}
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
+                <span>{toast.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setToast(null)}
+                  className="text-current opacity-70 hover:opacity-100"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {loadError && (
             <div className="mb-5 px-4 py-3 rounded-lg border border-red-500/30 bg-red-500/10 text-xs text-red-300 flex items-center justify-between">
@@ -608,81 +698,91 @@ export default function App() {
               <div className="h-64 bg-[#111114] border border-[#222227] rounded-lg animate-pulse" />
             </div>
           ) : workspace ? (
-            <>
-              {activeTab === "overview" && (
-                <OverviewView
-                  environment={workspace.environment}
-                  keys={workspace.keys}
-                  connections={workspace.connections}
-                  combos={workspace.combos}
-                  logs={workspace.logs}
-                  activeRoutes={activeRoutes}
-                  onNavigate={navigateTab}
-                  onRefresh={fetchBootstrap}
-                  onNotify={notify}
-                />
-              )}
-              {activeTab === "providers" && (
-                <ProvidersView
-                  connections={workspace.connections}
-                  serverGeminiAvailable={
-                    workspace.environment.serverGeminiAvailable
-                  }
-                  onRefresh={fetchBootstrap}
-                  onNotify={notify}
-                />
-              )}
-              {activeTab === "combos" && (
-                <CombosView
-                  combos={workspace.combos}
-                  connections={workspace.connections}
-                  wildcards={workspace.wildcards}
-                  onRefresh={fetchBootstrap}
-                  onNotify={notify}
-                />
-              )}
-              {activeTab === "keys" && (
-                <ApiKeysView
-                  keys={workspace.keys}
-                  combos={workspace.combos}
-                  gatewayEndpoint={workspace.environment.gatewayEndpoint}
-                  openCreateCounter={openCreateKeyCounter}
-                  onRefresh={fetchBootstrap}
-                  onNotify={notify}
-                />
-              )}
-              {activeTab === "logs" && (
-                <LogsView
-                  logs={workspace.logs}
-                  sseConnected={sseConnected}
-                  streamPaused={streamPaused}
-                  onTogglePause={() => setStreamPaused((p) => !p)}
-                  onClearLogs={handleClearLogs}
-                />
-              )}
-              {activeTab === "playground" && (
-                <PlaygroundView
-                  combos={workspace.combos}
-                  connections={workspace.connections}
-                  onNotify={notify}
-                />
-              )}
-            </>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {activeTab === "overview" && (
+                  <OverviewView
+                    environment={workspace.environment}
+                    keys={workspace.keys}
+                    connections={workspace.connections}
+                    combos={workspace.combos}
+                    logs={workspace.logs}
+                    activeRoutes={activeRoutes}
+                    onNavigate={navigateTab}
+                    onRefresh={fetchBootstrap}
+                    onNotify={notify}
+                  />
+                )}
+                {activeTab === "providers" && (
+                  <ProvidersView
+                    connections={workspace.connections}
+                    onRefresh={fetchBootstrap}
+                    onNotify={notify}
+                  />
+                )}
+                {activeTab === "combos" && (
+                  <CombosView
+                    combos={workspace.combos}
+                    connections={workspace.connections}
+                    wildcards={workspace.wildcards}
+                    onRefresh={fetchBootstrap}
+                    onNotify={notify}
+                  />
+                )}
+                {activeTab === "keys" && (
+                  <ApiKeysView
+                    keys={workspace.keys}
+                    combos={workspace.combos}
+                    gatewayEndpoint={workspace.environment.gatewayEndpoint}
+                    openCreateCounter={openCreateKeyCounter}
+                    onRefresh={fetchBootstrap}
+                    onNotify={notify}
+                  />
+                )}
+                {activeTab === "logs" && (
+                  <LogsView
+                    logs={workspace.logs}
+                    sseConnected={sseConnected}
+                    streamPaused={streamPaused}
+                    onTogglePause={() => setStreamPaused((p) => !p)}
+                    onClearLogs={handleClearLogs}
+                    onOpenPlayground={() => navigateTab("playground")}
+                  />
+                )}
+                {activeTab === "playground" && (
+                  <PlaygroundView
+                    combos={workspace.combos}
+                    connections={workspace.connections}
+                    onRefresh={fetchBootstrap}
+                    onNotify={notify}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
           ) : null}
         </main>
       </div>
 
-      {settingsOpen && (
-        <AccountSettingsModal
-          userName={session.user.name}
-          userEmail={session.user.email}
-          onClose={() => setSettingsOpen(false)}
-          onUpdated={async () => {
-            await refetch();
-          }}
-          onNotify={notify}
-        />
-      )}
+      <AnimatePresence>
+        {settingsOpen && (
+          <AccountSettingsModal
+            userName={session.user.name}
+            userEmail={session.user.email}
+            onClose={() => setSettingsOpen(false)}
+            onUpdated={async () => {
+              await refetch();
+            }}
+            onNotify={notify}
+          />
+        )}
+      </AnimatePresence>
     </div>
+    </MotionConfig>
   );
 }

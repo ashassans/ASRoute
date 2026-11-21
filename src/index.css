@@ -37,6 +37,28 @@
   .font-mono {
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   }
+
+  button,
+  [role="switch"],
+  select,
+  input,
+  textarea,
+  a {
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+    transition-duration: 240ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  button:not(:disabled),
+  [role="switch"]:not(:disabled),
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:not(:disabled):active,
+  [role="switch"]:not(:disabled):active {
+    transform: scale(0.972);
+  }
 }
 
 .tabular-nums {

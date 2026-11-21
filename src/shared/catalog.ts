@@ -55,48 +55,48 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     supportsServerKey: true,
     models: [
       {
-        id: "gemini-2.5-flash",
-        label: "Gemini 2.5 Flash (Fast)",
+        id: "gemini-4-hydrogen",
+        label: "Gemini 4 Hydrogen (Fast)",
         inputPer1MUsd: 0.15,
         outputPer1MUsd: 0.6,
         capabilities: ["fast", "coding", "vision", "tools"],
         tierRank: "balanced",
       },
       {
-        id: "gemini-2.5-pro",
-        label: "Gemini 2.5 Pro (Flagship)",
+        id: "gemini-3.1-flash-lite",
+        label: "Gemini 3.1 Flash Lite",
+        inputPer1MUsd: 0.075,
+        outputPer1MUsd: 0.3,
+        capabilities: ["fast", "vision", "tools"],
+        tierRank: "lite",
+      },
+      {
+        id: "gemini-4-neon",
+        label: "Gemini 4 Neon (Pro)",
         inputPer1MUsd: 1.25,
         outputPer1MUsd: 5.0,
         capabilities: ["coding", "reasoning", "vision", "tools"],
         tierRank: "flagship",
       },
       {
-        id: "gemini-2.0-flash",
-        label: "Gemini 2.0 Flash",
-        inputPer1MUsd: 0.1,
-        outputPer1MUsd: 0.4,
-        capabilities: ["fast", "coding", "vision", "tools"],
-        tierRank: "balanced",
+        id: "gemini-4-argon",
+        label: "Gemini 4 Argon (Reasoning)",
+        inputPer1MUsd: 1.0,
+        outputPer1MUsd: 4.0,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "flagship",
       },
       {
-        id: "gemini-2.0-flash-lite",
-        label: "Gemini 2.0 Flash Lite",
-        inputPer1MUsd: 0.075,
-        outputPer1MUsd: 0.3,
-        capabilities: ["fast", "vision", "tools"],
-        tierRank: "lite",
+        id: "gemini-4-carbon",
+        label: "Gemini 4 Carbon (Deep)",
+        inputPer1MUsd: 2.5,
+        outputPer1MUsd: 10.0,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "flagship",
       },
       {
-        id: "gemini-1.5-flash",
-        label: "Gemini 1.5 Flash",
-        inputPer1MUsd: 0.075,
-        outputPer1MUsd: 0.3,
-        capabilities: ["fast", "vision", "tools"],
-        tierRank: "lite",
-      },
-      {
-        id: "gemini-1.5-pro",
-        label: "Gemini 1.5 Pro",
+        id: "gemini-3.1-pro-preview",
+        label: "Gemini 3.1 Pro Preview",
         inputPer1MUsd: 1.25,
         outputPer1MUsd: 5.0,
         capabilities: ["coding", "reasoning", "vision", "tools"],
@@ -111,42 +111,42 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     supportsServerKey: false,
     models: [
       {
-        id: "gpt-4o-mini",
-        label: "GPT-4o Mini",
+        id: "gpt-6-luna",
+        label: "GPT-6 Luna (Fast)",
         inputPer1MUsd: 0.15,
         outputPer1MUsd: 0.6,
         capabilities: ["fast", "vision", "tools", "coding"],
         tierRank: "lite",
       },
       {
-        id: "gpt-4o",
-        label: "GPT-4o",
+        id: "gpt-6.1-terra",
+        label: "GPT-6.1 Terra (Vision)",
+        inputPer1MUsd: 0.8,
+        outputPer1MUsd: 3.2,
+        capabilities: ["fast", "vision", "tools", "coding"],
+        tierRank: "balanced",
+      },
+      {
+        id: "gpt-6.2-sol",
+        label: "GPT-6.2 Sol (Balanced)",
+        inputPer1MUsd: 1.75,
+        outputPer1MUsd: 7.0,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "balanced",
+      },
+      {
+        id: "gpt-6.2-astra",
+        label: "GPT-6.2 Astra (Flagship)",
+        inputPer1MUsd: 3.5,
+        outputPer1MUsd: 14.0,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "flagship",
+      },
+      {
+        id: "gpt-5.4",
+        label: "GPT-5.4",
         inputPer1MUsd: 2.5,
         outputPer1MUsd: 10.0,
-        capabilities: ["coding", "reasoning", "vision", "tools"],
-        tierRank: "flagship",
-      },
-      {
-        id: "gpt-4.5-preview",
-        label: "GPT-4.5 Preview",
-        inputPer1MUsd: 75.0,
-        outputPer1MUsd: 150.0,
-        capabilities: ["coding", "reasoning", "vision", "tools"],
-        tierRank: "flagship",
-      },
-      {
-        id: "o3-mini",
-        label: "o3 Mini",
-        inputPer1MUsd: 1.1,
-        outputPer1MUsd: 4.4,
-        capabilities: ["coding", "reasoning", "tools"],
-        tierRank: "flagship",
-      },
-      {
-        id: "o1",
-        label: "o1",
-        inputPer1MUsd: 15.0,
-        outputPer1MUsd: 60.0,
         capabilities: ["coding", "reasoning", "vision", "tools"],
         tierRank: "flagship",
       },
@@ -159,28 +159,36 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     supportsServerKey: false,
     models: [
       {
-        id: "claude-3-7-sonnet-latest",
-        label: "Claude 3.7 Sonnet",
+        id: "claude-sonnet-5-5",
+        label: "Claude Sonnet 5.5",
         inputPer1MUsd: 3.0,
         outputPer1MUsd: 15.0,
         capabilities: ["coding", "reasoning", "vision", "tools"],
         tierRank: "flagship",
       },
       {
-        id: "claude-3-5-sonnet-latest",
-        label: "Claude 3.5 Sonnet",
-        inputPer1MUsd: 3.0,
-        outputPer1MUsd: 15.0,
+        id: "claude-opus-5-5",
+        label: "Claude Opus 5.5",
+        inputPer1MUsd: 15.0,
+        outputPer1MUsd: 75.0,
         capabilities: ["coding", "reasoning", "vision", "tools"],
         tierRank: "flagship",
       },
       {
-        id: "claude-3-5-haiku-latest",
-        label: "Claude 3.5 Haiku",
+        id: "claude-haiku-5-5",
+        label: "Claude Haiku 5.5",
         inputPer1MUsd: 0.8,
         outputPer1MUsd: 4.0,
         capabilities: ["fast", "coding", "vision", "tools"],
         tierRank: "lite",
+      },
+      {
+        id: "claude-fable-5-2",
+        label: "Claude Fable 5.2",
+        inputPer1MUsd: 18.0,
+        outputPer1MUsd: 90.0,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "flagship",
       },
     ],
   },
@@ -190,6 +198,22 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     defaultBaseUrl: "https://api.groq.com/openai/v1",
     supportsServerKey: false,
     models: [
+      {
+        id: "meta-llama/llama-4-scout-17b-16e-instruct",
+        label: "Llama 4 Scout 17B",
+        inputPer1MUsd: 0.11,
+        outputPer1MUsd: 0.34,
+        capabilities: ["fast", "vision", "coding", "tools"],
+        tierRank: "balanced",
+      },
+      {
+        id: "meta-llama/llama-4-maverick-17b-128e-instruct",
+        label: "Llama 4 Maverick 17B",
+        inputPer1MUsd: 0.2,
+        outputPer1MUsd: 0.6,
+        capabilities: ["fast", "vision", "coding", "tools"],
+        tierRank: "flagship",
+      },
       {
         id: "llama-3.3-70b-versatile",
         label: "Llama 3.3 70B",
@@ -215,8 +239,16 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     supportsServerKey: false,
     models: [
       {
+        id: "deepseek-v3.2",
+        label: "DeepSeek V3.2",
+        inputPer1MUsd: 0.27,
+        outputPer1MUsd: 1.1,
+        capabilities: ["fast", "coding", "tools"],
+        tierRank: "balanced",
+      },
+      {
         id: "deepseek-chat",
-        label: "DeepSeek V3",
+        label: "DeepSeek Chat",
         inputPer1MUsd: 0.27,
         outputPer1MUsd: 1.1,
         capabilities: ["fast", "coding", "tools"],
@@ -224,7 +256,7 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
       },
       {
         id: "deepseek-reasoner",
-        label: "DeepSeek R1",
+        label: "DeepSeek Reasoner",
         inputPer1MUsd: 0.55,
         outputPer1MUsd: 2.19,
         capabilities: ["coding", "reasoning"],
@@ -247,8 +279,16 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
         tierRank: "lite",
       },
       {
+        id: "mistral-medium-latest",
+        label: "Mistral Medium 3.5",
+        inputPer1MUsd: 0.4,
+        outputPer1MUsd: 2.0,
+        capabilities: ["fast", "coding", "vision", "tools"],
+        tierRank: "balanced",
+      },
+      {
         id: "mistral-large-latest",
-        label: "Mistral Large",
+        label: "Mistral Large 4",
         inputPer1MUsd: 2.0,
         outputPer1MUsd: 6.0,
         capabilities: ["coding", "reasoning", "tools"],
@@ -263,20 +303,36 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     supportsServerKey: false,
     models: [
       {
-        id: "google/gemini-2.5-flash",
-        label: "Gemini via OpenRouter",
+        id: "google/gemini-4-hydrogen",
+        label: "Gemini 4 Hydrogen (OR)",
         inputPer1MUsd: 0.15,
         outputPer1MUsd: 0.6,
         capabilities: ["fast", "vision", "tools", "coding"],
         tierRank: "balanced",
       },
       {
-        id: "anthropic/claude-3.5-sonnet",
-        label: "Claude 3.5 Sonnet (OR)",
+        id: "openai/gpt-6.2-sol",
+        label: "GPT-6.2 Sol (OR)",
+        inputPer1MUsd: 1.75,
+        outputPer1MUsd: 7.0,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "balanced",
+      },
+      {
+        id: "anthropic/claude-sonnet-5.5",
+        label: "Claude Sonnet 5.5 (OR)",
         inputPer1MUsd: 3.0,
         outputPer1MUsd: 15.0,
         capabilities: ["coding", "reasoning", "vision", "tools"],
         tierRank: "flagship",
+      },
+      {
+        id: "openrouter/free",
+        label: "OpenRouter Free Auto",
+        inputPer1MUsd: 0,
+        outputPer1MUsd: 0,
+        capabilities: ["fast", "coding", "tools"],
+        tierRank: "lite",
       },
     ],
   },
@@ -353,12 +409,23 @@ export function getModelSpec(providerId: string, modelId: string): ModelSpec | u
   return spec.models.find((m) => m.id === modelId);
 }
 
+export function isModelKnownFree(providerId: string, modelId: string): boolean {
+  const id = (modelId || "").trim();
+  if (!id) return false;
+  if (/(^|[:/._-])free([:/._-]|$)/i.test(id)) return true;
+  if (providerId === "gemini" && /(flash|gemma|hydrogen)/i.test(id)) return true;
+  const spec = getModelSpec(providerId, id);
+  if (spec && spec.inputPer1MUsd === 0 && spec.outputPer1MUsd === 0) return true;
+  return false;
+}
+
 export function estimateModelCostUsd(
   providerId: string,
   modelId: string,
   promptTokens: number,
   completionTokens: number
 ): number {
+  if (isModelKnownFree(providerId, modelId)) return 0;
   const model = getModelSpec(providerId, modelId);
   const inRate = model ? model.inputPer1MUsd : 0.5;
   const outRate = model ? model.outputPer1MUsd : 1.5;
@@ -369,6 +436,7 @@ export function estimateModelCostUsd(
 }
 
 export function getModelUnitCost(providerId: string, modelId: string): number {
+  if (isModelKnownFree(providerId, modelId)) return 0;
   const model = getModelSpec(providerId, modelId);
   if (!model) return 2.0;
   return model.inputPer1MUsd + model.outputPer1MUsd;

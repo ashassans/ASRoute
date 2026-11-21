@@ -1,7 +1,6 @@
 export interface GatewayEnvironment {
   databaseMode: "neon" | "embedded-pg";
   neonConfigured: boolean;
-  serverGeminiAvailable: boolean;
   gatewayEndpoint: string;
 }
 
@@ -12,6 +11,7 @@ export interface GatewayApiKey {
   keyPrefix: string;
   isActive: boolean;
   allowedCombo: string | null;
+  freeOnly: boolean;
   dailyTokenLimit: number | null;
   monthlyUsdLimit: number | null;
   usedTokensToday: number;
@@ -24,6 +24,14 @@ export interface GatewayApiKey {
   createdAt: string;
 }
 
+export interface ModelHealthEntry {
+  ok: boolean;
+  latencyMs: number;
+  supportsTools?: boolean;
+  testedAt: string;
+  error?: string;
+}
+
 export interface ProviderConnection {
   id: string;
   userId: string;
@@ -31,11 +39,16 @@ export interface ProviderConnection {
   name: string;
   baseUrl: string | null;
   defaultModel: string | null;
-  useServerKey: boolean;
+  availableModels: string[];
   maskedKey: string;
+  poolKeyCount: number;
+  maskedPoolKeys: string[];
   isActive: boolean;
+  rpmLimit: number | null;
+  rpdLimit: number | null;
   dailyTokenQuota: number | null;
   monthlyUsdQuota: number | null;
+  usedRequestsToday: number;
   usedTokensToday: number;
   usedCostMonth: number;
   quotaResetAt: string;
@@ -44,6 +57,7 @@ export interface ProviderConnection {
   cooldownUntil: string | null;
   lastLatencyMs: number | null;
   lastError: string | null;
+  modelHealth: Record<string, ModelHealthEntry>;
   createdAt: string;
 }
 
@@ -65,6 +79,8 @@ export interface Combo {
   description: string | null;
   strategy: string;
   compressPrompt: boolean;
+  freeOnly: boolean;
+  enableCache: boolean;
   isActive: boolean;
   roundRobinCursor: number;
   createdAt: string;

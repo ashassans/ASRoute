@@ -190,8 +190,7 @@ export function AuthGate({
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Alex Rivera"
-                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder-[#52525B] focus:outline-none focus:border-amber-400 transition-colors"
+                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
                   />
                 </motion.div>
               )}
@@ -205,8 +204,7 @@ export function AuthGate({
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder-[#52525B] focus:outline-none focus:border-amber-400 transition-colors"
+                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
                 />
               </div>
 
@@ -220,8 +218,7 @@ export function AuthGate({
                   minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minimum 6 characters"
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder-[#52525B] focus:outline-none focus:border-amber-400 transition-colors"
+                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
                 />
               </div>
 
