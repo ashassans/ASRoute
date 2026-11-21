@@ -82,9 +82,11 @@ const STARTER_PROMPTS = [
 function AssistantMessageBody({
   content,
   isError,
+  onNotify,
 }: {
   content: string;
   isError?: boolean;
+  onNotify?: (msg: string, tone?: "success" | "error") => void;
 }) {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
@@ -119,12 +121,16 @@ function AssistantMessageBody({
                 <button
                   type="button"
                   onClick={async () => {
-                    await navigator.clipboard.writeText(code);
-                    setCopiedIdx(idx);
-                    setTimeout(
-                      () => setCopiedIdx((c) => (c === idx ? null : c)),
-                      1600
-                    );
+                    try {
+                      await navigator.clipboard.writeText(code);
+                      setCopiedIdx(idx);
+                      setTimeout(
+                        () => setCopiedIdx((c) => (c === idx ? null : c)),
+                        1600
+                      );
+                    } catch {
+                      onNotify?.("Clipboard access denied", "error");
+                    }
                   }}
                   className="inline-flex items-center gap-1 hover:text-white transition-colors"
                 >
@@ -226,6 +232,7 @@ export function PlaygroundView({
   const [toolsJson, setToolsJson] = useState(DEFAULT_TOOLS_JSON);
   const [freeOnly, setFreeOnly] = useState(false);
   const [useCache, setUseCache] = useState(false);
+  const [streamResponse, setStreamResponse] = useState(true);
   const [clearingCache, setClearingCache] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [running, setRunning] = useState(false);
@@ -234,6 +241,13 @@ export function PlaygroundView({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -368,6 +382,10 @@ export function PlaygroundView({
     setImageDataUrl(null);
     setRunning(true);
 
+    const assistantId = `a_${Date.now()}`;
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const apiMessages = [
         ...(systemPrompt.trim()
@@ -392,14 +410,117 @@ export function PlaygroundView({
       const res = await fetch("/api/playground/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           model: selectedModel,
           messages: apiMessages,
           tools: parsedTools,
           freeOnly,
           useCache,
+          stream: streamResponse,
         }),
       });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (streamResponse && res.ok && contentType.includes("text/event-stream") && res.body) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: assistantId,
+            role: "assistant",
+            content: "",
+          },
+        ]);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let eventName = "message";
+        let streamedText = "";
+
+        const processLine = (rawLine: string) => {
+          const line = rawLine.replace(/\r$/, "");
+          if (!line) {
+            eventName = "message";
+            return;
+          }
+          if (line.startsWith(":")) return;
+          if (line.startsWith("event:")) {
+            eventName = line.slice(6).trim();
+            return;
+          }
+          if (!line.startsWith("data:")) return;
+          const payloadStr = line.slice(5).trim();
+          if (!payloadStr) return;
+
+          try {
+            const payload = JSON.parse(payloadStr);
+            if (eventName === "delta") {
+              if (typeof payload.content === "string" && payload.content) {
+                streamedText += payload.content;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId ? { ...m, content: streamedText } : m
+                  )
+                );
+              }
+            } else if (eventName === "result") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content: payload.content || streamedText,
+                        toolCalls: payload.toolCalls,
+                        meta: {
+                          resolvedProvider: payload.resolvedProvider,
+                          resolvedModel: payload.resolvedModel,
+                          detectedIntent: payload.detectedIntent,
+                          promptTokens: payload.promptTokens,
+                          completionTokens: payload.completionTokens,
+                          estimatedCostUsd: payload.estimatedCostUsd,
+                          latencyMs: payload.latencyMs,
+                          cached: payload.cached,
+                          fallbackAttempts: payload.fallbackAttempts || [],
+                        },
+                      }
+                    : m
+                )
+              );
+            } else if (eventName === "error") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content: payload.error || "Stream failed",
+                        isError: true,
+                      }
+                    : m
+                )
+              );
+            }
+          } catch {
+            // ignore partial/malformed SSE chunk
+          }
+        };
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            processLine(line);
+          }
+        }
+        if (buffer.trim()) {
+          processLine(buffer);
+        }
+        return;
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
@@ -407,7 +528,7 @@ export function PlaygroundView({
         setMessages((prev) => [
           ...prev,
           {
-            id: `a_${Date.now()}`,
+            id: assistantId,
             role: "assistant",
             content: errText,
             isError: true,
@@ -419,7 +540,7 @@ export function PlaygroundView({
       setMessages((prev) => [
         ...prev,
         {
-          id: `a_${Date.now()}`,
+          id: assistantId,
           role: "assistant",
           content: data.content || "",
           toolCalls: data.toolCalls,
@@ -436,17 +557,33 @@ export function PlaygroundView({
           },
         },
       ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `a_${Date.now()}`,
-          role: "assistant",
-          content: "Network error reaching the gateway.",
-          isError: true,
-        },
-      ]);
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+      setMessages((prev) => {
+        const hasAssistant = prev.some((m) => m.id === assistantId);
+        if (hasAssistant) {
+          return prev.map((m) =>
+            m.id === assistantId && !m.content
+              ? { ...m, content: "Network error reaching the gateway.", isError: true }
+              : m
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: assistantId,
+            role: "assistant",
+            content: "Network error reaching the gateway.",
+            isError: true,
+          },
+        ];
+      });
     } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
       setRunning(false);
     }
   };
@@ -456,12 +593,17 @@ export function PlaygroundView({
       msg.content ||
       (msg.toolCalls ? JSON.stringify(msg.toolCalls, null, 2) : "");
     if (!textToCopy) return;
-    await navigator.clipboard.writeText(textToCopy);
-    setCopiedId(msg.id);
-    setTimeout(() => setCopiedId((id) => (id === msg.id ? null : id)), 1800);
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId((id) => (id === msg.id ? null : id)), 1800);
+    } catch {
+      onNotify("Clipboard access denied", "error");
+    }
   };
 
   const handleNewChat = () => {
+    abortRef.current?.abort();
     setMessages([]);
     setInputText("");
     setImageDataUrl(null);
@@ -576,6 +718,12 @@ export function PlaygroundView({
               </div>
 
               <div className="divide-y divide-[#1D1D22] border-y border-[#1D1D22] py-1">
+                <ToggleSwitch
+                  checked={streamResponse}
+                  onChange={setStreamResponse}
+                  label="Live Streaming"
+                  hint="Stream tokens chunk-by-chunk"
+                />
                 <ToggleSwitch
                   checked={freeOnly}
                   onChange={setFreeOnly}
@@ -737,6 +885,7 @@ export function PlaygroundView({
                       <AssistantMessageBody
                         content={msg.content}
                         isError={msg.isError}
+                        onNotify={onNotify}
                       />
                     )}
 

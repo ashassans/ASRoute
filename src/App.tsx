@@ -621,10 +621,14 @@ export default function App() {
                     ? `${window.location.origin}/v1`
                     : "");
                 if (!baseUrl) return;
-                await navigator.clipboard.writeText(baseUrl);
-                setCopiedBaseUrl(true);
-                notify("Base URL copied.", "success");
-                setTimeout(() => setCopiedBaseUrl(false), 1800);
+                try {
+                  await navigator.clipboard.writeText(baseUrl);
+                  setCopiedBaseUrl(true);
+                  notify("Base URL copied.", "success");
+                  setTimeout(() => setCopiedBaseUrl(false), 1800);
+                } catch {
+                  notify("Clipboard access denied", "error");
+                }
               }}
               className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
             >

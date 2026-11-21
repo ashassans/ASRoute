@@ -55,6 +55,30 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     supportsServerKey: true,
     models: [
       {
+        id: "gemini-2.5-flash",
+        label: "Gemini 2.5 Flash",
+        inputPer1MUsd: 0.15,
+        outputPer1MUsd: 0.6,
+        capabilities: ["fast", "coding", "vision", "tools"],
+        tierRank: "balanced",
+      },
+      {
+        id: "gemini-2.5-pro",
+        label: "Gemini 2.5 Pro",
+        inputPer1MUsd: 1.25,
+        outputPer1MUsd: 10.0,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "flagship",
+      },
+      {
+        id: "gemini-2.0-flash",
+        label: "Gemini 2.0 Flash",
+        inputPer1MUsd: 0.1,
+        outputPer1MUsd: 0.4,
+        capabilities: ["fast", "coding", "vision", "tools"],
+        tierRank: "lite",
+      },
+      {
         id: "gemini-4-hydrogen",
         label: "Gemini 4 Hydrogen (Fast)",
         inputPer1MUsd: 0.15,
@@ -111,6 +135,30 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     supportsServerKey: false,
     models: [
       {
+        id: "gpt-4.1",
+        label: "GPT-4.1",
+        inputPer1MUsd: 2.0,
+        outputPer1MUsd: 8.0,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "flagship",
+      },
+      {
+        id: "gpt-4.1-mini",
+        label: "GPT-4.1 Mini",
+        inputPer1MUsd: 0.4,
+        outputPer1MUsd: 1.6,
+        capabilities: ["fast", "coding", "vision", "tools"],
+        tierRank: "balanced",
+      },
+      {
+        id: "o4-mini",
+        label: "o4-mini (Reasoning)",
+        inputPer1MUsd: 1.1,
+        outputPer1MUsd: 4.4,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "balanced",
+      },
+      {
         id: "gpt-6-luna",
         label: "GPT-6 Luna (Fast)",
         inputPer1MUsd: 0.15,
@@ -158,6 +206,22 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     defaultBaseUrl: "https://api.anthropic.com/v1",
     supportsServerKey: false,
     models: [
+      {
+        id: "claude-sonnet-4-20250514",
+        label: "Claude Sonnet 4",
+        inputPer1MUsd: 3.0,
+        outputPer1MUsd: 15.0,
+        capabilities: ["coding", "reasoning", "vision", "tools"],
+        tierRank: "flagship",
+      },
+      {
+        id: "claude-3-5-haiku-20241022",
+        label: "Claude 3.5 Haiku",
+        inputPer1MUsd: 0.8,
+        outputPer1MUsd: 4.0,
+        capabilities: ["fast", "coding", "vision", "tools"],
+        tierRank: "lite",
+      },
       {
         id: "claude-sonnet-5-5",
         label: "Claude Sonnet 5.5",
@@ -409,13 +473,24 @@ export function getModelSpec(providerId: string, modelId: string): ModelSpec | u
   return spec.models.find((m) => m.id === modelId);
 }
 
+const KNOWN_FREE_GEMINI_MODELS = new Set([
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-4-hydrogen",
+]);
+
 export function isModelKnownFree(providerId: string, modelId: string): boolean {
-  const id = (modelId || "").trim();
+  const id = (modelId || "").trim().toLowerCase();
   if (!id) return false;
   if (/(^|[:/._-])free([:/._-]|$)/i.test(id)) return true;
-  if (providerId === "gemini" && /(flash|gemma|hydrogen)/i.test(id)) return true;
   const spec = getModelSpec(providerId, id);
   if (spec && spec.inputPer1MUsd === 0 && spec.outputPer1MUsd === 0) return true;
+  if (providerId === "gemini") {
+    if (KNOWN_FREE_GEMINI_MODELS.has(id)) return true;
+    if (/^gemma-|^gemini-.*flash-lite/i.test(id)) return true;
+  }
   return false;
 }
 

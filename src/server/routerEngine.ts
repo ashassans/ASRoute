@@ -54,7 +54,7 @@ interface EnrichedTier {
   connection: ConnectionRow;
 }
 
-function globToRegex(pattern: string): RegExp {
+export function globToRegex(pattern: string): RegExp {
   const escaped = pattern
     .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\*/g, ".*");
@@ -229,6 +229,13 @@ async function applyRpmPacing(
 
   const now = Date.now();
   const windowStart = now - 60_000;
+  if (rpmWindowMap.size > 200) {
+    for (const [connId, timestamps] of rpmWindowMap.entries()) {
+      const active = timestamps.filter((ts) => ts > windowStart);
+      if (active.length === 0) rpmWindowMap.delete(connId);
+      else rpmWindowMap.set(connId, active);
+    }
+  }
   const recent = (rpmWindowMap.get(connection.id) || []).filter((ts) => ts > windowStart);
 
   if (recent.length < rpm) {
@@ -430,7 +437,7 @@ function parseEmulatedToolCalls(text: string): OpenAIToolCall[] | undefined {
   }
 }
 
-function evaluateTierEligibility(
+export function evaluateTierEligibility(
   conn: ConnectionRow,
   now: Date
 ): { eligible: boolean; reason?: string; promotedToHalfOpen?: boolean } {
@@ -483,7 +490,7 @@ function evaluateTierEligibility(
   return { eligible: true };
 }
 
-function orderTiersByStrategy(
+export function orderTiersByStrategy(
   tiers: EnrichedTier[],
   strategy: RoutingStrategy,
   roundRobinCursor: number,
@@ -710,6 +717,7 @@ export async function executeGatewayChatCompletion(params: {
   request: NormalizedCompletionRequest;
   freeOnly?: boolean;
   useCache?: boolean;
+  signal?: AbortSignal;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<{
   id: string;
@@ -731,7 +739,7 @@ export async function executeGatewayChatCompletion(params: {
 }> {
   const startedAt = Date.now();
   const requestId = `chatcmpl-${crypto.randomBytes(8).toString("hex")}`;
-  const { userId, apiKeyId, apiKeyPrefix, request, onStreamDelta } = params;
+  const { userId, apiKeyId, apiKeyPrefix, request, signal, onStreamDelta } = params;
 
   const detectedIntent = classifyRequestIntent(request);
   const target = await resolveRoutingTarget(userId, request.model);
@@ -878,7 +886,10 @@ export async function executeGatewayChatCompletion(params: {
   } | null = null;
 
   for (let tierIdx = 0; tierIdx < orderedTiers.length; tierIdx++) {
-    if (tierIdx > 0 && Date.now() - startedAt > 20_000) {
+    if (signal?.aborted) {
+      break;
+    }
+    if (tierIdx > 0 && Date.now() - startedAt > 35_000) {
       break;
     }
 
@@ -954,7 +965,7 @@ export async function executeGatewayChatCompletion(params: {
     const { keys: candidateKeys, cursor: startCursor } =
       resolveConnectionApiKeys(connection);
     const tierStart = Date.now();
-    const tierTimeoutMs = hasRemainingTier ? 5500 : 25000;
+    const tierTimeoutMs = hasRemainingTier ? 12000 : 25000;
 
     publishRouteActivity(userId, {
       requestId,
@@ -971,6 +982,7 @@ export async function executeGatewayChatCompletion(params: {
     let tierSucceeded = false;
 
     for (let keyIdx = 0; keyIdx < Math.max(1, candidateKeys.length); keyIdx++) {
+      if (signal?.aborted) break;
       const upstreamKey = candidateKeys[keyIdx] || "";
       try {
         const result = await invokeUpstreamCompletion({
@@ -979,6 +991,7 @@ export async function executeGatewayChatCompletion(params: {
           apiKey: upstreamKey,
           baseUrl: connection.baseUrl,
           timeoutMs: tierTimeoutMs,
+          signal,
           request: {
             ...request,
             messages: effectiveMessages,
@@ -1296,7 +1309,8 @@ export async function executeGatewayChatCompletion(params: {
     toolFallbackCandidate &&
     request.tools &&
     request.tools.length > 0 &&
-    !streamedAnyChunk
+    !streamedAnyChunk &&
+    !signal?.aborted
   ) {
     const adapterStart = Date.now();
     try {
@@ -1309,6 +1323,7 @@ export async function executeGatewayChatCompletion(params: {
         model: toolFallbackCandidate.tier.upstreamModel,
         apiKey: toolFallbackCandidate.apiKey,
         baseUrl: toolFallbackCandidate.connection.baseUrl,
+        signal,
         request: {
           model: request.model,
           messages: emulatedMessages,
@@ -1342,35 +1357,88 @@ export async function executeGatewayChatCompletion(params: {
 
       const totalTokens =
         adapterResult.promptTokens + adapterResult.completionTokens;
-      await db
-        .update(providerConnections)
-        .set({
-          usedRequestsToday: sql`${providerConnections.usedRequestsToday} + 1`,
-          usedTokensToday: sql`${providerConnections.usedTokensToday} + ${totalTokens}`,
-          lastLatencyMs: adapterLatency,
-        })
-        .where(eq(providerConnections.id, toolFallbackCandidate.connection.id));
+      const fbConn = toolFallbackCandidate.connection;
+      const fbLastReset = fbConn.quotaResetAt
+        ? new Date(fbConn.quotaResetAt)
+        : new Date(0);
+      const fbResetDaily =
+        fbLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+        fbLastReset.getUTCMonth() !== now.getUTCMonth() ||
+        fbLastReset.getUTCDate() !== now.getUTCDate();
+      const fbResetMonthly =
+        fbLastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+        fbLastReset.getUTCMonth() !== now.getUTCMonth();
 
-      await recordRequestLog({
-        userId,
-        apiKeyId,
-        apiKeyPrefix,
-        comboName: target.combo?.name ?? null,
-        requestedModel: request.model,
-        resolvedProvider: toolFallbackCandidate.connection.provider,
-        resolvedModel: toolFallbackCandidate.tier.upstreamModel,
-        connectionName: toolFallbackCandidate.connection.name,
-        statusCode: 200,
-        outcome: "fallback_success",
-        fallbackAttempts: attempts,
-        promptTokens: adapterResult.promptTokens,
-        completionTokens: adapterResult.completionTokens,
-        estimatedCostUsd: adapterResult.estimatedCostUsd,
-        latencyMs: totalLatency,
-        compressed,
-        detectedIntent,
-        errorMessage: null,
-      });
+      const adapterWrites: Promise<unknown>[] = [
+        ...pendingDbWrites,
+        db
+          .update(providerConnections)
+          .set({
+            usedRequestsToday: fbResetDaily
+              ? 1
+              : sql`${providerConnections.usedRequestsToday} + 1`,
+            usedTokensToday: fbResetDaily
+              ? totalTokens
+              : sql`${providerConnections.usedTokensToday} + ${totalTokens}`,
+            usedCostMonth: fbResetMonthly
+              ? adapterResult.estimatedCostUsd
+              : sql`${providerConnections.usedCostMonth} + ${adapterResult.estimatedCostUsd}`,
+            ...(fbResetDaily || fbResetMonthly ? { quotaResetAt: now } : {}),
+            lastLatencyMs: adapterLatency,
+          })
+          .where(eq(providerConnections.id, fbConn.id)),
+        recordRequestLog({
+          userId,
+          apiKeyId,
+          apiKeyPrefix,
+          comboName: target.combo?.name ?? null,
+          requestedModel: request.model,
+          resolvedProvider: fbConn.provider,
+          resolvedModel: toolFallbackCandidate.tier.upstreamModel,
+          connectionName: fbConn.name,
+          statusCode: 200,
+          outcome: "fallback_success",
+          fallbackAttempts: attempts,
+          promptTokens: adapterResult.promptTokens,
+          completionTokens: adapterResult.completionTokens,
+          estimatedCostUsd: adapterResult.estimatedCostUsd,
+          latencyMs: totalLatency,
+          compressed,
+          detectedIntent,
+          errorMessage: null,
+        }),
+      ];
+
+      if (
+        target.combo &&
+        !toolFallbackCandidate.tier.id.startsWith("direct-") &&
+        !toolFallbackCandidate.tier.id.startsWith("auto-")
+      ) {
+        adapterWrites.push(
+          db
+            .update(comboTiers)
+            .set({ requestCount: sql`${comboTiers.requestCount} + 1` })
+            .where(eq(comboTiers.id, toolFallbackCandidate.tier.id))
+        );
+      }
+
+      if (apiKeyId) {
+        adapterWrites.push(
+          db
+            .update(gatewayApiKeys)
+            .set({
+              totalRequests: sql`${gatewayApiKeys.totalRequests} + 1`,
+              totalTokens: sql`${gatewayApiKeys.totalTokens} + ${totalTokens}`,
+              totalCostUsd: sql`${gatewayApiKeys.totalCostUsd} + ${adapterResult.estimatedCostUsd}`,
+              usedTokensToday: sql`${gatewayApiKeys.usedTokensToday} + ${totalTokens}`,
+              usedCostMonth: sql`${gatewayApiKeys.usedCostMonth} + ${adapterResult.estimatedCostUsd}`,
+              lastUsedAt: new Date(),
+            })
+            .where(eq(gatewayApiKeys.id, apiKeyId))
+        );
+      }
+
+      await Promise.allSettled(adapterWrites);
 
       return {
         id: requestId,

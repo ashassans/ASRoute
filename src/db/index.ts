@@ -49,7 +49,9 @@ function getOrCreateDb(): AppDatabase {
     return global._asRouterDb;
   }
 
-  const pglite = new PGlite("./.asrouter-pgdata");
+  const pglite = new PGlite(
+    process.env.NODE_TEST_CONTEXT ? undefined : "./.asrouter-pgdata"
+  );
   global._asRouterPglite = pglite;
   global._asRouterDb = drizzlePglite(pglite, {
     schema,
@@ -227,19 +229,55 @@ const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "idx_combos_user" ON "combos" ("user_id")`,
   `CREATE INDEX IF NOT EXISTS "idx_combo_tiers_combo" ON "combo_tiers" ("combo_id")`,
   `CREATE INDEX IF NOT EXISTS "idx_wildcard_routes_user" ON "wildcard_routes" ("user_id")`,
-  `DELETE FROM "provider_connections" WHERE "use_server_key" = true`,
+  `CREATE TABLE IF NOT EXISTS "system_config" (
+    "key" text PRIMARY KEY NOT NULL,
+    "value" text NOT NULL,
+    "updated_at" timestamp DEFAULT now() NOT NULL
+  )`,
 ];
+
+async function initRuntimeVaultSecret(): Promise<void> {
+  if (process.env.BETTER_AUTH_SECRET?.trim()) return;
+  const g = globalThis as typeof globalThis & { _asRouterVaultSecret?: string };
+  if (g._asRouterVaultSecret) return;
+
+  const crypto = await import("node:crypto");
+  const { eq } = await import("drizzle-orm");
+  const existing = await db
+    .select()
+    .from(schema.systemConfig)
+    .where(eq(schema.systemConfig.key, "vault_secret"));
+
+  if (existing.length > 0 && existing[0].value) {
+    g._asRouterVaultSecret = existing[0].value;
+    return;
+  }
+
+  const generated = crypto.randomBytes(32).toString("hex");
+  try {
+    await db
+      .insert(schema.systemConfig)
+      .values({ key: "vault_secret", value: generated })
+      .onConflictDoNothing();
+    const recheck = await db
+      .select()
+      .from(schema.systemConfig)
+      .where(eq(schema.systemConfig.key, "vault_secret"));
+    g._asRouterVaultSecret = recheck[0]?.value || generated;
+  } catch {
+    g._asRouterVaultSecret = generated;
+  }
+}
 
 async function executeSchemaInit(): Promise<void> {
   const batchedSql = `${DDL_STATEMENTS.join(";\n")};`;
   if (global._asRouterPool) {
     await global._asRouterPool.query(batchedSql);
-    return;
-  }
-  if (global._asRouterPglite) {
+  } else if (global._asRouterPglite) {
     await global._asRouterPglite.waitReady;
     await global._asRouterPglite.exec(batchedSql);
   }
+  await initRuntimeVaultSecret();
 }
 
 export async function ensureSchema(): Promise<void> {

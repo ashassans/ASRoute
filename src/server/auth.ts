@@ -9,8 +9,14 @@ import {
   sendVerificationOtpEmail,
 } from "./mailer.ts";
 
-const appUrl = process.env.APP_URL?.trim() || "http://localhost:3000";
-const isHttps = appUrl.startsWith("https://");
+const appUrl =
+  process.env.APP_URL?.trim() ||
+  process.env.BETTER_AUTH_URL?.trim() ||
+  "http://localhost:3000";
+const isHttps =
+  appUrl.startsWith("https://") ||
+  Boolean(process.env.BETTER_AUTH_URL?.trim().startsWith("https://")) ||
+  process.env.NODE_ENV === "production";
 const emailVerificationEnabled = isGmailMailerConfigured();
 
 const baseTrustedOrigins = Array.from(

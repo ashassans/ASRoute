@@ -1,19 +1,41 @@
 import crypto from "node:crypto";
 
-const RAW_SECRET =
-  process.env.BETTER_AUTH_SECRET?.trim() ||
-  process.env.APP_URL?.trim() ||
-  "as-router-default-session-and-vault-secret-key-2026";
-
-function deriveEncryptionKey(): Buffer {
-  return crypto.createHash("sha256").update(RAW_SECRET).digest();
-}
+const globalCryptoState = globalThis as typeof globalThis & {
+  _asRouterAuthSecret?: string;
+  _asRouterVaultSecret?: string;
+  _asRouterWarnedSecret?: boolean;
+};
 
 export function getAuthSecret(): string {
-  if (RAW_SECRET.length >= 32) {
-    return RAW_SECRET;
+  const envSecret = process.env.BETTER_AUTH_SECRET?.trim();
+  if (envSecret) {
+    if (envSecret.length >= 32) return envSecret;
+    return crypto.createHash("sha256").update(envSecret).digest("hex");
   }
-  return crypto.createHash("sha256").update(RAW_SECRET).digest("hex");
+
+  if (!globalCryptoState._asRouterAuthSecret) {
+    globalCryptoState._asRouterAuthSecret = crypto
+      .randomBytes(32)
+      .toString("hex");
+    if (
+      process.env.NODE_ENV === "production" &&
+      !globalCryptoState._asRouterWarnedSecret
+    ) {
+      globalCryptoState._asRouterWarnedSecret = true;
+      console.warn(
+        "[AS ROUTER] BETTER_AUTH_SECRET is not set. Using an ephemeral random signing secret for this process."
+      );
+    }
+  }
+  return globalCryptoState._asRouterAuthSecret;
+}
+
+function deriveEncryptionKey(): Buffer {
+  const secretSource =
+    process.env.BETTER_AUTH_SECRET?.trim() ||
+    globalCryptoState._asRouterVaultSecret ||
+    getAuthSecret();
+  return crypto.createHash("sha256").update(secretSource).digest();
 }
 
 export function encryptSecret(plaintext: string): string {

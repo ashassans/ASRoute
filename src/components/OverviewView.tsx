@@ -245,7 +245,15 @@ export function OverviewView({
 
   useEffect(() => {
     loadAnalytics(range);
-  }, [range, logs.length, loadAnalytics]);
+  }, [range, loadAnalytics]);
+
+  useEffect(() => {
+    if (logs.length === 0) return;
+    const timer = window.setTimeout(() => {
+      loadAnalytics(range);
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [logs.length, range, loadAnalytics]);
 
   const activeCombo = combos.length
     ? combos[previewComboIdx % combos.length]
@@ -504,9 +512,13 @@ export function OverviewView({
   }'`;
 
   const copyCurl = async () => {
-    await navigator.clipboard.writeText(curlSnippet);
-    setCopiedCurl(true);
-    setTimeout(() => setCopiedCurl(false), 1800);
+    try {
+      await navigator.clipboard.writeText(curlSnippet);
+      setCopiedCurl(true);
+      setTimeout(() => setCopiedCurl(false), 1800);
+    } catch {
+      onNotify?.("Clipboard access denied", "error");
+    }
   };
 
   const copyChartSummary = async () => {
@@ -522,9 +534,13 @@ export function OverviewView({
         byModel: b.byModel,
       })),
     };
-    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-    setCopiedChart(true);
-    setTimeout(() => setCopiedChart(false), 1800);
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setCopiedChart(true);
+      setTimeout(() => setCopiedChart(false), 1800);
+    } catch {
+      onNotify?.("Clipboard access denied", "error");
+    }
   };
 
   const hoveredBucket =

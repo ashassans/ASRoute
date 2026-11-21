@@ -182,9 +182,13 @@ export function ApiKeysView({
 
   const copyRawKey = async () => {
     if (!revealedKey) return;
-    await navigator.clipboard.writeText(revealedKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
+    try {
+      await navigator.clipboard.writeText(revealedKey);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
+    } catch {
+      onNotify("Clipboard access denied", "error");
+    }
   };
 
   return (

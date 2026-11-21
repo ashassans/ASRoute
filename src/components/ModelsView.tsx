@@ -14,6 +14,7 @@ interface ModelRow {
   key: string;
   providerName: string;
   modelId: string;
+  copyId: string;
 }
 
 export function ModelsView({
@@ -38,6 +39,7 @@ export function ModelsView({
         key,
         providerName: "Combo",
         modelId: combo.name,
+        copyId: combo.name,
       });
     }
 
@@ -66,7 +68,12 @@ export function ModelsView({
         const key = `${conn.provider}:${modelId}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        list.push({ key, providerName, modelId });
+        list.push({
+          key,
+          providerName,
+          modelId,
+          copyId: `${conn.provider}/${modelId}`,
+        });
       }
     }
 
@@ -79,20 +86,21 @@ export function ModelsView({
     return rows.filter(
       (r) =>
         r.modelId.toLowerCase().includes(q) ||
+        r.copyId.toLowerCase().includes(q) ||
         r.providerName.toLowerCase().includes(q)
     );
   }, [rows, query]);
 
   const handleCopy = async (row: ModelRow) => {
     try {
-      await navigator.clipboard.writeText(row.modelId);
+      await navigator.clipboard.writeText(row.copyId);
       setCopiedKey(row.key);
-      onNotify(`Copied ${row.modelId}`, "success");
+      onNotify(`Copied ${row.copyId}`, "success");
       setTimeout(() => {
         setCopiedKey((prev) => (prev === row.key ? null : prev));
       }, 1500);
     } catch {
-      onNotify("Failed to copy Model ID", "error");
+      onNotify("Clipboard access denied", "error");
     }
   };
 
@@ -157,7 +165,7 @@ export function ModelsView({
                     {row.providerName}
                   </span>
                   <span className="text-xs sm:text-sm font-mono text-white truncate">
-                    {row.modelId}
+                    {row.copyId}
                   </span>
                 </div>
 

@@ -12,6 +12,7 @@ import {
   isModelKnownFree,
 } from "../shared/catalog.ts";
 import type { ModelHealthEntry } from "../types/gateway.ts";
+import { validateOutboundUrl } from "./urlSafety.ts";
 
 export type OpenAIContentPart =
   | { type: "text"; text: string }
@@ -119,62 +120,24 @@ function parseDataUrl(url: string): { mimeType: string; data: string } | null {
   return { mimeType: match[1], data: match[2] };
 }
 
-function isBlockedHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().trim();
-  if (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host === "0.0.0.0" ||
-    host === "::1" ||
-    host === "169.254.169.254" ||
-    host === "metadata.google.internal" ||
-    host.endsWith(".local") ||
-    host.endsWith(".internal")
-  ) {
-    return true;
-  }
-  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4) {
-    const o1 = Number(ipv4[1]);
-    const o2 = Number(ipv4[2]);
-    if (o1 === 10 || o1 === 127 || (o1 === 169 && o2 === 254)) return true;
-    if (o1 === 172 && o2 >= 16 && o2 <= 31) return true;
-    if (o1 === 192 && o2 === 168) return true;
-    if (o1 === 0) return true;
-  }
-  return false;
-}
-
 async function resolveImageToInlineData(
   url: string
 ): Promise<{ mimeType: string; data: string }> {
   const parsed = parseDataUrl(url);
   if (parsed) return parsed;
 
-  if (!url.startsWith("http://") && !url.startsWith("https://")) {
-    throw new UpstreamHttpError(
-      "Unsupported image URL format. Provide an https:// URL or base64 data URI.",
-      400,
-      false
-    );
-  }
-
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(url);
-  } catch {
-    throw new UpstreamHttpError("Invalid image URL format.", 400, false);
-  }
-
-  if (isBlockedHost(parsedUrl.hostname)) {
+    parsedUrl = validateOutboundUrl(url, "image URL");
+  } catch (err) {
     throw new UpstreamHttpError(
-      "Access to internal or restricted IP addresses is blocked for security.",
+      err instanceof Error ? err.message : "Invalid image URL.",
       400,
       false
     );
   }
 
-  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  const res = await fetch(parsedUrl.toString(), { signal: AbortSignal.timeout(10000) });
   if (!res.ok) {
     throw new UpstreamHttpError(
       `Failed to fetch multimodal image URL (${res.status})`,
@@ -365,11 +328,20 @@ export async function invokeUpstreamCompletion(params: {
   apiKey: string;
   baseUrl?: string | null;
   timeoutMs?: number;
+  signal?: AbortSignal;
   request: NormalizedCompletionRequest;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<UpstreamExecutionResult> {
-  const { provider, model, apiKey, baseUrl, timeoutMs, request, onStreamDelta } =
-    params;
+  const {
+    provider,
+    model,
+    apiKey,
+    baseUrl,
+    timeoutMs,
+    signal,
+    request,
+    onStreamDelta,
+  } = params;
 
   if (!apiKey) {
     throw new UpstreamHttpError(
@@ -379,11 +351,16 @@ export async function invokeUpstreamCompletion(params: {
     );
   }
 
+  if (signal?.aborted) {
+    throw new UpstreamHttpError("Request aborted by client.", 499, false);
+  }
+
   if (provider === "gemini") {
     return invokeGemini({
       model,
       apiKey,
       timeoutMs,
+      signal,
       request,
       onStreamDelta,
     });
@@ -395,6 +372,7 @@ export async function invokeUpstreamCompletion(params: {
       apiKey,
       baseUrl,
       timeoutMs,
+      signal,
       request,
       onStreamDelta,
     });
@@ -406,6 +384,7 @@ export async function invokeUpstreamCompletion(params: {
     apiKey,
     baseUrl,
     timeoutMs,
+    signal,
     request,
     onStreamDelta,
   });
@@ -441,10 +420,18 @@ async function invokeGemini(params: {
   model: string;
   apiKey: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   request: NormalizedCompletionRequest;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<UpstreamExecutionResult> {
-  const { model, apiKey, timeoutMs = 25000, request, onStreamDelta } = params;
+  const {
+    model,
+    apiKey,
+    timeoutMs = 25000,
+    signal,
+    request,
+    onStreamDelta,
+  } = params;
   const ai = new GoogleGenAI({
     apiKey,
     httpOptions: {
@@ -465,6 +452,7 @@ async function invokeGemini(params: {
   }
   if (tools) config.tools = tools;
   if (toolConfig) config.toolConfig = toolConfig;
+  if (signal) config.abortSignal = signal;
 
   try {
     if (request.stream && onStreamDelta) {
@@ -484,6 +472,7 @@ async function invokeGemini(params: {
       const collectedToolCalls: OpenAIToolCall[] = [];
 
       for await (const chunk of stream) {
+        if (signal?.aborted) break;
         const chunkText = chunk.text ?? "";
         if (chunkText) {
           fullText += chunkText;
@@ -616,6 +605,7 @@ async function invokeAnthropic(params: {
   apiKey: string;
   baseUrl?: string | null;
   timeoutMs?: number;
+  signal?: AbortSignal;
   request: NormalizedCompletionRequest;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<UpstreamExecutionResult> {
@@ -624,10 +614,21 @@ async function invokeAnthropic(params: {
     apiKey,
     baseUrl,
     timeoutMs = 25000,
+    signal,
     request,
     onStreamDelta,
   } = params;
-  const endpoint = `${(baseUrl || "https://api.anthropic.com/v1").replace(/\/+$/, "")}/messages`;
+  const rawEndpoint = `${(baseUrl || "https://api.anthropic.com/v1").replace(/\/+$/, "")}/messages`;
+  let endpoint: string;
+  try {
+    endpoint = validateOutboundUrl(rawEndpoint, "provider base URL").toString();
+  } catch (err) {
+    throw new UpstreamHttpError(
+      err instanceof Error ? err.message : "Invalid provider base URL.",
+      400,
+      false
+    );
+  }
 
   const systemParts: string[] = [];
   const messages: Array<{ role: "user" | "assistant"; content: unknown }> = [];
@@ -701,11 +702,24 @@ async function invokeAnthropic(params: {
               },
             });
           } else {
+            let safeUrl: string;
+            try {
+              safeUrl = validateOutboundUrl(
+                part.image_url.url,
+                "image URL"
+              ).toString();
+            } catch (err) {
+              throw new UpstreamHttpError(
+                err instanceof Error ? err.message : "Invalid image URL.",
+                400,
+                false
+              );
+            }
             blocks.push({
               type: "image",
               source: {
                 type: "url",
-                url: part.image_url.url,
+                url: safeUrl,
               },
             });
           }
@@ -759,6 +773,9 @@ async function invokeAnthropic(params: {
   }
 
   const connectController = new AbortController();
+  const onParentAbort = () =>
+    connectController.abort(new Error("Request aborted by client"));
+  signal?.addEventListener("abort", onParentAbort, { once: true });
   const connectTimer = setTimeout(() => {
     connectController.abort(
       new Error(`Anthropic upstream timed out after ${timeoutMs}ms`)
@@ -779,13 +796,15 @@ async function invokeAnthropic(params: {
     });
   } catch (err) {
     clearTimeout(connectTimer);
+    signal?.removeEventListener("abort", onParentAbort);
     throw new UpstreamHttpError(
       err instanceof Error ? err.message : "Anthropic connection error",
-      504,
-      true
+      signal?.aborted ? 499 : 504,
+      !signal?.aborted
     );
   }
   clearTimeout(connectTimer);
+  signal?.removeEventListener("abort", onParentAbort);
 
   if (!res.ok) {
     const errText = await res.text();
@@ -982,6 +1001,7 @@ async function invokeOpenAICompatible(params: {
   apiKey: string;
   baseUrl?: string | null;
   timeoutMs?: number;
+  signal?: AbortSignal;
   request: NormalizedCompletionRequest;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<UpstreamExecutionResult> {
@@ -991,14 +1011,25 @@ async function invokeOpenAICompatible(params: {
     apiKey,
     baseUrl,
     timeoutMs = 25000,
+    signal,
     request,
     onStreamDelta,
   } = params;
   const spec = getProviderSpec(provider);
   const resolvedBase = (baseUrl || spec.defaultBaseUrl).replace(/\/+$/, "");
-  const endpoint = resolvedBase.endsWith("/chat/completions")
+  const rawEndpoint = resolvedBase.endsWith("/chat/completions")
     ? resolvedBase
     : `${resolvedBase}/chat/completions`;
+  let endpoint: string;
+  try {
+    endpoint = validateOutboundUrl(rawEndpoint, "provider base URL").toString();
+  } catch (err) {
+    throw new UpstreamHttpError(
+      err instanceof Error ? err.message : "Invalid provider base URL.",
+      400,
+      false
+    );
+  }
 
   const body: Record<string, unknown> = {
     model,
@@ -1022,6 +1053,9 @@ async function invokeOpenAICompatible(params: {
   }
 
   const connectController = new AbortController();
+  const onParentAbort = () =>
+    connectController.abort(new Error("Request aborted by client"));
+  signal?.addEventListener("abort", onParentAbort, { once: true });
   const connectTimer = setTimeout(() => {
     connectController.abort(
       new Error(`${spec.label} timed out after ${timeoutMs}ms`)
@@ -1041,13 +1075,15 @@ async function invokeOpenAICompatible(params: {
     });
   } catch (err) {
     clearTimeout(connectTimer);
+    signal?.removeEventListener("abort", onParentAbort);
     throw new UpstreamHttpError(
       err instanceof Error ? err.message : `${spec.label} connection error`,
-      504,
-      true
+      signal?.aborted ? 499 : 504,
+      !signal?.aborted
     );
   }
   clearTimeout(connectTimer);
+  signal?.removeEventListener("abort", onParentAbort);
 
   if (!res.ok) {
     const errText = await res.text();
@@ -1243,19 +1279,18 @@ export async function testProviderConnection(params: {
     }
 
     if (provider === "anthropic") {
-      const endpoint = `${(baseUrl || "https://api.anthropic.com/v1").replace(/\/+$/, "")}/messages`;
-      const res = await fetch(endpoint, {
-        method: "POST",
+      const cleanBase = validateOutboundUrl(
+        (baseUrl || "https://api.anthropic.com/v1").replace(/\/+$/, ""),
+        "provider base URL"
+      )
+        .toString()
+        .replace(/\/+$/, "");
+      const res = await fetch(`${cleanBase}/models?limit=1`, {
+        method: "GET",
         headers: {
-          "Content-Type": "application/json",
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
         },
-        body: JSON.stringify({
-          model: "claude-haiku-5-5",
-          max_tokens: 8,
-          messages: [{ role: "user", content: "OK" }],
-        }),
         signal: AbortSignal.timeout(12000),
       });
       if (!res.ok) {
@@ -1269,12 +1304,17 @@ export async function testProviderConnection(params: {
       return {
         ok: true,
         latencyMs: Date.now() - start,
-        detail: "Anthropic endpoint authenticated and responsive.",
+        detail: "Anthropic models endpoint authenticated and responsive.",
       };
     }
 
     const spec = getProviderSpec(provider);
-    const resolvedBase = (baseUrl || spec.defaultBaseUrl).replace(/\/+$/, "");
+    const resolvedBase = validateOutboundUrl(
+      (baseUrl || spec.defaultBaseUrl).replace(/\/+$/, ""),
+      "provider base URL"
+    )
+      .toString()
+      .replace(/\/+$/, "");
     const res = await fetch(`${resolvedBase}/models`, {
       method: "GET",
       headers: {
@@ -1352,10 +1392,15 @@ export async function fetchProviderModels(params: {
   }
 
   if (provider === "gemini") {
-    const cleanBase = (baseUrl || spec.defaultBaseUrl)
-      .trim()
-      .replace(/\/+$/, "")
-      .replace(/\/v1beta$/, "");
+    const cleanBase = validateOutboundUrl(
+      (baseUrl || spec.defaultBaseUrl)
+        .trim()
+        .replace(/\/+$/, "")
+        .replace(/\/v1beta$/, ""),
+      "provider base URL"
+    )
+      .toString()
+      .replace(/\/+$/, "");
     const res = await fetch(
       `${cleanBase}/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=100`,
       {
@@ -1386,8 +1431,13 @@ export async function fetchProviderModels(params: {
   }
 
   if (provider === "anthropic") {
-    const cleanBase = (baseUrl || "https://api.anthropic.com/v1")
-      .trim()
+    const cleanBase = validateOutboundUrl(
+      (baseUrl || "https://api.anthropic.com/v1")
+        .trim()
+        .replace(/\/+$/, ""),
+      "provider base URL"
+    )
+      .toString()
       .replace(/\/+$/, "");
     const res = await fetch(`${cleanBase}/models?limit=100`, {
       method: "GET",
@@ -1413,7 +1463,12 @@ export async function fetchProviderModels(params: {
     return Array.from(new Set(list)).sort();
   }
 
-  const cleanBase = (baseUrl || spec.defaultBaseUrl).trim().replace(/\/+$/, "");
+  const cleanBase = validateOutboundUrl(
+    (baseUrl || spec.defaultBaseUrl).trim().replace(/\/+$/, ""),
+    "provider base URL"
+  )
+    .toString()
+    .replace(/\/+$/, "");
   const res = await fetch(`${cleanBase}/models`, {
     method: "GET",
     headers: {

@@ -189,3 +189,9 @@ export const requestLogs = pgTable("request_logs", {
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const systemConfig = pgTable("system_config", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

@@ -391,9 +391,13 @@ const msg = await client.messages.create({
   };
 
   const copySdk = async () => {
-    await navigator.clipboard.writeText(sdkSnippets[sdkTab]);
-    setCopiedSdk(true);
-    setTimeout(() => setCopiedSdk(false), 1800);
+    try {
+      await navigator.clipboard.writeText(sdkSnippets[sdkTab]);
+      setCopiedSdk(true);
+      setTimeout(() => setCopiedSdk(false), 1800);
+    } catch {
+      // ignore clipboard permission denial
+    }
   };
 
   const primaryAction = () => {
