@@ -222,21 +222,23 @@ const DDL_STATEMENTS = [
   `ALTER TABLE "combos" ADD COLUMN IF NOT EXISTS "enable_cache" boolean DEFAULT false NOT NULL`,
   `CREATE INDEX IF NOT EXISTS "idx_request_logs_user_created" ON "request_logs" ("user_id", "created_at" DESC)`,
   `CREATE INDEX IF NOT EXISTS "idx_gateway_keys_hash" ON "gateway_api_keys" ("key_hash")`,
+  `CREATE INDEX IF NOT EXISTS "idx_gateway_keys_user" ON "gateway_api_keys" ("user_id")`,
+  `CREATE INDEX IF NOT EXISTS "idx_provider_connections_user" ON "provider_connections" ("user_id")`,
+  `CREATE INDEX IF NOT EXISTS "idx_combos_user" ON "combos" ("user_id")`,
+  `CREATE INDEX IF NOT EXISTS "idx_combo_tiers_combo" ON "combo_tiers" ("combo_id")`,
+  `CREATE INDEX IF NOT EXISTS "idx_wildcard_routes_user" ON "wildcard_routes" ("user_id")`,
   `DELETE FROM "provider_connections" WHERE "use_server_key" = true`,
 ];
 
 async function executeSchemaInit(): Promise<void> {
+  const batchedSql = `${DDL_STATEMENTS.join(";\n")};`;
   if (global._asRouterPool) {
-    for (const ddl of DDL_STATEMENTS) {
-      await global._asRouterPool.query(ddl);
-    }
+    await global._asRouterPool.query(batchedSql);
     return;
   }
   if (global._asRouterPglite) {
     await global._asRouterPglite.waitReady;
-    for (const ddl of DDL_STATEMENTS) {
-      await global._asRouterPglite.exec(ddl);
-    }
+    await global._asRouterPglite.exec(batchedSql);
   }
 }
 

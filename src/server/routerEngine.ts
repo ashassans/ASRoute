@@ -239,7 +239,7 @@ async function applyRpmPacing(
 
   const oldestTs = recent[0];
   const waitMs = Math.max(50, oldestTs + 60_050 - now);
-  const maxQueueWait = hasRemainingTier ? 2500 : 7000;
+  const maxQueueWait = hasRemainingTier ? 350 : 5000;
 
   if (waitMs > maxQueueWait) {
     rpmWindowMap.set(connection.id, recent);
@@ -566,34 +566,52 @@ export async function resolveRoutingTarget(
   tiers: EnrichedTier[];
   matchedVia: "wildcard" | "combo" | "direct" | "default";
 }> {
-  const userConns = await db
-    .select()
-    .from(providerConnections)
-    .where(eq(providerConnections.userId, userId));
+  const trimmedModel = requestedModel.trim();
+  const comboLookupName = trimmedModel
+    .replace(/^(as-router-combo|combo)\//i, "")
+    .trim();
+
+  const [userConns, userCombos, userWildcards, allUserTierRows] =
+    await Promise.all([
+      db
+        .select()
+        .from(providerConnections)
+        .where(eq(providerConnections.userId, userId)),
+      db
+        .select()
+        .from(combos)
+        .where(and(eq(combos.userId, userId), eq(combos.isActive, true))),
+      db
+        .select()
+        .from(wildcardRoutes)
+        .where(
+          and(eq(wildcardRoutes.userId, userId), eq(wildcardRoutes.isActive, true))
+        ),
+      db
+        .select({ tier: comboTiers })
+        .from(comboTiers)
+        .innerJoin(combos, eq(comboTiers.comboId, combos.id))
+        .where(eq(combos.userId, userId))
+        .orderBy(asc(comboTiers.priority)),
+    ]);
+
   const connMap = new Map(userConns.map((c) => [c.id, c]));
-
-  const userCombos = await db
-    .select()
-    .from(combos)
-    .where(and(eq(combos.userId, userId), eq(combos.isActive, true)));
-
-  const userWildcards = await db
-    .select()
-    .from(wildcardRoutes)
-    .where(
-      and(eq(wildcardRoutes.userId, userId), eq(wildcardRoutes.isActive, true))
-    );
+  const tiersByComboId = new Map<string, TierRow[]>();
+  for (const row of allUserTierRows) {
+    const list = tiersByComboId.get(row.tier.comboId) || [];
+    list.push(row.tier);
+    tiersByComboId.set(row.tier.comboId, list);
+  }
 
   // 1. Check wildcard routes
   for (const rule of userWildcards) {
-    if (globToRegex(rule.pattern).test(requestedModel)) {
+    if (
+      globToRegex(rule.pattern).test(trimmedModel) ||
+      globToRegex(rule.pattern).test(comboLookupName)
+    ) {
       const matchedCombo = userCombos.find((c) => c.id === rule.comboId);
       if (matchedCombo) {
-        const rawTiers = await db
-          .select()
-          .from(comboTiers)
-          .where(eq(comboTiers.comboId, matchedCombo.id))
-          .orderBy(asc(comboTiers.priority));
+        const rawTiers = tiersByComboId.get(matchedCombo.id) || [];
         const enriched = rawTiers
           .map((t) => ({ tier: t, connection: connMap.get(t.connectionId)! }))
           .filter((x) => Boolean(x.connection));
@@ -602,16 +620,14 @@ export async function resolveRoutingTarget(
     }
   }
 
-  // 2. Check exact combo name
+  // 2. Check exact combo name (including optional combo/ prefix)
   const exactCombo = userCombos.find(
-    (c) => c.name.toLowerCase() === requestedModel.toLowerCase()
+    (c) =>
+      c.name.trim().toLowerCase() === trimmedModel.toLowerCase() ||
+      c.name.trim().toLowerCase() === comboLookupName.toLowerCase()
   );
   if (exactCombo) {
-    const rawTiers = await db
-      .select()
-      .from(comboTiers)
-      .where(eq(comboTiers.comboId, exactCombo.id))
-      .orderBy(asc(comboTiers.priority));
+    const rawTiers = tiersByComboId.get(exactCombo.id) || [];
     const enriched = rawTiers
       .map((t) => ({ tier: t, connection: connMap.get(t.connectionId)! }))
       .filter((x) => Boolean(x.connection));
@@ -724,11 +740,15 @@ export async function executeGatewayChatCompletion(params: {
   const enforceFreeOnly = Boolean(params.freeOnly || target.combo?.freeOnly);
   const cacheEnabled = Boolean(target.combo?.enableCache || params.useCache);
 
+  const pendingDbWrites: Promise<unknown>[] = [];
+
   if (target.combo && strategy === "round_robin") {
-    await db
-      .update(combos)
-      .set({ roundRobinCursor: cursor + 1 })
-      .where(eq(combos.id, target.combo.id));
+    pendingDbWrites.push(
+      db
+        .update(combos)
+        .set({ roundRobinCursor: cursor + 1 })
+        .where(eq(combos.id, target.combo.id))
+    );
   }
 
   let effectiveMessages = request.messages;
@@ -858,6 +878,10 @@ export async function executeGatewayChatCompletion(params: {
   } | null = null;
 
   for (let tierIdx = 0; tierIdx < orderedTiers.length; tierIdx++) {
+    if (tierIdx > 0 && Date.now() - startedAt > 20_000) {
+      break;
+    }
+
     const { tier, connection } = orderedTiers[tierIdx];
 
     if (enforceFreeOnly && !isModelKnownFree(connection.provider, tier.upstreamModel)) {
@@ -918,16 +942,19 @@ export async function executeGatewayChatCompletion(params: {
     }
 
     if (eligibility.promotedToHalfOpen) {
-      await db
-        .update(providerConnections)
-        .set({ circuitStatus: "half_open" })
-        .where(eq(providerConnections.id, connection.id));
+      pendingDbWrites.push(
+        db
+          .update(providerConnections)
+          .set({ circuitStatus: "half_open" })
+          .where(eq(providerConnections.id, connection.id))
+      );
       publishCircuitUpdate(userId, connection.id, "half_open");
     }
 
     const { keys: candidateKeys, cursor: startCursor } =
       resolveConnectionApiKeys(connection);
     const tierStart = Date.now();
+    const tierTimeoutMs = hasRemainingTier ? 5500 : 25000;
 
     publishRouteActivity(userId, {
       requestId,
@@ -951,6 +978,7 @@ export async function executeGatewayChatCompletion(params: {
           model: tier.upstreamModel,
           apiKey: upstreamKey,
           baseUrl: connection.baseUrl,
+          timeoutMs: tierTimeoutMs,
           request: {
             ...request,
             messages: effectiveMessages,
@@ -1027,28 +1055,51 @@ export async function executeGatewayChatCompletion(params: {
           testedAt: now.toISOString(),
         };
 
-        await db
-          .update(providerConnections)
-          .set({
-            circuitStatus: "healthy",
-            failureCount: 0,
-            cooldownUntil: null,
-            lastLatencyMs: tierLatency,
-            lastError: null,
-            keyPoolCursor: nextPoolCursor,
-            modelHealth: JSON.stringify(nextHealth),
-            usedRequestsToday: connResetDaily
-              ? 1
-              : sql`${providerConnections.usedRequestsToday} + 1`,
-            usedTokensToday: connResetDaily
-              ? totalTokens
-              : sql`${providerConnections.usedTokensToday} + ${totalTokens}`,
-            usedCostMonth: connResetMonthly
-              ? result.estimatedCostUsd
-              : sql`${providerConnections.usedCostMonth} + ${result.estimatedCostUsd}`,
-            ...(connResetDaily || connResetMonthly ? { quotaResetAt: now } : {}),
-          })
-          .where(eq(providerConnections.id, connection.id));
+        const postSuccessWrites: Promise<unknown>[] = [
+          ...pendingDbWrites,
+          db
+            .update(providerConnections)
+            .set({
+              circuitStatus: "healthy",
+              failureCount: 0,
+              cooldownUntil: null,
+              lastLatencyMs: tierLatency,
+              lastError: null,
+              keyPoolCursor: nextPoolCursor,
+              modelHealth: JSON.stringify(nextHealth),
+              usedRequestsToday: connResetDaily
+                ? 1
+                : sql`${providerConnections.usedRequestsToday} + 1`,
+              usedTokensToday: connResetDaily
+                ? totalTokens
+                : sql`${providerConnections.usedTokensToday} + ${totalTokens}`,
+              usedCostMonth: connResetMonthly
+                ? result.estimatedCostUsd
+                : sql`${providerConnections.usedCostMonth} + ${result.estimatedCostUsd}`,
+              ...(connResetDaily || connResetMonthly ? { quotaResetAt: now } : {}),
+            })
+            .where(eq(providerConnections.id, connection.id)),
+          recordRequestLog({
+            userId,
+            apiKeyId,
+            apiKeyPrefix,
+            comboName: target.combo?.name ?? null,
+            requestedModel: request.model,
+            resolvedProvider: connection.provider,
+            resolvedModel: tier.upstreamModel,
+            connectionName: connection.name,
+            statusCode: 200,
+            outcome: hadPriorFailure ? "fallback_success" : "success",
+            fallbackAttempts: attempts,
+            promptTokens: result.promptTokens,
+            completionTokens: result.completionTokens,
+            estimatedCostUsd: result.estimatedCostUsd,
+            latencyMs: totalLatency,
+            compressed,
+            detectedIntent,
+            errorMessage: null,
+          }),
+        ];
 
         if (connection.circuitStatus !== "healthy") {
           publishCircuitUpdate(userId, connection.id, "healthy");
@@ -1059,24 +1110,28 @@ export async function executeGatewayChatCompletion(params: {
           !tier.id.startsWith("direct-") &&
           !tier.id.startsWith("auto-")
         ) {
-          await db
-            .update(comboTiers)
-            .set({ requestCount: sql`${comboTiers.requestCount} + 1` })
-            .where(eq(comboTiers.id, tier.id));
+          postSuccessWrites.push(
+            db
+              .update(comboTiers)
+              .set({ requestCount: sql`${comboTiers.requestCount} + 1` })
+              .where(eq(comboTiers.id, tier.id))
+          );
         }
 
         if (apiKeyId) {
-          await db
-            .update(gatewayApiKeys)
-            .set({
-              totalRequests: sql`${gatewayApiKeys.totalRequests} + 1`,
-              totalTokens: sql`${gatewayApiKeys.totalTokens} + ${totalTokens}`,
-              totalCostUsd: sql`${gatewayApiKeys.totalCostUsd} + ${result.estimatedCostUsd}`,
-              usedTokensToday: sql`${gatewayApiKeys.usedTokensToday} + ${totalTokens}`,
-              usedCostMonth: sql`${gatewayApiKeys.usedCostMonth} + ${result.estimatedCostUsd}`,
-              lastUsedAt: new Date(),
-            })
-            .where(eq(gatewayApiKeys.id, apiKeyId));
+          postSuccessWrites.push(
+            db
+              .update(gatewayApiKeys)
+              .set({
+                totalRequests: sql`${gatewayApiKeys.totalRequests} + 1`,
+                totalTokens: sql`${gatewayApiKeys.totalTokens} + ${totalTokens}`,
+                totalCostUsd: sql`${gatewayApiKeys.totalCostUsd} + ${result.estimatedCostUsd}`,
+                usedTokensToday: sql`${gatewayApiKeys.usedTokensToday} + ${totalTokens}`,
+                usedCostMonth: sql`${gatewayApiKeys.usedCostMonth} + ${result.estimatedCostUsd}`,
+                lastUsedAt: new Date(),
+              })
+              .where(eq(gatewayApiKeys.id, apiKeyId))
+          );
         }
 
         if (cacheKey) {
@@ -1096,26 +1151,7 @@ export async function executeGatewayChatCompletion(params: {
           });
         }
 
-        await recordRequestLog({
-          userId,
-          apiKeyId,
-          apiKeyPrefix,
-          comboName: target.combo?.name ?? null,
-          requestedModel: request.model,
-          resolvedProvider: connection.provider,
-          resolvedModel: tier.upstreamModel,
-          connectionName: connection.name,
-          statusCode: 200,
-          outcome: hadPriorFailure ? "fallback_success" : "success",
-          fallbackAttempts: attempts,
-          promptTokens: result.promptTokens,
-          completionTokens: result.completionTokens,
-          estimatedCostUsd: result.estimatedCostUsd,
-          latencyMs: totalLatency,
-          compressed,
-          detectedIntent,
-          errorMessage: null,
-        });
+        await Promise.allSettled(postSuccessWrites);
 
         return {
           id: requestId,
@@ -1193,33 +1229,42 @@ export async function executeGatewayChatCompletion(params: {
           supportsTools: false,
           testedAt: now.toISOString(),
         };
-        await db
-          .update(providerConnections)
-          .set({ modelHealth: JSON.stringify(nextHealth) })
-          .where(eq(providerConnections.id, connection.id));
+        pendingDbWrites.push(
+          db
+            .update(providerConnections)
+            .set({ modelHealth: JSON.stringify(nextHealth) })
+            .where(eq(providerConnections.id, connection.id))
+        );
       } else {
-        const newFailureCount = connection.failureCount + 1;
+        const isModelSpecificClientError =
+          statusCode === 400 || statusCode === 404 || statusCode === 422;
+        const newFailureCount = isModelSpecificClientError
+          ? connection.failureCount
+          : connection.failureCount + 1;
         const shouldOpenCircuit =
-          statusCode === 429 ||
-          statusCode === 401 ||
-          statusCode === 403 ||
-          newFailureCount >= 2;
+          !isModelSpecificClientError &&
+          (statusCode === 429 ||
+            statusCode === 401 ||
+            statusCode === 403 ||
+            newFailureCount >= 2);
 
         const nextStatus = shouldOpenCircuit ? "open" : connection.circuitStatus;
         const cooldownUntil = shouldOpenCircuit
           ? new Date(Date.now() + (statusCode === 429 ? 30_000 : 45_000))
           : connection.cooldownUntil;
 
-        await db
-          .update(providerConnections)
-          .set({
-            failureCount: newFailureCount,
-            circuitStatus: nextStatus,
-            cooldownUntil,
-            lastLatencyMs: tierLatency,
-            lastError: errMessage.slice(0, 300),
-          })
-          .where(eq(providerConnections.id, connection.id));
+        pendingDbWrites.push(
+          db
+            .update(providerConnections)
+            .set({
+              failureCount: newFailureCount,
+              circuitStatus: nextStatus,
+              cooldownUntil,
+              lastLatencyMs: tierLatency,
+              lastError: errMessage.slice(0, 300),
+            })
+            .where(eq(providerConnections.id, connection.id))
+        );
 
         if (shouldOpenCircuit) {
           publishCircuitUpdate(userId, connection.id, "open");
@@ -1365,26 +1410,29 @@ export async function executeGatewayChatCompletion(params: {
     : lastFailure?.reason ||
       "All candidate tiers skipped due to circuit breakers or exhausted quotas.";
 
-  await recordRequestLog({
-    userId,
-    apiKeyId,
-    apiKeyPrefix,
-    comboName: target.combo?.name ?? null,
-    requestedModel: request.model,
-    resolvedProvider: lastFailure?.provider || "none",
-    resolvedModel: lastFailure?.model || request.model,
-    connectionName: lastFailure?.connectionName || null,
-    statusCode: finalStatus,
-    outcome: finalStatus === 429 ? "rate_limited" : "error",
-    fallbackAttempts: attempts,
-    promptTokens: 0,
-    completionTokens: 0,
-    estimatedCostUsd: 0,
-    latencyMs: totalLatency,
-    compressed,
-    detectedIntent,
-    errorMessage: finalReason,
-  });
+  await Promise.allSettled([
+    ...pendingDbWrites,
+    recordRequestLog({
+      userId,
+      apiKeyId,
+      apiKeyPrefix,
+      comboName: target.combo?.name ?? null,
+      requestedModel: request.model,
+      resolvedProvider: lastFailure?.provider || "none",
+      resolvedModel: lastFailure?.model || request.model,
+      connectionName: lastFailure?.connectionName || null,
+      statusCode: finalStatus,
+      outcome: finalStatus === 429 ? "rate_limited" : "error",
+      fallbackAttempts: attempts,
+      promptTokens: 0,
+      completionTokens: 0,
+      estimatedCostUsd: 0,
+      latencyMs: totalLatency,
+      compressed,
+      detectedIntent,
+      errorMessage: finalReason,
+    }),
+  ]);
 
   throw new UpstreamHttpError(finalReason, finalStatus, false);
 }

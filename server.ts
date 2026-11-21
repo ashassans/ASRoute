@@ -4,7 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "cors";
-import { and, asc, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import express, {
   type NextFunction,
   type Request,
@@ -500,6 +500,7 @@ app.post("/v1/chat/completions", async (req: Request, res: Response) => {
       res.setHeader("Cache-Control", "no-cache, no-transform");
       res.setHeader("Connection", "keep-alive");
       res.flushHeaders?.();
+      res.write(": asrouter-stream\n\n");
 
       const streamId = `chatcmpl-${crypto.randomBytes(8).toString("hex")}`;
       const created = Math.floor(Date.now() / 1000);
@@ -1016,7 +1017,7 @@ app.get(
     try {
       const userId = req.authUser!.id;
 
-      const [keys, conns, userCombos, tiers, wildcards, recentLogs, userAccounts] =
+      const [keys, conns, userCombos, wildcards, recentLogs, userAccounts] =
         await Promise.all([
           db
             .select()
@@ -1033,7 +1034,6 @@ app.get(
             .from(combos)
             .where(eq(combos.userId, userId))
             .orderBy(desc(combos.createdAt)),
-          db.select().from(comboTiers).orderBy(asc(comboTiers.priority)),
           db
             .select()
             .from(wildcardRoutes)
@@ -1044,7 +1044,7 @@ app.get(
             .from(requestLogs)
             .where(eq(requestLogs.userId, userId))
             .orderBy(desc(requestLogs.createdAt))
-            .limit(150),
+            .limit(100),
           db
             .select({
               providerId: account.providerId,
@@ -1054,15 +1054,22 @@ app.get(
             .where(eq(account.userId, userId)),
         ]);
 
+      const comboIds = userCombos.map((c) => c.id);
+      const userTiers =
+        comboIds.length > 0
+          ? await db
+              .select()
+              .from(comboTiers)
+              .where(inArray(comboTiers.comboId, comboIds))
+              .orderBy(asc(comboTiers.priority))
+          : [];
+
       const hasPassword = userAccounts.some(
         (a) => a.providerId === "credential" || Boolean(a.password)
       );
       const authProviders = Array.from(
         new Set(userAccounts.map((a) => a.providerId))
       );
-
-      const comboIdSet = new Set(userCombos.map((c) => c.id));
-      const userTiers = tiers.filter((t) => comboIdSet.has(t.comboId));
 
       const sanitizedConnections = conns.map((c) => sanitizeConnection(c));
 
@@ -1696,23 +1703,31 @@ app.post(
         })
         .returning();
 
-      const insertedTiers = [];
-      for (let i = 0; i < tiers.length; i++) {
-        const t = tiers[i];
-        const [tierRow] = await db
-          .insert(comboTiers)
-          .values({
-            id: `tier_${crypto.randomBytes(8).toString("hex")}`,
-            comboId,
-            connectionId: String(t.connectionId),
-            upstreamModel: String(t.upstreamModel),
-            priority: typeof t.priority === "number" ? t.priority : i,
-            weight: typeof t.weight === "number" ? Math.max(1, t.weight) : 100,
-            maxRetries: typeof t.maxRetries === "number" ? t.maxRetries : 1,
-          })
-          .returning();
-        insertedTiers.push(tierRow);
-      }
+      const tierValues = tiers.map(
+        (
+          t: {
+            connectionId: string;
+            upstreamModel: string;
+            priority?: number;
+            weight?: number;
+            maxRetries?: number;
+          },
+          i: number
+        ) => ({
+          id: `tier_${crypto.randomBytes(8).toString("hex")}`,
+          comboId,
+          connectionId: String(t.connectionId),
+          upstreamModel: String(t.upstreamModel),
+          priority: typeof t.priority === "number" ? t.priority : i,
+          weight: typeof t.weight === "number" ? Math.max(1, t.weight) : 100,
+          maxRetries: typeof t.maxRetries === "number" ? t.maxRetries : 1,
+        })
+      );
+
+      const insertedTiers =
+        tierValues.length > 0
+          ? await db.insert(comboTiers).values(tierValues).returning()
+          : [];
 
       return res.status(201).json({
         combo: { ...created, tiers: insertedTiers },
@@ -1829,23 +1844,19 @@ app.post(
         comboRow = created;
       }
 
-      const insertedTiers = [];
-      for (let i = 0; i < pickedTiers.length; i++) {
-        const item = pickedTiers[i];
-        const [tierRow] = await db
-          .insert(comboTiers)
-          .values({
-            id: `tier_${crypto.randomBytes(8).toString("hex")}`,
-            comboId: comboRow.id,
-            connectionId: item.connectionId,
-            upstreamModel: item.upstreamModel,
-            priority: i,
-            weight: 100,
-            maxRetries: 1,
-          })
-          .returning();
-        insertedTiers.push(tierRow);
-      }
+      const tierValues = pickedTiers.map((item, i) => ({
+        id: `tier_${crypto.randomBytes(8).toString("hex")}`,
+        comboId: comboRow.id,
+        connectionId: item.connectionId,
+        upstreamModel: item.upstreamModel,
+        priority: i,
+        weight: 100,
+        maxRetries: 1,
+      }));
+      const insertedTiers =
+        tierValues.length > 0
+          ? await db.insert(comboTiers).values(tierValues).returning()
+          : [];
 
       return res.json({
         combo: { ...comboRow, tiers: insertedTiers },
@@ -1917,23 +1928,30 @@ app.patch(
 
       if (Array.isArray(tiers)) {
         await db.delete(comboTiers).where(eq(comboTiers.comboId, id));
-        currentTiers = [];
-        for (let i = 0; i < tiers.length; i++) {
-          const t = tiers[i];
-          const [tierRow] = await db
-            .insert(comboTiers)
-            .values({
-              id: `tier_${crypto.randomBytes(8).toString("hex")}`,
-              comboId: id,
-              connectionId: String(t.connectionId),
-              upstreamModel: String(t.upstreamModel),
-              priority: typeof t.priority === "number" ? t.priority : i,
-              weight: typeof t.weight === "number" ? Math.max(1, t.weight) : 100,
-              maxRetries: typeof t.maxRetries === "number" ? t.maxRetries : 1,
-            })
-            .returning();
-          currentTiers.push(tierRow);
-        }
+        const tierValues = tiers.map(
+          (
+            t: {
+              connectionId: string;
+              upstreamModel: string;
+              priority?: number;
+              weight?: number;
+              maxRetries?: number;
+            },
+            i: number
+          ) => ({
+            id: `tier_${crypto.randomBytes(8).toString("hex")}`,
+            comboId: id,
+            connectionId: String(t.connectionId),
+            upstreamModel: String(t.upstreamModel),
+            priority: typeof t.priority === "number" ? t.priority : i,
+            weight: typeof t.weight === "number" ? Math.max(1, t.weight) : 100,
+            maxRetries: typeof t.maxRetries === "number" ? t.maxRetries : 1,
+          })
+        );
+        currentTiers =
+          tierValues.length > 0
+            ? await db.insert(comboTiers).values(tierValues).returning()
+            : [];
       }
 
       return res.json({ combo: { ...updated, tiers: currentTiers } });

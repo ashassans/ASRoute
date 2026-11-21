@@ -737,11 +737,13 @@ export default function App() {
                   <ProvidersView
                     connections={workspace.connections}
                     onRefresh={fetchBootstrap}
+                    onUpdateWorkspace={setWorkspace}
                     onNotify={notify}
                   />
                 )}
                 {activeTab === "models" && (
                   <ModelsView
+                    combos={workspace.combos}
                     connections={workspace.connections}
                     onConnectProvider={() => navigateTab("providers")}
                     onNotify={notify}
@@ -753,6 +755,7 @@ export default function App() {
                     connections={workspace.connections}
                     wildcards={workspace.wildcards}
                     onRefresh={fetchBootstrap}
+                    onUpdateWorkspace={setWorkspace}
                     onNotify={notify}
                   />
                 )}
@@ -763,6 +766,7 @@ export default function App() {
                     gatewayEndpoint={workspace.environment.gatewayEndpoint}
                     openCreateCounter={openCreateKeyCounter}
                     onRefresh={fetchBootstrap}
+                    onUpdateWorkspace={setWorkspace}
                     onNotify={notify}
                   />
                 )}

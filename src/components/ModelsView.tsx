@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { Check, Copy, Search } from "lucide-react";
 import { getProviderSpec } from "../shared/catalog.ts";
-import type { ProviderConnection } from "../types/gateway.ts";
+import type { Combo, ProviderConnection } from "../types/gateway.ts";
 
 interface ModelsViewProps {
+  combos: Combo[];
   connections: ProviderConnection[];
   onConnectProvider: () => void;
   onNotify: (msg: string, tone?: "success" | "error") => void;
@@ -16,6 +17,7 @@ interface ModelRow {
 }
 
 export function ModelsView({
+  combos,
   connections,
   onConnectProvider,
   onNotify,
@@ -26,6 +28,18 @@ export function ModelsView({
   const rows = useMemo<ModelRow[]>(() => {
     const list: ModelRow[] = [];
     const seen = new Set<string>();
+
+    for (const combo of combos) {
+      if (!combo.isActive) continue;
+      const key = `combo:${combo.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push({
+        key,
+        providerName: "Combo",
+        modelId: combo.name,
+      });
+    }
 
     for (const conn of connections) {
       if (!conn.isActive) continue;
@@ -57,7 +71,7 @@ export function ModelsView({
     }
 
     return list;
-  }, [connections]);
+  }, [combos, connections]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowDown,
   ArrowUp,
+  Check,
+  Copy,
   GripVertical,
   Pencil,
   Play,
@@ -18,6 +20,7 @@ import {
 } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import type {
+  BootstrapPayload,
   Combo,
   ProviderConnection,
   WildcardRoute,
@@ -28,6 +31,7 @@ interface CombosViewProps {
   connections: ProviderConnection[];
   wildcards: WildcardRoute[];
   onRefresh: () => Promise<void>;
+  onUpdateWorkspace: React.Dispatch<React.SetStateAction<BootstrapPayload | null>>;
   onNotify: (msg: string, tone?: "success" | "error") => void;
 }
 
@@ -53,6 +57,7 @@ export function CombosView({
   connections,
   wildcards,
   onRefresh,
+  onUpdateWorkspace,
   onNotify,
 }: CombosViewProps) {
   const [showBuilder, setShowBuilder] = useState(false);
@@ -69,6 +74,20 @@ export function CombosView({
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [copiedComboId, setCopiedComboId] = useState<string | null>(null);
+
+  const handleCopyComboId = async (combo: Combo) => {
+    try {
+      await navigator.clipboard.writeText(combo.name);
+      setCopiedComboId(combo.id);
+      onNotify(`Copied ${combo.name}`, "success");
+      setTimeout(() => {
+        setCopiedComboId((prev) => (prev === combo.id ? null : prev));
+      }, 1500);
+    } catch {
+      onNotify("Failed to copy Combo Model ID", "error");
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -214,8 +233,22 @@ export function CombosView({
         onNotify(data.error || "Failed to save combo", "error");
         return;
       }
+      const savedCombo = data.combo as Combo | undefined;
+      if (savedCombo) {
+        onUpdateWorkspace((prev) =>
+          prev
+            ? {
+                ...prev,
+                combos: editingComboId
+                  ? prev.combos.map((c) => (c.id === savedCombo.id ? savedCombo : c))
+                  : [savedCombo, ...prev.combos],
+              }
+            : prev
+        );
+      } else {
+        await onRefresh();
+      }
       setShowBuilder(false);
-      await onRefresh();
       onNotify(
         editingComboId
           ? `Combo "${comboName.trim()}" updated.`
@@ -230,26 +263,54 @@ export function CombosView({
   };
 
   const handleToggleCombo = async (combo: Combo) => {
+    const nextActive = !combo.isActive;
+    onUpdateWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            combos: prev.combos.map((c) =>
+              c.id === combo.id ? { ...c, isActive: nextActive } : c
+            ),
+          }
+        : prev
+    );
     try {
       const res = await fetch(`/api/combos/${combo.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !combo.isActive }),
+        body: JSON.stringify({ isActive: nextActive }),
       });
-      if (res.ok) await onRefresh();
+      if (!res.ok) {
+        await onRefresh();
+        onNotify("Failed to update combo state", "error");
+      }
     } catch {
+      await onRefresh();
       onNotify("Failed to update combo state", "error");
     }
   };
 
   const handleDeleteCombo = async (id: string) => {
+    setConfirmDeleteId(null);
+    onUpdateWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            combos: prev.combos.filter((c) => c.id !== id),
+            wildcards: prev.wildcards.filter((w) => w.comboId !== id),
+          }
+        : prev
+    );
     try {
       const res = await fetch(`/api/combos/${id}`, { method: "DELETE" });
       if (res.ok) {
-        await onRefresh();
         onNotify("Combo deleted.", "success");
+      } else {
+        await onRefresh();
+        onNotify("Failed to delete combo", "error");
       }
     } catch {
+      await onRefresh();
       onNotify("Failed to delete combo", "error");
     }
   };
@@ -266,7 +327,21 @@ export function CombosView({
         onNotify(data.error || "Unable to build free-auto combo", "error");
         return;
       }
-      await onRefresh();
+      const builtCombo = data.combo as Combo | undefined;
+      if (builtCombo) {
+        onUpdateWorkspace((prev) => {
+          if (!prev) return prev;
+          const exists = prev.combos.some((c) => c.id === builtCombo.id);
+          return {
+            ...prev,
+            combos: exists
+              ? prev.combos.map((c) => (c.id === builtCombo.id ? builtCombo : c))
+              : [builtCombo, ...prev.combos],
+          };
+        });
+      } else {
+        await onRefresh();
+      }
       onNotify(
         `Built "${data.combo?.name || "free-auto"}" with ${data.tierCount ?? 0} verified free tier(s).`,
         "success"
@@ -290,9 +365,18 @@ export function CombosView({
           comboId: wcComboId,
         }),
       });
+      const data = await res.json();
       if (res.ok) {
         setWcPattern("");
-        await onRefresh();
+        if (data.wildcard) {
+          onUpdateWorkspace((prev) =>
+            prev
+              ? { ...prev, wildcards: [data.wildcard, ...prev.wildcards] }
+              : prev
+          );
+        } else {
+          await onRefresh();
+        }
         onNotify("Wildcard mapping added.", "success");
       }
     } catch {
@@ -301,10 +385,19 @@ export function CombosView({
   };
 
   const handleDeleteWildcard = async (id: string) => {
+    onUpdateWorkspace((prev) =>
+      prev
+        ? { ...prev, wildcards: prev.wildcards.filter((w) => w.id !== id) }
+        : prev
+    );
     try {
       const res = await fetch(`/api/wildcards/${id}`, { method: "DELETE" });
-      if (res.ok) await onRefresh();
+      if (!res.ok) {
+        await onRefresh();
+        onNotify("Failed to remove wildcard", "error");
+      }
     } catch {
+      await onRefresh();
       onNotify("Failed to remove wildcard", "error");
     }
   };
@@ -398,9 +491,34 @@ export function CombosView({
               >
                 <div>
                   <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="font-mono text-base font-semibold text-white">
-                        {combo.name}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono text-base font-semibold text-white truncate">
+                          {combo.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyComboId(combo)}
+                          title="Copy Combo Model ID"
+                          aria-label={`Copy combo model ID ${combo.name}`}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded border transition-colors shrink-0 ${
+                            copiedComboId === combo.id
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                              : "border-[#222227] bg-[#09090B] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
+                          }`}
+                        >
+                          {copiedComboId === combo.id ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              <span>Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy ID</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                       <div className="mt-1 text-xs text-[#A1A1AA] flex flex-wrap items-center gap-x-1.5">
                         <span>{stratSpec?.label || combo.strategy}</span>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
-import type { Combo, GatewayApiKey } from "../types/gateway.ts";
+import type { BootstrapPayload, Combo, GatewayApiKey } from "../types/gateway.ts";
 
 interface ApiKeysViewProps {
   keys: GatewayApiKey[];
@@ -10,6 +10,7 @@ interface ApiKeysViewProps {
   gatewayEndpoint: string;
   openCreateCounter: number;
   onRefresh: () => Promise<void>;
+  onUpdateWorkspace: React.Dispatch<React.SetStateAction<BootstrapPayload | null>>;
   onNotify: (msg: string, tone?: "success" | "error") => void;
 }
 
@@ -19,6 +20,7 @@ export function ApiKeysView({
   gatewayEndpoint,
   openCreateCounter,
   onRefresh,
+  onUpdateWorkspace,
   onNotify,
 }: ApiKeysViewProps) {
   const [showCreate, setShowCreate] = useState(false);
@@ -98,6 +100,21 @@ export function ApiKeysView({
       if (!isEdit && data.rawKey) {
         setRevealedKey(data.rawKey);
       }
+      const savedKey = data.key as GatewayApiKey | undefined;
+      if (savedKey) {
+        onUpdateWorkspace((prev) =>
+          prev
+            ? {
+                ...prev,
+                keys: isEdit
+                  ? prev.keys.map((k) => (k.id === savedKey.id ? savedKey : k))
+                  : [savedKey, ...prev.keys],
+              }
+            : prev
+        );
+      } else {
+        await onRefresh();
+      }
       setShowCreate(false);
       setEditingId(null);
       setName("");
@@ -105,7 +122,6 @@ export function ApiKeysView({
       setDailyTokenLimit("");
       setMonthlyUsdLimit("");
       setFreeOnly(false);
-      await onRefresh();
       onNotify(
         isEdit ? "API key updated." : "Gateway API key created.",
         "success"
@@ -118,26 +134,48 @@ export function ApiKeysView({
   };
 
   const handleToggle = async (k: GatewayApiKey) => {
+    const nextActive = !k.isActive;
+    onUpdateWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            keys: prev.keys.map((item) =>
+              item.id === k.id ? { ...item, isActive: nextActive } : item
+            ),
+          }
+        : prev
+    );
     try {
       const res = await fetch(`/api/keys/${k.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !k.isActive }),
+        body: JSON.stringify({ isActive: nextActive }),
       });
-      if (res.ok) await onRefresh();
+      if (!res.ok) {
+        await onRefresh();
+        onNotify("Failed to update key state", "error");
+      }
     } catch {
+      await onRefresh();
       onNotify("Failed to update key state", "error");
     }
   };
 
   const handleDelete = async (id: string) => {
+    setConfirmDeleteId(null);
+    onUpdateWorkspace((prev) =>
+      prev ? { ...prev, keys: prev.keys.filter((k) => k.id !== id) } : prev
+    );
     try {
       const res = await fetch(`/api/keys/${id}`, { method: "DELETE" });
       if (res.ok) {
-        await onRefresh();
         onNotify("API key revoked.", "success");
+      } else {
+        await onRefresh();
+        onNotify("Failed to revoke key", "error");
       }
     } catch {
+      await onRefresh();
       onNotify("Failed to revoke key", "error");
     }
   };

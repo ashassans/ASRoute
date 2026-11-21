@@ -364,10 +364,12 @@ export async function invokeUpstreamCompletion(params: {
   model: string;
   apiKey: string;
   baseUrl?: string | null;
+  timeoutMs?: number;
   request: NormalizedCompletionRequest;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<UpstreamExecutionResult> {
-  const { provider, model, apiKey, baseUrl, request, onStreamDelta } = params;
+  const { provider, model, apiKey, baseUrl, timeoutMs, request, onStreamDelta } =
+    params;
 
   if (!apiKey) {
     throw new UpstreamHttpError(
@@ -381,6 +383,7 @@ export async function invokeUpstreamCompletion(params: {
     return invokeGemini({
       model,
       apiKey,
+      timeoutMs,
       request,
       onStreamDelta,
     });
@@ -391,6 +394,7 @@ export async function invokeUpstreamCompletion(params: {
       model,
       apiKey,
       baseUrl,
+      timeoutMs,
       request,
       onStreamDelta,
     });
@@ -401,21 +405,50 @@ export async function invokeUpstreamCompletion(params: {
     model,
     apiKey,
     baseUrl,
+    timeoutMs,
     request,
     onStreamDelta,
   });
 }
 
+async function withInitialTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new UpstreamHttpError(
+              `${label} timed out after ${timeoutMs}ms`,
+              504,
+              true
+            )
+          );
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function invokeGemini(params: {
   model: string;
   apiKey: string;
+  timeoutMs?: number;
   request: NormalizedCompletionRequest;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<UpstreamExecutionResult> {
-  const { model, apiKey, request, onStreamDelta } = params;
+  const { model, apiKey, timeoutMs = 25000, request, onStreamDelta } = params;
   const ai = new GoogleGenAI({
     apiKey,
     httpOptions: {
+      timeout: timeoutMs,
       headers: {
         "User-Agent": "aistudio-build",
       },
@@ -435,11 +468,15 @@ async function invokeGemini(params: {
 
   try {
     if (request.stream && onStreamDelta) {
-      const stream = await ai.models.generateContentStream({
-        model,
-        contents,
-        config: Object.keys(config).length > 0 ? config : undefined,
-      });
+      const stream = await withInitialTimeout(
+        ai.models.generateContentStream({
+          model,
+          contents,
+          config: Object.keys(config).length > 0 ? config : undefined,
+        }),
+        timeoutMs,
+        `Gemini (${model})`
+      );
 
       let fullText = "";
       let promptTokens = 0;
@@ -515,11 +552,15 @@ async function invokeGemini(params: {
       };
     }
 
-    const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: Object.keys(config).length > 0 ? config : undefined,
-    });
+    const response = await withInitialTimeout(
+      ai.models.generateContent({
+        model,
+        contents,
+        config: Object.keys(config).length > 0 ? config : undefined,
+      }),
+      timeoutMs,
+      `Gemini (${model})`
+    );
 
     const text = response.text ?? "";
     const toolCalls: OpenAIToolCall[] = (response.functionCalls || []).map(
@@ -574,10 +615,18 @@ async function invokeAnthropic(params: {
   model: string;
   apiKey: string;
   baseUrl?: string | null;
+  timeoutMs?: number;
   request: NormalizedCompletionRequest;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<UpstreamExecutionResult> {
-  const { model, apiKey, baseUrl, request, onStreamDelta } = params;
+  const {
+    model,
+    apiKey,
+    baseUrl,
+    timeoutMs = 25000,
+    request,
+    onStreamDelta,
+  } = params;
   const endpoint = `${(baseUrl || "https://api.anthropic.com/v1").replace(/\/+$/, "")}/messages`;
 
   const systemParts: string[] = [];
@@ -709,16 +758,34 @@ async function invokeAnthropic(params: {
     }
   }
 
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(45000),
-  });
+  const connectController = new AbortController();
+  const connectTimer = setTimeout(() => {
+    connectController.abort(
+      new Error(`Anthropic upstream timed out after ${timeoutMs}ms`)
+    );
+  }, timeoutMs);
+
+  let res: globalThis.Response;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(body),
+      signal: connectController.signal,
+    });
+  } catch (err) {
+    clearTimeout(connectTimer);
+    throw new UpstreamHttpError(
+      err instanceof Error ? err.message : "Anthropic connection error",
+      504,
+      true
+    );
+  }
+  clearTimeout(connectTimer);
 
   if (!res.ok) {
     const errText = await res.text();
@@ -914,10 +981,19 @@ async function invokeOpenAICompatible(params: {
   model: string;
   apiKey: string;
   baseUrl?: string | null;
+  timeoutMs?: number;
   request: NormalizedCompletionRequest;
   onStreamDelta?: (delta: StreamDeltaPayload) => void;
 }): Promise<UpstreamExecutionResult> {
-  const { provider, model, apiKey, baseUrl, request, onStreamDelta } = params;
+  const {
+    provider,
+    model,
+    apiKey,
+    baseUrl,
+    timeoutMs = 25000,
+    request,
+    onStreamDelta,
+  } = params;
   const spec = getProviderSpec(provider);
   const resolvedBase = (baseUrl || spec.defaultBaseUrl).replace(/\/+$/, "");
   const endpoint = resolvedBase.endsWith("/chat/completions")
@@ -945,15 +1021,33 @@ async function invokeOpenAICompatible(params: {
     body.stream_options = { include_usage: true };
   }
 
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(45000),
-  });
+  const connectController = new AbortController();
+  const connectTimer = setTimeout(() => {
+    connectController.abort(
+      new Error(`${spec.label} timed out after ${timeoutMs}ms`)
+    );
+  }, timeoutMs);
+
+  let res: globalThis.Response;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: connectController.signal,
+    });
+  } catch (err) {
+    clearTimeout(connectTimer);
+    throw new UpstreamHttpError(
+      err instanceof Error ? err.message : `${spec.label} connection error`,
+      504,
+      true
+    );
+  }
+  clearTimeout(connectTimer);
 
   if (!res.ok) {
     const errText = await res.text();

@@ -13,11 +13,12 @@ import {
 } from "lucide-react";
 import { PROVIDER_CATALOG, getProviderSpec } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
-import type { ProviderConnection } from "../types/gateway.ts";
+import type { BootstrapPayload, ProviderConnection } from "../types/gateway.ts";
 
 interface ProvidersViewProps {
   connections: ProviderConnection[];
   onRefresh: () => Promise<void>;
+  onUpdateWorkspace: React.Dispatch<React.SetStateAction<BootstrapPayload | null>>;
   onNotify: (msg: string, tone?: "success" | "error") => void;
 }
 
@@ -40,6 +41,7 @@ function getUtcResetCountdown(): string {
 export function ProvidersView({
   connections,
   onRefresh,
+  onUpdateWorkspace,
   onNotify,
 }: ProvidersViewProps) {
   const [showAdd, setShowAdd] = useState(false);
@@ -249,9 +251,22 @@ export function ProvidersView({
         onNotify(data.error || "Failed to save provider connection", "error");
         return;
       }
+      const savedConn = data.connection as ProviderConnection | undefined;
+      if (savedConn) {
+        onUpdateWorkspace((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            connections: isEdit
+              ? prev.connections.map((c) => (c.id === savedConn.id ? savedConn : c))
+              : [savedConn, ...prev.connections],
+          };
+        });
+      } else {
+        await onRefresh();
+      }
       setShowAdd(false);
       setEditingId(null);
-      await onRefresh();
       onNotify(
         isEdit ? "Provider connection updated." : "Provider connection saved.",
         "success"
@@ -264,18 +279,47 @@ export function ProvidersView({
   };
 
   const handleToggle = async (conn: ProviderConnection) => {
+    const nextActive = !conn.isActive;
+    onUpdateWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            connections: prev.connections.map((c) =>
+              c.id === conn.id ? { ...c, isActive: nextActive } : c
+            ),
+          }
+        : prev
+    );
     try {
       const res = await fetch(`/api/providers/${conn.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !conn.isActive }),
+        body: JSON.stringify({ isActive: nextActive }),
       });
       if (!res.ok) {
+        onUpdateWorkspace((prev) =>
+          prev
+            ? {
+                ...prev,
+                connections: prev.connections.map((c) =>
+                  c.id === conn.id ? { ...c, isActive: conn.isActive } : c
+                ),
+              }
+            : prev
+        );
         onNotify("Failed to update provider state", "error");
-        return;
       }
-      await onRefresh();
     } catch {
+      onUpdateWorkspace((prev) =>
+        prev
+          ? {
+              ...prev,
+              connections: prev.connections.map((c) =>
+                c.id === conn.id ? { ...c, isActive: conn.isActive } : c
+              ),
+            }
+          : prev
+      );
       onNotify("Network error updating provider", "error");
     }
   };
@@ -397,27 +441,64 @@ export function ProvidersView({
   };
 
   const handleResetCircuit = async (id: string) => {
+    onUpdateWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            connections: prev.connections.map((c) =>
+              c.id === id
+                ? {
+                    ...c,
+                    circuitStatus: "healthy",
+                    failureCount: 0,
+                    cooldownUntil: null,
+                    lastError: null,
+                  }
+                : c
+            ),
+          }
+        : prev
+    );
     try {
       const res = await fetch(`/api/providers/${id}/reset-circuit`, {
         method: "POST",
       });
       if (res.ok) {
-        await onRefresh();
         onNotify("Circuit breaker reset to Healthy.", "success");
+      } else {
+        await onRefresh();
       }
     } catch {
+      await onRefresh();
       onNotify("Failed to reset circuit breaker", "error");
     }
   };
 
   const handleDelete = async (id: string) => {
+    setOpenMenuId(null);
+    setConfirmDeleteId(null);
+    onUpdateWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            connections: prev.connections.filter((c) => c.id !== id),
+            combos: prev.combos.map((combo) => ({
+              ...combo,
+              tiers: combo.tiers.filter((t) => t.connectionId !== id),
+            })),
+          }
+        : prev
+    );
     try {
       const res = await fetch(`/api/providers/${id}`, { method: "DELETE" });
       if (res.ok) {
-        await onRefresh();
         onNotify("Provider connection removed.", "success");
+      } else {
+        await onRefresh();
+        onNotify("Failed to remove provider", "error");
       }
     } catch {
+      await onRefresh();
       onNotify("Failed to remove provider", "error");
     }
   };
