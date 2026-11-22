@@ -15,7 +15,10 @@ import {
 } from "lucide-react";
 import {
   PROVIDER_CATALOG,
+  READY_MADE_COMBO_PRESETS,
+  type ReadyMadeComboPreset,
   ROUTING_STRATEGIES,
+  getConnectionPrefix,
   getProviderSpec,
 } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
@@ -70,6 +73,8 @@ export function CombosView({
   const [freeOnly, setFreeOnly] = useState(false);
   const [enableCache, setEnableCache] = useState(false);
   const [buildingFreeAuto, setBuildingFreeAuto] = useState(false);
+  const [creatingPresetId, setCreatingPresetId] = useState<string | null>(null);
+  const [creatingAllPresets, setCreatingAllPresets] = useState(false);
   const [tiers, setTiers] = useState<DraftTier[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -239,16 +244,16 @@ export function CombosView({
       }
       const savedCombo = data.combo as Combo | undefined;
       if (savedCombo) {
-        onUpdateWorkspace((prev) =>
-          prev
-            ? {
-                ...prev,
-                combos: editingComboId
-                  ? prev.combos.map((c) => (c.id === savedCombo.id ? savedCombo : c))
-                  : [savedCombo, ...prev.combos],
-              }
-            : prev
-        );
+        onUpdateWorkspace((prev) => {
+          if (!prev) return prev;
+          const exists = prev.combos.some((c) => c.id === savedCombo.id);
+          return {
+            ...prev,
+            combos: exists
+              ? prev.combos.map((c) => (c.id === savedCombo.id ? savedCombo : c))
+              : [savedCombo, ...prev.combos],
+          };
+        });
       } else {
         await onRefresh();
       }
@@ -357,6 +362,83 @@ export function CombosView({
     }
   };
 
+  const handleBuildPresetCombo = async (
+    preset: ReadyMadeComboPreset,
+    silent = false
+  ): Promise<boolean> => {
+    setCreatingPresetId(preset.id);
+    try {
+      const res = await fetch("/api/combos/preset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ presetId: preset.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (!silent) {
+          onNotify(
+            data.error || `Unable to build "${preset.name}" combo`,
+            "error"
+          );
+        }
+        return false;
+      }
+      const builtCombo = data.combo as Combo | undefined;
+      if (builtCombo) {
+        onUpdateWorkspace((prev) => {
+          if (!prev) return prev;
+          const exists = prev.combos.some((c) => c.id === builtCombo.id);
+          return {
+            ...prev,
+            combos: exists
+              ? prev.combos.map((c) => (c.id === builtCombo.id ? builtCombo : c))
+              : [builtCombo, ...prev.combos],
+          };
+        });
+      } else {
+        await onRefresh();
+      }
+      if (!silent) {
+        onNotify(
+          `${data.updated ? "Synced" : "Created"} "${preset.name}" with ${data.tierCount ?? 0} tier(s).`,
+          "success"
+        );
+      }
+      return true;
+    } catch {
+      if (!silent) {
+        onNotify(`Network error building "${preset.name}" combo`, "error");
+      }
+      return false;
+    } finally {
+      setCreatingPresetId(null);
+    }
+  };
+
+  const handleBuildAllPresetCombos = async () => {
+    setCreatingAllPresets(true);
+    let createdCount = 0;
+    try {
+      for (const preset of READY_MADE_COMBO_PRESETS) {
+        const ok = await handleBuildPresetCombo(preset, true);
+        if (ok) createdCount += 1;
+      }
+      if (createdCount > 0) {
+        onNotify(
+          `Synced ${createdCount} ready-made combo(s) from your connected providers.`,
+          "success"
+        );
+      } else {
+        onNotify(
+          "No active provider models available to build combos.",
+          "error"
+        );
+      }
+    } finally {
+      setCreatingAllPresets(false);
+    }
+  };
+
   const handleAddWildcard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!wcPattern.trim() || !wcComboId) return;
@@ -373,11 +455,17 @@ export function CombosView({
       if (res.ok) {
         setWcPattern("");
         if (data.wildcard) {
-          onUpdateWorkspace((prev) =>
-            prev
-              ? { ...prev, wildcards: [data.wildcard, ...prev.wildcards] }
-              : prev
-          );
+          const savedWc = data.wildcard as WildcardRoute;
+          onUpdateWorkspace((prev) => {
+            if (!prev) return prev;
+            const exists = prev.wildcards.some((w) => w.id === savedWc.id);
+            return {
+              ...prev,
+              wildcards: exists
+                ? prev.wildcards.map((w) => (w.id === savedWc.id ? savedWc : w))
+                : [savedWc, ...prev.wildcards],
+            };
+          });
         } else {
           await onRefresh();
         }
@@ -502,12 +590,107 @@ export function CombosView({
         </div>
       </div>
 
+      {/* Ready-Made Combo Templates */}
+      <section className="bg-[#111114] border border-[#222227] rounded-xl p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-display text-sm font-semibold text-white">
+                Ready-Made Combos
+              </h3>
+              <span className="px-2 py-0.5 text-[11px] font-mono rounded bg-[#18181B] border border-[#27272A] text-[#A1A1AA]">
+                {READY_MADE_COMBO_PRESETS.length} presets
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-[#8B8B95]">
+              1-click auto-configured failover combos built from your connected providers.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleBuildAllPresetCombos}
+            disabled={connections.length === 0 || creatingAllPresets}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#18181B] hover:bg-[#222227] disabled:opacity-50 text-[#FAFAFA] border border-[#27272A] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>
+              {creatingAllPresets ? "Building All..." : "Create All"}
+            </span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {READY_MADE_COMBO_PRESETS.map((preset) => {
+            const existingCombo = combos.find(
+              (c) => c.name.trim().toLowerCase() === preset.name.toLowerCase()
+            );
+            const stratSpec = ROUTING_STRATEGIES.find(
+              (s) => s.id === preset.strategy
+            );
+            const isBusy =
+              creatingPresetId === preset.id || creatingAllPresets;
+
+            return (
+              <div
+                key={preset.id}
+                className="bg-[#09090B] border border-[#222227] hover:border-[#3F3F46] rounded-lg p-3.5 flex flex-col justify-between gap-3 transition-colors"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-[#18181B] border border-[#27272A] text-amber-400 shrink-0">
+                        {preset.badge}
+                      </span>
+                      <span className="font-mono text-xs font-semibold text-white truncate">
+                        {preset.name}
+                      </span>
+                    </div>
+                    {existingCombo && (
+                      <span className="text-[11px] font-medium text-emerald-400 shrink-0">
+                        {existingCombo.tiers.length} tiers
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-[#8B8B95] leading-relaxed">
+                    {preset.description}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#1D1D22]">
+                  <span className="text-[11px] text-[#71717A] truncate">
+                    {stratSpec?.label.split(" ")[0] || preset.strategy}
+                    {preset.freeOnly ? " · Free-only" : ""}
+                    {preset.enableCache ? " · Cached" : ""}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={connections.length === 0 || isBusy}
+                    onClick={() => handleBuildPresetCombo(preset)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 ${
+                      existingCombo
+                        ? "bg-[#18181B] hover:bg-[#222227] text-[#E4E4E7] border border-[#27272A]"
+                        : "bg-amber-400 hover:bg-amber-300 text-[#09090B]"
+                    }`}
+                  >
+                    {creatingPresetId === preset.id
+                      ? "Building..."
+                      : existingCombo
+                        ? "Sync Tiers"
+                        : "Create"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* Combos List */}
       {combos.length === 0 ? (
         <div className="bg-[#111114] border border-[#222227] rounded-lg p-10 text-center">
           <p className="text-sm font-medium text-white">No combos yet</p>
           <p className="mt-1 text-xs text-[#71717A]">
-            Create a routing combo or auto-build one from your connected free models.
+            Pick any Ready-Made Combo above or create a custom failover combo.
           </p>
         </div>
       ) : (
@@ -648,7 +831,7 @@ export function CombosView({
                               </div>
                               <div className="text-[#A1A1AA] truncate">
                                 {conn?.name || "Unknown"} ·{" "}
-                                {conn?.provider || "custom"}
+                                {conn ? getConnectionPrefix(conn) : "custom"}
                               </div>
                             </div>
                           </div>

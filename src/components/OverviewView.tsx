@@ -28,7 +28,8 @@ interface OverviewViewProps {
   onNavigate: (
     tab:
       | "overview"
-      | "providers"
+      | "provider-list"
+      | "provider-connected"
       | "models"
       | "combos"
       | "keys"
@@ -212,6 +213,9 @@ export function OverviewView({
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [hoveredBucketIdx, setHoveredBucketIdx] = useState<number | null>(null);
   const [copiedCurl, setCopiedCurl] = useState(false);
+  const [endpointMode, setEndpointMode] = useState<"openai" | "anthropic">(
+    "openai"
+  );
   const [copiedChart, setCopiedChart] = useState(false);
 
   // Interactive landing showcase states
@@ -520,7 +524,7 @@ export function OverviewView({
   }, [buckets]);
 
   const defaultModelAlias = combos[0]?.name || "gemini-4-hydrogen";
-  const curlSnippet = `curl ${environment.gatewayEndpoint}/chat/completions \\
+  const openaiCurlSnippet = `curl ${environment.gatewayEndpoint}/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer ${keys[0]?.keyPrefix || "sk-asr-YOUR_KEY"}" \\
   -d '{
@@ -528,9 +532,27 @@ export function OverviewView({
     "messages": [{"role": "user", "content": "Hello from AS ROUTER"}]
   }'`;
 
+  const anthropicBaseOrigin = environment.gatewayEndpoint.replace(/\/v1\/?$/, "");
+  const anthropicCurlSnippet = `# Claude Code / Anthropic SDK env
+export ANTHROPIC_BASE_URL="${anthropicBaseOrigin}"
+export ANTHROPIC_API_KEY="${keys[0]?.keyPrefix || "sk-asr-YOUR_KEY"}"
+
+curl ${environment.gatewayEndpoint}/messages \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: ${keys[0]?.keyPrefix || "sk-asr-YOUR_KEY"}" \\
+  -H "anthropic-version: 2023-06-01" \\
+  -d '{
+    "model": "${defaultModelAlias}",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello from AS ROUTER"}]
+  }'`;
+
+  const activeSnippet =
+    endpointMode === "anthropic" ? anthropicCurlSnippet : openaiCurlSnippet;
+
   const copyCurl = async () => {
     try {
-      await navigator.clipboard.writeText(curlSnippet);
+      await navigator.clipboard.writeText(activeSnippet);
       setCopiedCurl(true);
       setTimeout(() => setCopiedCurl(false), 1800);
     } catch {
@@ -1190,7 +1212,7 @@ export function OverviewView({
               </span>
               <button
                 type="button"
-                onClick={() => onNavigate("providers")}
+                onClick={() => onNavigate("provider-connected")}
                 className="flex items-center gap-1.5 flex-wrap justify-end"
                 title="Manage connected providers"
               >
@@ -1576,16 +1598,44 @@ export function OverviewView({
 
       {/* Gateway Endpoint & Quick cURL Onboarding */}
       <div className="bg-[#111114] border border-[#222227] rounded-xl p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-          <div>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3">
+          <div className="min-w-0">
             <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
-              OpenAI-Compatible Gateway Endpoint
+              {endpointMode === "anthropic"
+                ? "Anthropic-Compatible Endpoint (/v1/messages)"
+                : "OpenAI-Compatible Gateway Endpoint (/v1/chat/completions)"}
             </h3>
             <div className="mt-1 font-mono text-xs text-amber-400 truncate">
-              {environment.gatewayEndpoint}
+              {endpointMode === "anthropic"
+                ? `${environment.gatewayEndpoint}/messages`
+                : `${environment.gatewayEndpoint}/chat/completions`}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <div className="inline-flex items-center rounded-md bg-[#09090B] border border-[#27272A] p-0.5">
+              <button
+                type="button"
+                onClick={() => setEndpointMode("openai")}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
+                  endpointMode === "openai"
+                    ? "bg-[#18181B] text-amber-300"
+                    : "text-[#8B8B95] hover:text-white"
+                }`}
+              >
+                OpenAI
+              </button>
+              <button
+                type="button"
+                onClick={() => setEndpointMode("anthropic")}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
+                  endpointMode === "anthropic"
+                    ? "bg-[#18181B] text-amber-300"
+                    : "text-[#8B8B95] hover:text-white"
+                }`}
+              >
+                /v1/messages
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => onNavigate("playground")}
@@ -1606,7 +1656,7 @@ export function OverviewView({
               ) : (
                 <>
                   <Copy className="w-3.5 h-3.5" />
-                  <span>Copy cURL</span>
+                  <span>Copy Snippet</span>
                 </>
               )}
             </button>
@@ -1614,7 +1664,7 @@ export function OverviewView({
         </div>
 
         <pre className="p-3.5 bg-[#09090B] border border-[#27272A] rounded-lg font-mono text-xs text-[#D4D4D8] overflow-x-auto leading-relaxed">
-          {curlSnippet}
+          {activeSnippet}
         </pre>
       </div>
     </div>

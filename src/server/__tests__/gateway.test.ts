@@ -8,7 +8,12 @@ import {
   providerConnections,
   user,
 } from "../../db/schema.ts";
-import { getProviderSpec, isModelKnownFree } from "../../shared/catalog.ts";
+import {
+  getConnectionPrefix,
+  getProviderSpec,
+  isModelKnownFree,
+  READY_MADE_PROVIDER_PRESETS,
+} from "../../shared/catalog.ts";
 import {
   decryptSecret,
   encryptSecret,
@@ -26,6 +31,7 @@ import {
   resolveRoutingTarget,
 } from "../routerEngine.ts";
 import { isModelAllowedForKey } from "../routes/gateway.ts";
+import { buildReadyMadeComboTiers } from "../routes/combos.ts";
 import { isBlockedHost, validateOutboundUrl } from "../urlSafety.ts";
 import { serializeEncryptedKeyPool } from "../utils/connections.ts";
 
@@ -819,5 +825,148 @@ test("urlSafety ALLOW_LOCAL_PROVIDERS permits localhost Ollama while still block
     }
   }
 });
+test("getConnectionPrefix and resolveRoutingTarget resolve custom preset prefixes cleanly", async () => {
+  assert.equal(
+    getConnectionPrefix({
+      provider: "custom",
+      name: "SambaNova",
+      baseUrl: "https://api.sambanova.ai/v1",
+    }),
+    "sambanova"
+  );
+  assert.equal(
+    getConnectionPrefix({
+      provider: "custom",
+      name: "Cloudflare Workers AI #2",
+      baseUrl: "https://api.cloudflare.com/client/v4/accounts/acc_12345/ai/v1",
+    }),
+    "cloudflare"
+  );
+  assert.equal(
+    getConnectionPrefix({
+      provider: "custom",
+      name: "My Private Gateway",
+      baseUrl: "https://gateway.example.com/v1",
+    }),
+    "my-private-gateway"
+  );
+  assert.ok(READY_MADE_PROVIDER_PRESETS.every((p) => Boolean(p.category)));
+  const presetKeys = READY_MADE_PROVIDER_PRESETS.map((p) => p.key);
+  assert.equal(new Set(presetKeys).size, presetKeys.length);
+  assert.equal(
+    getConnectionPrefix({
+      provider: "custom",
+      name: "Dahl Inference",
+      baseUrl: "https://inference.dahl.global/v1",
+    }),
+    "dahl"
+  );
+  const freeTierPresets = READY_MADE_PROVIDER_PRESETS.filter(
+    (p) => p.freeTier === "free-tier"
+  );
+  const freeCreditsPresets = READY_MADE_PROVIDER_PRESETS.filter(
+    (p) => p.freeTier === "free-credits"
+  );
+  assert.ok(freeTierPresets.length >= 10);
+  assert.ok(freeCreditsPresets.length >= 10);
+  assert.ok(
+    READY_MADE_PROVIDER_PRESETS.every(
+      (p) => !p.freeTier || Boolean(p.freeTierNote?.trim())
+    )
+  );
 
+  await ensureSchema();
+  const uid = "user_prefix_test";
+  await db.delete(user).where(eq(user.id, uid));
+  await db.insert(user).values({
+    id: uid,
+    name: "Prefix Test",
+    email: "prefix-test@example.com",
+  });
+
+  await db.insert(providerConnections).values([
+    {
+      id: "conn_pref_sambanova",
+      userId: uid,
+      provider: "custom",
+      name: "SambaNova",
+      baseUrl: "https://api.sambanova.ai/v1",
+      defaultModel: "Meta-Llama-3.3-70B-Instruct",
+      encryptedApiKey: encryptSecret("sk-test-sn"),
+      isActive: true,
+    },
+    {
+      id: "conn_pref_cohere",
+      userId: uid,
+      provider: "custom",
+      name: "Cohere",
+      baseUrl: "https://api.cohere.ai/compatibility/v1",
+      defaultModel: "command-a-03-2025",
+      encryptedApiKey: encryptSecret("sk-test-cohere"),
+      isActive: true,
+    },
+  ]);
+
+  const snTarget = await resolveRoutingTarget(
+    uid,
+    "sambanova/Meta-Llama-3.3-70B-Instruct"
+  );
+  assert.equal(snTarget.matchedVia, "direct");
+  assert.equal(snTarget.tiers[0]?.connection.id, "conn_pref_sambanova");
+  assert.equal(
+    snTarget.tiers[0]?.tier.upstreamModel,
+    "Meta-Llama-3.3-70B-Instruct"
+  );
+
+  const coTarget = await resolveRoutingTarget(uid, "cohere/command-a-03-2025");
+  assert.equal(coTarget.matchedVia, "direct");
+  assert.equal(coTarget.tiers[0]?.connection.id, "conn_pref_cohere");
+  assert.equal(coTarget.tiers[0]?.tier.upstreamModel, "command-a-03-2025");
+});
+
+test("buildReadyMadeComboTiers ranks providers by preset intent and free eligibility", () => {
+  const conns = [
+    makeConn({
+      id: "c_groq",
+      provider: "groq",
+      name: "Groq",
+      defaultModel: "llama-3.3-70b-versatile",
+      availableModels: JSON.stringify(["llama-3.3-70b-versatile"]),
+      lastLatencyMs: 180,
+    }),
+    makeConn({
+      id: "c_openai",
+      provider: "openai",
+      name: "OpenAI",
+      defaultModel: "gpt-4.1-mini",
+      availableModels: JSON.stringify(["gpt-4.1-mini", "o4-mini", "gpt-6.2-sol"]),
+      lastLatencyMs: 420,
+    }),
+    makeConn({
+      id: "c_deepseek",
+      provider: "deepseek",
+      name: "DeepSeek",
+      defaultModel: "deepseek-chat",
+      availableModels: JSON.stringify(["deepseek-chat", "deepseek-r1"]),
+      lastLatencyMs: 550,
+    }),
+  ];
+
+  const smartTiers = buildReadyMadeComboTiers("smart-auto", conns);
+  assert.ok(smartTiers.length >= 3);
+
+  const freeTiers = buildReadyMadeComboTiers("free-pool", conns);
+  assert.ok(freeTiers.every((t) => t.connectionId !== "c_openai"));
+
+  const fastTiers = buildReadyMadeComboTiers("fast-chat", conns);
+  assert.equal(fastTiers[0]?.connectionId, "c_groq");
+
+  const reasoningTiers = buildReadyMadeComboTiers("deep-reasoning", conns);
+  assert.ok(
+    reasoningTiers.some(
+      (t) =>
+        t.upstreamModel.includes("r1") || t.upstreamModel.includes("o4")
+    )
+  );
+});
 

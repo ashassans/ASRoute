@@ -7,7 +7,12 @@ import {
   gatewayApiKeys,
   providerConnections,
 } from "../../db/schema.ts";
-import { isModelKnownFree, PROVIDER_CATALOG } from "../../shared/catalog.ts";
+import {
+  getConnectionPrefix,
+  getProviderSpec,
+  isModelKnownFree,
+  PROVIDER_CATALOG,
+} from "../../shared/catalog.ts";
 import { hashGatewayApiKey } from "../crypto.ts";
 import {
   type NormalizedCompletionRequest,
@@ -25,7 +30,6 @@ import {
   decryptConnectionAllKeys,
   parseAvailableModels,
 } from "../utils/connections.ts";
-import { getProviderSpec } from "../../shared/catalog.ts";
 
 export const gatewayRouter = Router();
 
@@ -179,6 +183,7 @@ gatewayRouter.get("/models", async (req: Request, res: Response) => {
     }
 
     for (const conn of userConns) {
+      const prefix = getConnectionPrefix(conn);
       const connModels = Array.from(
         new Set([
           ...(conn.defaultModel ? [conn.defaultModel] : []),
@@ -187,14 +192,14 @@ gatewayRouter.get("/models", async (req: Request, res: Response) => {
       );
       for (const m of connModels) {
         if (keyRow.freeOnly && !isModelKnownFree(conn.provider, m)) continue;
-        const modelKey = `${conn.provider}/${m}`;
+        const modelKey = `${prefix}/${m}`;
         if (!seenIds.has(modelKey)) {
           seenIds.add(modelKey);
           models.push({
             id: modelKey,
             object: "model",
             created: Math.floor(conn.createdAt.getTime() / 1000),
-            owned_by: conn.provider,
+            owned_by: prefix,
           });
         }
       }
@@ -577,12 +582,18 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
       translatedToolChoice = "auto";
     }
 
+    const rawMaxTokens = Number(body.max_tokens);
+    const boundedMaxTokens =
+      Number.isFinite(rawMaxTokens) && rawMaxTokens > 0
+        ? Math.min(Math.round(rawMaxTokens), 65536)
+        : 2048;
+
     const requestPayload: NormalizedCompletionRequest = {
       model: body.model,
       messages: translatedMessages,
       stream: Boolean(body.stream),
       temperature: body.temperature,
-      max_tokens: body.max_tokens ?? 2048,
+      max_tokens: boundedMaxTokens,
       top_p: body.top_p,
       stop: Array.isArray(body.stop_sequences) ? body.stop_sequences : undefined,
       tools: translatedTools,
@@ -860,6 +871,56 @@ gatewayRouter.post("/messages", async (req: Request, res: Response) => {
   }
 });
 
+gatewayRouter.post("/messages/count_tokens", async (req: Request, res: Response) => {
+  try {
+    const keyRow = await authenticateGatewayKey(req);
+    const body = (req.body || {}) as {
+      model?: string;
+      system?: unknown;
+      messages?: unknown;
+      tools?: unknown;
+    };
+
+    if (!body.model || !Array.isArray(body.messages)) {
+      return res.status(400).json({
+        type: "error",
+        error: {
+          type: "invalid_request_error",
+          message: "Request must include 'model' and 'messages' array.",
+        },
+      });
+    }
+
+    if (!(await isModelAllowedForKey(keyRow.allowedCombo, keyRow.userId, body.model))) {
+      return res.status(403).json({
+        type: "error",
+        error: {
+          type: "permission_error",
+          message: `This API key is scoped exclusively to combo "${keyRow.allowedCombo}".`,
+        },
+      });
+    }
+
+    const serialized = JSON.stringify({
+      system: body.system ?? "",
+      messages: body.messages,
+      tools: body.tools ?? [],
+    });
+    const estimatedTokens = Math.max(1, Math.ceil(serialized.length / 4));
+    return res.json({ input_tokens: estimatedTokens });
+  } catch (err: unknown) {
+    const status = err instanceof UpstreamHttpError ? err.statusCode : 500;
+    const message = err instanceof Error ? err.message : "Token count failure";
+    return res.status(status).json({
+      type: "error",
+      error: {
+        type: status === 401 ? "authentication_error" : "api_error",
+        message,
+      },
+    });
+  }
+});
+
 gatewayRouter.post("/embeddings", async (req: Request, res: Response) => {
   try {
     const keyRow = await authenticateGatewayKey(req);
@@ -901,7 +962,11 @@ gatewayRouter.post("/embeddings", async (req: Request, res: Response) => {
       );
 
     const conn =
-      userConns.find((c) => c.provider === providerHint) ||
+      userConns.find(
+        (c) =>
+          c.provider === providerHint ||
+          getConnectionPrefix(c) === providerHint
+      ) ||
       userConns.find((c) =>
         [
           "openai",

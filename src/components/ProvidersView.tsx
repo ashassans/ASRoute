@@ -2,22 +2,37 @@ import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Activity,
+  CheckCircle2,
   ChevronDown,
+  KeyRound,
   MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
   X,
   Zap,
 } from "lucide-react";
-import { PROVIDER_CATALOG, getProviderSpec } from "../shared/catalog.ts";
+import {
+  PROVIDER_CATALOG,
+  PROVIDER_PRESET_CATEGORIES,
+  type ProviderFreeTier,
+  type ProviderPresetCategory,
+  READY_MADE_PROVIDER_PRESETS,
+  type ReadyMadeProviderPreset,
+  getConnectionPrefix,
+  getProviderSpec,
+  matchPresetForConnection,
+} from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import type { BootstrapPayload, ProviderConnection } from "../types/gateway.ts";
 
 interface ProvidersViewProps {
+  section: "list" | "connected";
   connections: ProviderConnection[];
   serverGeminiKeyAvailable?: boolean;
+  onNavigateSection?: (section: "list" | "connected") => void;
   onRefresh: () => Promise<void>;
   onUpdateWorkspace: React.Dispatch<React.SetStateAction<BootstrapPayload | null>>;
   onNotify: (msg: string, tone?: "success" | "error") => void;
@@ -39,15 +54,40 @@ function getUtcResetCountdown(): string {
   return `${hrs}h ${mins}m`;
 }
 
+function getMatchingConnections(
+  preset: ReadyMadeProviderPreset,
+  connections: ProviderConnection[]
+): ProviderConnection[] {
+  return connections.filter(
+    (c) => matchPresetForConnection(c)?.key === preset.key
+  );
+}
+
 export function ProvidersView({
+  section,
   connections,
   serverGeminiKeyAvailable = false,
+  onNavigateSection,
   onRefresh,
   onUpdateWorkspace,
   onNotify,
 }: ProvidersViewProps) {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [quickPreset, setQuickPreset] = useState<ReadyMadeProviderPreset | null>(
+    null
+  );
+  const [showQuickCustomize, setShowQuickCustomize] = useState(false);
+  const [providerCategory, setProviderCategory] = useState<
+    "all" | "connected" | "free" | ProviderPresetCategory
+  >("all");
+  const [freeTierFilter, setFreeTierFilter] = useState<
+    "all" | "any-free" | ProviderFreeTier
+  >("all");
+  const [connectedFilter, setConnectedFilter] = useState<
+    "all" | "free" | "token-quota" | "paused"
+  >("all");
+  const [providerSearch, setProviderSearch] = useState("");
   const [provider, setProvider] = useState("openai");
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -108,12 +148,41 @@ export function ProvidersView({
 
   const selectedSpec = getProviderSpec(provider);
 
-  const openModal = () => {
+  const openModal = (initialProvider = "openai") => {
     setEditingId(null);
-    setProvider("openai");
+    setQuickPreset(null);
+    setShowQuickCustomize(false);
+    setProvider(initialProvider);
     setName("");
-    setBaseUrl(getProviderSpec("openai").defaultBaseUrl);
+    setBaseUrl(getProviderSpec(initialProvider).defaultBaseUrl);
     setDefaultModel("");
+    setFetchedModels([]);
+    setFreeOnly(false);
+    setFetchError(null);
+    setApiKey("");
+    setUseServerKey(false);
+    setExtraApiKeys("");
+    setClearKeyPool(false);
+    setEditingPoolPreview([]);
+    setRpmLimit("");
+    setRpdLimit("");
+    setDailyTokenQuota("");
+    setMonthlyUsdQuota("");
+    setShowAdvanced(false);
+    setShowAdd(true);
+  };
+
+  const openQuickConnect = (preset: ReadyMadeProviderPreset) => {
+    const existingCount = getMatchingConnections(preset, connections).length;
+    setEditingId(null);
+    setQuickPreset(preset);
+    setShowQuickCustomize(preset.defaultBaseUrl.includes("{"));
+    setProvider(preset.id);
+    setName(
+      existingCount > 0 ? `${preset.label} #${existingCount + 1}` : preset.label
+    );
+    setBaseUrl(preset.defaultBaseUrl);
+    setDefaultModel(preset.defaultModel);
     setFetchedModels([]);
     setFreeOnly(false);
     setFetchError(null);
@@ -132,6 +201,8 @@ export function ProvidersView({
 
   const openEditModal = (conn: ProviderConnection) => {
     setEditingId(conn.id);
+    setQuickPreset(null);
+    setShowQuickCustomize(false);
     setProvider(conn.provider);
     setName(conn.name);
     setBaseUrl(conn.baseUrl || getProviderSpec(conn.provider).defaultBaseUrl);
@@ -249,8 +320,13 @@ export function ProvidersView({
       const url = isEdit ? `/api/providers/${editingId}` : "/api/providers";
       const method = isEdit ? "PATCH" : "POST";
 
+      const resolvedName =
+        name.trim() ||
+        quickPreset?.label ||
+        getProviderSpec(provider).label;
+
       const payload: Record<string, unknown> = {
-        name: name.trim(),
+        name: resolvedName,
         baseUrl: baseUrl.trim() || null,
         defaultModel: defaultModel.trim() || null,
         availableModels: fetchedModels,
@@ -297,9 +373,10 @@ export function ProvidersView({
       if (savedConn) {
         onUpdateWorkspace((prev) => {
           if (!prev) return prev;
+          const exists = prev.connections.some((c) => c.id === savedConn.id);
           return {
             ...prev,
-            connections: isEdit
+            connections: exists
               ? prev.connections.map((c) => (c.id === savedConn.id ? savedConn : c))
               : [savedConn, ...prev.connections],
           };
@@ -609,12 +686,28 @@ export function ProvidersView({
 
   return (
     <div className="space-y-6">
+      {/* Top Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h2 className="font-display text-lg font-semibold text-white">
-          Providers
-        </h2>
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h2 className="font-display text-lg font-semibold text-white">
+              {section === "list" ? "Provider List" : "Provider Connected"}
+            </h2>
+            <span className="px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#18181B] border border-[#27272A] text-[#D4D4D8] tabular-nums">
+              {section === "list"
+                ? READY_MADE_PROVIDER_PRESETS.length
+                : connections.length}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-[#8B8B95]">
+            {section === "list"
+              ? "Ready-made providers with pre-configured Base URLs — connect using your API key only."
+              : "Manage active upstream API connections, health checks, and usage quotas."}
+          </p>
+        </div>
+
         <div className="flex items-center gap-2.5 flex-wrap">
-          {connections.some((c) => c.isActive) && (
+          {section === "connected" && connections.some((c) => c.isActive) && (
             <button
               type="button"
               onClick={handleProbeAllFree}
@@ -627,13 +720,23 @@ export function ProvidersView({
               <span>{probingAll ? "Pinging..." : "Ping Free"}</span>
             </button>
           )}
+          {section === "connected" && onNavigateSection && (
+            <button
+              type="button"
+              onClick={() => onNavigateSection("list")}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#111114] hover:bg-[#18181B] text-[#D4D4D8] hover:text-white border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+              <span>Provider List</span>
+            </button>
+          )}
           <button
             type="button"
-            onClick={openModal}
+            onClick={() => openModal("custom")}
             className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Provider</span>
+            <span>Custom Provider</span>
           </button>
         </div>
       </div>
@@ -649,26 +752,124 @@ export function ProvidersView({
         />
       )}
 
-      {connections.length === 0 ? (
-        <div className="bg-[#111114] border border-[#222227] rounded-lg p-10 text-center">
-          <p className="text-sm font-medium text-white">No providers connected yet</p>
-          <p className="mt-1 text-xs text-[#8B8B95]">
-            Add an upstream API provider to start routing and load-balancing requests.
-          </p>
-          <button
-            type="button"
-            onClick={openModal}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Provider</span>
-          </button>
-        </div>
-      ) : (
-        <>
+      {/* Section: Provider Connected */}
+      {section === "connected" && (
+        <section className="space-y-3.5">
+        {connections.length === 0 ? (
+          <div className="bg-[#111114] border border-[#222227] rounded-lg p-10 text-center">
+            <p className="text-sm font-medium text-white">
+              No providers connected yet
+            </p>
+            <p className="mt-1 text-xs text-[#8B8B95]">
+              Pick any ready-made provider from Provider List and paste your API key to connect.
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-2.5 flex-wrap">
+              {onNavigateSection && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateSection("list")}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Open Provider List</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => openModal("custom")}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium bg-[#18181B] hover:bg-[#222227] text-white border border-[#27272A] rounded-lg transition-colors whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Custom Provider</span>
+              </button>
+            </div>
+          </div>
+        ) : (() => {
+          const isConnFreeEligible = (conn: ProviderConnection) =>
+            Boolean(matchPresetForConnection(conn)?.freeTier) ||
+            conn.availableModels.some((m) => m.includes(":free"));
+          const hasConnTokenQuota = (conn: ProviderConnection) =>
+            Boolean(conn.dailyTokenQuota) || conn.usedTokensToday > 0;
+          const isConnPausedOrIssue = (conn: ProviderConnection) =>
+            !conn.isActive || conn.circuitStatus !== "healthy";
+
+          const connectedCounts = {
+            all: connections.length,
+            free: connections.filter(isConnFreeEligible).length,
+            "token-quota": connections.filter(hasConnTokenQuota).length,
+            paused: connections.filter(isConnPausedOrIssue).length,
+          };
+
+          const filteredConnections = connections.filter((conn) => {
+            if (connectedFilter === "free") return isConnFreeEligible(conn);
+            if (connectedFilter === "token-quota") return hasConnTokenQuota(conn);
+            if (connectedFilter === "paused") return isConnPausedOrIssue(conn);
+            return true;
+          });
+
+          return (
+          <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  { id: "all", label: "All" },
+                  { id: "free", label: "Free Tier / Tokens" },
+                  { id: "token-quota", label: "Token Quota" },
+                  { id: "paused", label: "Paused / Issues" },
+                ] as const
+              ).map((tab) => {
+                const active = connectedFilter === tab.id;
+                const count = connectedCounts[tab.id];
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setConnectedFilter(tab.id)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+                      active
+                        ? tab.id === "free"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300"
+                          : "bg-amber-400/15 border-amber-400/60 text-amber-300"
+                        : "bg-[#111114] border-[#222227] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`text-[11px] font-mono tabular-nums ${
+                        active ? "text-white/80" : "text-[#71717A]"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-xs text-[#8B8B95] tabular-nums">
+              Showing {filteredConnections.length} of {connections.length}
+            </span>
+          </div>
+
+          {filteredConnections.length === 0 ? (
+            <div className="bg-[#111114] border border-[#222227] rounded-lg p-8 text-center space-y-2.5">
+              <p className="text-sm font-medium text-white">
+                No connected providers match this filter
+              </p>
+              <button
+                type="button"
+                onClick={() => setConnectedFilter("all")}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#18181B] hover:bg-[#222227] text-white border border-[#27272A] rounded-lg transition-colors"
+              >
+                Show all connected
+              </button>
+            </div>
+          ) : (
+          <>
           {/* Mobile Cards (<768px) — avoids horizontal table & menu clipping */}
           <div className="md:hidden space-y-3">
-            {connections.map((conn) => {
+            {filteredConnections.map((conn) => {
+              const matchedPreset = matchPresetForConnection(conn);
               const testInfo = testResults[conn.id];
               const circuitLabel = !conn.isActive
                 ? "Disabled"
@@ -692,11 +893,28 @@ export function ProvidersView({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="font-medium text-white truncate">
-                        {conn.name}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-medium text-white truncate">
+                          {conn.name}
+                        </span>
+                        {matchedPreset?.freeTier && (
+                          <span
+                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0 ${
+                              matchedPreset.freeTier === "free-tier"
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                                : "bg-sky-500/10 border-sky-500/30 text-sky-300"
+                            }`}
+                          >
+                            {matchedPreset.freeTier === "free-tier"
+                              ? "Free Tier"
+                              : "Free Tokens"}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-0.5 text-xs font-mono text-[#A1A1AA] truncate">
-                        {conn.provider}
+                        <span className="text-amber-400">
+                          {getConnectionPrefix(conn)}/*
+                        </span>
                         {conn.defaultModel ? ` · ${conn.defaultModel}` : ""}
                       </div>
                     </div>
@@ -809,7 +1027,8 @@ export function ProvidersView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#222227] text-sm">
-                {connections.map((conn) => {
+                {filteredConnections.map((conn) => {
+                  const matchedPreset = matchPresetForConnection(conn);
                   const testInfo = testResults[conn.id];
                   const tokenPct = conn.dailyTokenQuota
                     ? Math.min(
@@ -853,11 +1072,29 @@ export function ProvidersView({
                       className="hover:bg-[#18181B]/50 transition-colors"
                     >
                       <td className="py-3.5 px-5 align-top">
-                        <div className="font-medium text-white">
-                          {conn.name}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-white">
+                            {conn.name}
+                          </span>
+                          {matchedPreset?.freeTier && (
+                            <span
+                              title={matchedPreset.freeTierNote}
+                              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                                matchedPreset.freeTier === "free-tier"
+                                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                                  : "bg-sky-500/10 border-sky-500/30 text-sky-300"
+                              }`}
+                            >
+                              {matchedPreset.freeTier === "free-tier"
+                                ? "Free Tier"
+                                : "Free Tokens"}
+                            </span>
+                          )}
                         </div>
                         <div className="mt-0.5 text-xs text-[#A1A1AA] font-mono">
-                          {conn.provider}
+                          <span className="text-emerald-300">
+                            {getConnectionPrefix(conn)}/*
+                          </span>
                           {conn.defaultModel ? (
                             <span className="text-amber-400">
                               {" "}
@@ -1183,9 +1420,304 @@ export function ProvidersView({
           </div>
         </div>
         </>
+          )}
+        </>
+        );
+        })()}
+      </section>
       )}
 
-      {/* Add / Edit Provider Modal */}
+      {/* Section: Provider List (Ready-Made Presets) */}
+      {section === "list" && (() => {
+        const searchQ = providerSearch.trim().toLowerCase();
+        const categoryCounts: Record<string, number> = {
+          all: READY_MADE_PROVIDER_PRESETS.length,
+          connected: READY_MADE_PROVIDER_PRESETS.filter(
+            (p) => getMatchingConnections(p, connections).length > 0
+          ).length,
+          free: READY_MADE_PROVIDER_PRESETS.filter((p) => Boolean(p.freeTier))
+            .length,
+        };
+        for (const preset of READY_MADE_PROVIDER_PRESETS) {
+          categoryCounts[preset.category] =
+            (categoryCounts[preset.category] || 0) + 1;
+        }
+
+        const freeCounts = {
+          all: READY_MADE_PROVIDER_PRESETS.length,
+          "any-free": READY_MADE_PROVIDER_PRESETS.filter((p) =>
+            Boolean(p.freeTier)
+          ).length,
+          "free-tier": READY_MADE_PROVIDER_PRESETS.filter(
+            (p) => p.freeTier === "free-tier"
+          ).length,
+          "free-credits": READY_MADE_PROVIDER_PRESETS.filter(
+            (p) => p.freeTier === "free-credits"
+          ).length,
+        };
+
+        const filteredPresets = READY_MADE_PROVIDER_PRESETS.filter((preset) => {
+          const isConnected =
+            getMatchingConnections(preset, connections).length > 0;
+          if (providerCategory === "connected" && !isConnected) return false;
+          if (providerCategory === "free" && !preset.freeTier) return false;
+          if (
+            providerCategory !== "all" &&
+            providerCategory !== "connected" &&
+            providerCategory !== "free" &&
+            preset.category !== providerCategory
+          ) {
+            return false;
+          }
+          if (freeTierFilter === "any-free" && !preset.freeTier) return false;
+          if (
+            freeTierFilter === "free-tier" &&
+            preset.freeTier !== "free-tier"
+          ) {
+            return false;
+          }
+          if (
+            freeTierFilter === "free-credits" &&
+            preset.freeTier !== "free-credits"
+          ) {
+            return false;
+          }
+          if (!searchQ) return true;
+          return (
+            preset.label.toLowerCase().includes(searchQ) ||
+            preset.tagline.toLowerCase().includes(searchQ) ||
+            preset.defaultBaseUrl.toLowerCase().includes(searchQ) ||
+            preset.defaultModel.toLowerCase().includes(searchQ) ||
+            preset.key.toLowerCase().includes(searchQ) ||
+            (preset.freeTierNote || "").toLowerCase().includes(searchQ)
+          );
+        });
+
+        return (
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {PROVIDER_PRESET_CATEGORIES.map((cat) => {
+                const active = providerCategory === cat.id;
+                const count = categoryCounts[cat.id] || 0;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setProviderCategory(cat.id)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+                      active
+                        ? cat.id === "free"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300"
+                          : "bg-amber-400/15 border-amber-400/60 text-amber-300"
+                        : "bg-[#111114] border-[#222227] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
+                    }`}
+                  >
+                    <span>{cat.label}</span>
+                    <span
+                      className={`text-[11px] font-mono tabular-nums ${
+                        active
+                          ? cat.id === "free"
+                            ? "text-emerald-200"
+                            : "text-amber-200"
+                          : "text-[#71717A]"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1">
+                <div className="relative w-full sm:max-w-xs">
+                  <Search className="w-3.5 h-3.5 text-[#71717A] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={providerSearch}
+                    onChange={(e) => setProviderSearch(e.target.value)}
+                    placeholder="Search providers, prefix or base URL..."
+                    className="w-full bg-[#111114] border border-[#222227] rounded-lg pl-8 pr-8 py-2 text-xs text-white placeholder-[#71717A] focus:outline-none focus:border-amber-400"
+                  />
+                  {providerSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setProviderSearch("")}
+                      aria-label="Clear search"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-white"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="inline-flex flex-wrap items-center gap-1 bg-[#111114] border border-[#222227] rounded-lg p-1 self-start">
+                  {(
+                    [
+                      { id: "all", label: "All Tiers" },
+                      { id: "any-free", label: "Any Free" },
+                      { id: "free-tier", label: "Free Tier" },
+                      { id: "free-credits", label: "Free Tokens" },
+                    ] as const
+                  ).map((opt) => {
+                    const active = freeTierFilter === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setFreeTierFilter(opt.id)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
+                          active
+                            ? opt.id === "free-credits"
+                              ? "bg-sky-500/20 text-sky-300"
+                              : opt.id === "all"
+                                ? "bg-[#222227] text-white"
+                                : "bg-emerald-500/20 text-emerald-300"
+                            : "text-[#8B8B95] hover:text-white"
+                        }`}
+                      >
+                        <span>{opt.label}</span>
+                        <span className="font-mono text-[10px] opacity-75 tabular-nums">
+                          {freeCounts[opt.id]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <span className="text-xs text-[#8B8B95] tabular-nums shrink-0">
+                Showing {filteredPresets.length} of{" "}
+                {READY_MADE_PROVIDER_PRESETS.length} providers
+              </span>
+            </div>
+
+            {filteredPresets.length === 0 ? (
+              <div className="bg-[#111114] border border-[#222227] rounded-xl p-10 text-center space-y-2.5">
+                <p className="text-sm font-medium text-white">
+                  No providers match this filter
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProviderCategory("all");
+                    setFreeTierFilter("all");
+                    setProviderSearch("");
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#18181B] hover:bg-[#222227] text-white border border-[#27272A] rounded-lg transition-colors"
+                >
+                  Reset filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {filteredPresets.map((preset) => {
+                  const matchingConns = getMatchingConnections(
+                    preset,
+                    connections
+                  );
+                  const activeCount = matchingConns.filter(
+                    (c) => c.isActive
+                  ).length;
+                  const isConnected = matchingConns.length > 0;
+
+                  return (
+                    <div
+                      key={preset.key}
+                      className="bg-[#111114] border border-[#222227] hover:border-[#3F3F46] rounded-xl p-4 flex flex-col justify-between gap-4 transition-colors"
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-lg bg-[#18181B] border border-[#27272A] flex items-center justify-center font-mono text-xs font-bold text-amber-400 shrink-0">
+                              {preset.badge}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-display text-sm font-semibold text-white truncate">
+                                {preset.label}
+                              </div>
+                              <div className="text-xs text-[#8B8B95] truncate">
+                                {preset.tagline}
+                              </div>
+                            </div>
+                          </div>
+
+                          {isConnected && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 shrink-0">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>
+                                {activeCount > 0
+                                  ? `${matchingConns.length} connected`
+                                  : `${matchingConns.length} paused`}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="bg-[#09090B] border border-[#1D1D22] rounded-lg px-3 py-2 space-y-1 text-[11px] font-mono">
+                          <div
+                            className="text-[#A1A1AA] truncate"
+                            title={preset.defaultBaseUrl}
+                          >
+                            {preset.defaultBaseUrl}
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[#71717A] truncate">
+                              Prefix:{" "}
+                              <span className="text-emerald-400">
+                                {preset.key}/
+                              </span>
+                            </span>
+                            <span
+                              className="text-[#D4D4D8] truncate max-w-[55%]"
+                              title={preset.defaultModel}
+                            >
+                              {preset.defaultModel}
+                            </span>
+                          </div>
+                          <div className="pt-0.5 flex items-center justify-between gap-2 border-t border-[#16161B]">
+                            {preset.freeTier === "free-tier" ? (
+                              <span className="text-emerald-400 truncate">
+                                Free Tier · {preset.freeTierNote}
+                              </span>
+                            ) : preset.freeTier === "free-credits" ? (
+                              <span className="text-sky-400 truncate">
+                                Free Tokens · {preset.freeTierNote}
+                              </span>
+                            ) : (
+                              <span className="text-[#71717A] truncate">
+                                Paid API · Pay-as-you-go
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => openQuickConnect(preset)}
+                        className={`w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                          isConnected
+                            ? "bg-[#18181B] hover:bg-[#222227] text-[#FAFAFA] border border-[#27272A]"
+                            : "bg-amber-400 hover:bg-amber-300 text-[#09090B]"
+                        }`}
+                      >
+                        <KeyRound className="w-3.5 h-3.5" />
+                        <span>
+                          {isConnected ? "Add Another Key" : "Connect"}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        );
+      })()}
+
+      {/* Add / Quick Connect / Edit Provider Modal */}
       <AnimatePresence>
         {showAdd && (
           <motion.div
@@ -1205,9 +1737,20 @@ export function ProvidersView({
               className="w-full max-w-lg bg-[#111114] border border-[#222227] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
             >
             <div className="flex items-center justify-between pb-4 border-b border-[#222227]">
-              <h3 className="font-display text-base font-semibold text-white">
-                {editingId ? "Edit Provider Connection" : "Add Provider"}
-              </h3>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {quickPreset && (
+                  <span className="w-7 h-7 rounded-md bg-[#18181B] border border-[#27272A] flex items-center justify-center font-mono text-[11px] font-bold text-amber-400 shrink-0">
+                    {quickPreset.badge}
+                  </span>
+                )}
+                <h3 className="font-display text-base font-semibold text-white truncate">
+                  {editingId
+                    ? "Edit Provider Connection"
+                    : quickPreset
+                      ? `Connect ${quickPreset.label}`
+                      : "Add Provider"}
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowAdd(false)}
@@ -1218,38 +1761,57 @@ export function ProvidersView({
             </div>
 
             <form onSubmit={handleSave} className="mt-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                    Provider
-                  </label>
-                  <select
-                    value={provider}
-                    disabled={Boolean(editingId)}
-                    onChange={(e) => handleProviderChange(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-60 focus:outline-none focus:border-amber-400"
-                  >
-                    {PROVIDER_CATALOG.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
+              {quickPreset && !editingId && (
+                <div className="bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-xs space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[#8B8B95]">Endpoint</span>
+                    <span className="font-mono text-[#D4D4D8] truncate">
+                      {baseUrl}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[#8B8B95]">Default Model</span>
+                    <span className="font-mono text-amber-400 truncate">
+                      {defaultModel || quickPreset.defaultModel}
+                    </span>
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                    Connection Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
-                  />
+              {(!quickPreset || showQuickCustomize || Boolean(editingId)) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                      Provider
+                    </label>
+                    <select
+                      value={provider}
+                      disabled={Boolean(editingId) || Boolean(quickPreset)}
+                      onChange={(e) => handleProviderChange(e.target.value)}
+                      className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-60 focus:outline-none focus:border-amber-400"
+                    >
+                      {PROVIDER_CATALOG.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                      Connection Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {provider === "gemini" && serverGeminiKeyAvailable && (
                 <div className="px-1">
@@ -1271,6 +1833,7 @@ export function ProvidersView({
                 </label>
                 <input
                   type="password"
+                  autoFocus={Boolean(quickPreset) && !editingId}
                   required={!editingId && !(provider === "gemini" && useServerKey)}
                   disabled={provider === "gemini" && useServerKey}
                   value={apiKey}
@@ -1280,28 +1843,49 @@ export function ProvidersView({
                       ? "Using server GEMINI_API_KEY"
                       : editingId
                         ? "Leave blank to keep existing key"
-                        : undefined
+                        : quickPreset?.keyPlaceholder || "Paste your API key..."
                   }
                   className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] disabled:opacity-50 focus:outline-none focus:border-amber-400"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                  Base URL
-                </label>
-                <input
-                  type="url"
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
-                />
-              </div>
+              {quickPreset && !editingId && (
+                <button
+                  type="button"
+                  onClick={() => setShowQuickCustomize((v) => !v)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#A1A1AA] hover:text-white transition-colors"
+                >
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform ${
+                      showQuickCustomize ? "rotate-180" : ""
+                    }`}
+                  />
+                  <span>
+                    {showQuickCustomize
+                      ? "Hide name, base URL & model options"
+                      : "Customize name, base URL & model"}
+                  </span>
+                </button>
+              )}
 
-              <div>
-                <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                  Model ID
-                </label>
+              {(!quickPreset || showQuickCustomize || Boolean(editingId)) && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                      Base URL
+                    </label>
+                    <input
+                      type="url"
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                      Model ID
+                    </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
@@ -1361,12 +1945,14 @@ export function ProvidersView({
                   </select>
                 )}
 
-                {fetchError && (
-                  <div className="mt-1.5 text-xs text-red-400">
-                    {fetchError}
+                    {fetchError && (
+                      <div className="mt-1.5 text-xs text-red-400">
+                        {fetchError}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
 
               <div className="border-t border-[#222227] pt-3">
                 <button
@@ -1498,10 +2084,12 @@ export function ProvidersView({
                   className="px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-[#09090B] rounded-lg transition-colors whitespace-nowrap"
                 >
                   {submitting
-                    ? "Saving..."
+                    ? "Connecting..."
                     : editingId
                       ? "Save Changes"
-                      : "Save Connection"}
+                      : quickPreset
+                        ? `Connect ${quickPreset.label}`
+                        : "Save Connection"}
                 </button>
               </div>
             </form>

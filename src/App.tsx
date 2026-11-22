@@ -11,12 +11,14 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Plug,
   Plus,
   Server,
   Settings,
   Terminal,
   X,
 } from "lucide-react";
+import { READY_MADE_PROVIDER_PRESETS } from "./shared/catalog.ts";
 import { AccountSettingsModal } from "./components/AccountSettingsModal.tsx";
 import { ApiKeysView } from "./components/ApiKeysView.tsx";
 import { AuthGate } from "./components/AuthGate.tsx";
@@ -41,7 +43,8 @@ import type {
 
 type NavTab =
   | "overview"
-  | "providers"
+  | "provider-list"
+  | "provider-connected"
   | "models"
   | "combos"
   | "keys"
@@ -54,7 +57,8 @@ const NAV_ITEMS: Array<{
   icon: React.ComponentType<{ className?: string }>;
 }> = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "providers", label: "Providers", icon: Server },
+  { id: "provider-list", label: "Provider List", icon: Plug },
+  { id: "provider-connected", label: "Provider Connected", icon: Server },
   { id: "models", label: "Models", icon: Cpu },
   { id: "combos", label: "Combos", icon: Layers },
   { id: "keys", label: "API Keys", icon: KeyRound },
@@ -64,7 +68,8 @@ const NAV_ITEMS: Array<{
 
 const VALID_TABS = new Set<NavTab>([
   "overview",
-  "providers",
+  "provider-list",
+  "provider-connected",
   "models",
   "combos",
   "keys",
@@ -81,7 +86,11 @@ function parseRoute(pathname: string): {
   if (clean === "/signup") return { area: "signup", tab: "overview" };
   if (clean === "/dashboard") return { area: "dashboard", tab: "overview" };
   if (clean.startsWith("/dashboard/")) {
-    const seg = clean.slice("/dashboard/".length).split("/")[0] as NavTab;
+    const rawSeg = clean.slice("/dashboard/".length).split("/")[0];
+    if (rawSeg === "providers") {
+      return { area: "dashboard", tab: "provider-connected" };
+    }
+    const seg = rawSeg as NavTab;
     return {
       area: "dashboard",
       tab: VALID_TABS.has(seg) ? seg : "overview",
@@ -468,11 +477,14 @@ export default function App() {
             if (data.action === "upsert" && data.record) {
               const rec = data.record as ProviderConnection;
               const exists = prev.connections.some((c) => c.id === rec.id);
+              const deduped = prev.connections.filter(
+                (c, i) => prev.connections.findIndex((x) => x.id === c.id) === i
+              );
               return {
                 ...prev,
                 connections: exists
-                  ? prev.connections.map((c) => (c.id === rec.id ? rec : c))
-                  : [rec, ...prev.connections],
+                  ? deduped.map((c) => (c.id === rec.id ? rec : c))
+                  : [rec, ...deduped],
               };
             }
           }
@@ -487,11 +499,14 @@ export default function App() {
             if (data.action === "upsert" && data.record) {
               const rec = data.record as Combo;
               const exists = prev.combos.some((c) => c.id === rec.id);
+              const deduped = prev.combos.filter(
+                (c, i) => prev.combos.findIndex((x) => x.id === c.id) === i
+              );
               return {
                 ...prev,
                 combos: exists
-                  ? prev.combos.map((c) => (c.id === rec.id ? rec : c))
-                  : [rec, ...prev.combos],
+                  ? deduped.map((c) => (c.id === rec.id ? rec : c))
+                  : [rec, ...deduped],
               };
             }
           }
@@ -505,11 +520,14 @@ export default function App() {
             if (data.action === "upsert" && data.record) {
               const rec = data.record as GatewayApiKey;
               const exists = prev.keys.some((k) => k.id === rec.id);
+              const deduped = prev.keys.filter(
+                (k, i) => prev.keys.findIndex((x) => x.id === k.id) === i
+              );
               return {
                 ...prev,
                 keys: exists
-                  ? prev.keys.map((k) => (k.id === rec.id ? rec : k))
-                  : [rec, ...prev.keys],
+                  ? deduped.map((k) => (k.id === rec.id ? rec : k))
+                  : [rec, ...deduped],
               };
             }
           }
@@ -523,11 +541,14 @@ export default function App() {
             if (data.action === "upsert" && data.record) {
               const rec = data.record as WildcardRoute;
               const exists = prev.wildcards.some((w) => w.id === rec.id);
+              const deduped = prev.wildcards.filter(
+                (w, i) => prev.wildcards.findIndex((x) => x.id === w.id) === i
+              );
               return {
                 ...prev,
                 wildcards: exists
-                  ? prev.wildcards.map((w) => (w.id === rec.id ? rec : w))
-                  : [rec, ...prev.wildcards],
+                  ? deduped.map((w) => (w.id === rec.id ? rec : w))
+                  : [rec, ...deduped],
               };
             }
           }
@@ -706,6 +727,16 @@ export default function App() {
                   />
                   <span>{item.label}</span>
                 </span>
+                {item.id === "provider-list" && (
+                  <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                    {READY_MADE_PROVIDER_PRESETS.length}
+                  </span>
+                )}
+                {item.id === "provider-connected" && workspace && (
+                  <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                    {workspace.connections.length}
+                  </span>
+                )}
                 {item.id === "logs" && workspace && (
                   <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
                     {workspace.logs.length}
@@ -817,7 +848,24 @@ export default function App() {
                           isActive ? "text-amber-400" : "text-[#A1A1AA]"
                         }`}
                       />
-                      <span className="relative z-10">{item.label}</span>
+                      <span className="relative z-10 flex-1 text-left">
+                        {item.label}
+                      </span>
+                      {item.id === "provider-list" && (
+                        <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                          {READY_MADE_PROVIDER_PRESETS.length}
+                        </span>
+                      )}
+                      {item.id === "provider-connected" && workspace && (
+                        <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                          {workspace.connections.length}
+                        </span>
+                      )}
+                      {item.id === "logs" && workspace && (
+                        <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                          {workspace.logs.length}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -1023,12 +1071,21 @@ export default function App() {
                     onNotify={notify}
                   />
                 )}
-                {activeTab === "providers" && (
+                {(activeTab === "provider-list" ||
+                  activeTab === "provider-connected") && (
                   <ProvidersView
+                    section={
+                      activeTab === "provider-list" ? "list" : "connected"
+                    }
                     connections={workspace.connections}
                     serverGeminiKeyAvailable={Boolean(
                       workspace.environment.serverGeminiKeyAvailable
                     )}
+                    onNavigateSection={(sec) =>
+                      navigateTab(
+                        sec === "list" ? "provider-list" : "provider-connected"
+                      )
+                    }
                     onRefresh={refreshWorkspace}
                     onUpdateWorkspace={setWorkspace}
                     onNotify={notify}
@@ -1038,7 +1095,7 @@ export default function App() {
                   <ModelsView
                     combos={workspace.combos}
                     connections={workspace.connections}
-                    onConnectProvider={() => navigateTab("providers")}
+                    onConnectProvider={() => navigateTab("provider-list")}
                     onNotify={notify}
                   />
                 )}
@@ -1056,7 +1113,6 @@ export default function App() {
                   <ApiKeysView
                     keys={workspace.keys}
                     combos={workspace.combos}
-                    gatewayEndpoint={workspace.environment.gatewayEndpoint}
                     openCreateCounter={openCreateKeyCounter}
                     onRefresh={refreshWorkspace}
                     onUpdateWorkspace={setWorkspace}

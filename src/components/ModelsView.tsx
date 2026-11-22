@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Check, Copy, Search } from "lucide-react";
-import { getProviderSpec } from "../shared/catalog.ts";
+import { getConnectionPrefix, getProviderSpec } from "../shared/catalog.ts";
 import type { Combo, ProviderConnection } from "../types/gateway.ts";
 
 interface ModelsViewProps {
@@ -46,6 +46,7 @@ export function ModelsView({
     for (const conn of connections) {
       if (!conn.isActive) continue;
       const spec = getProviderSpec(conn.provider);
+      const prefix = getConnectionPrefix(conn);
       const providerName =
         conn.provider === "custom" && conn.name ? conn.name : spec.label;
 
@@ -60,19 +61,19 @@ export function ModelsView({
           : Array.from(
               new Set([
                 ...(conn.defaultModel ? [conn.defaultModel] : []),
-                ...spec.models.map((m) => m.id),
+                ...(conn.provider === "custom" ? [] : spec.models.map((m) => m.id)),
               ])
             );
 
       for (const modelId of models) {
-        const key = `${conn.provider}:${modelId}`;
+        const key = `${prefix}:${modelId}`;
         if (seen.has(key)) continue;
         seen.add(key);
         list.push({
           key,
           providerName,
           modelId,
-          copyId: `${conn.provider}/${modelId}`,
+          copyId: `${prefix}/${modelId}`,
         });
       }
     }

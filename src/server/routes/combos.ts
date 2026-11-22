@@ -8,7 +8,15 @@ import {
   providerConnections,
   wildcardRoutes,
 } from "../../db/schema.ts";
-import { isModelKnownFree } from "../../shared/catalog.ts";
+import {
+  type ComboPresetId,
+  getConnectionPrefix,
+  getModelSpec,
+  getModelUnitCost,
+  isModelKnownFree,
+  matchPresetForConnection,
+  READY_MADE_COMBO_PRESETS,
+} from "../../shared/catalog.ts";
 import { type AuthedRequest, requireSession } from "../middleware/auth.ts";
 import {
   clearGatewayResponseCache,
@@ -294,6 +302,263 @@ combosRouter.post(
       return res
         .status(500)
         .json({ error: "Failed to build free-auto combo" });
+    }
+  }
+);
+
+export function buildReadyMadeComboTiers(
+  presetId: ComboPresetId,
+  activeConns: Array<typeof providerConnections.$inferSelect>
+): Array<{ connectionId: string; upstreamModel: string; score: number }> {
+  interface ScoredCandidate {
+    connectionId: string;
+    upstreamModel: string;
+    score: number;
+    latencyMs: number;
+    healthOk: boolean;
+  }
+
+  const candidates: ScoredCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const conn of activeConns) {
+    const prefix = getConnectionPrefix(conn);
+    const matchedPreset = matchPresetForConnection(conn);
+    const healthMap = parseModelHealth(conn.modelHealth);
+    const synced = parseAvailableModels(conn.availableModels);
+
+    const poolModels = Array.from(
+      new Set([
+        ...(conn.defaultModel ? [conn.defaultModel] : []),
+        ...synced.slice(0, 12),
+        ...(matchedPreset?.defaultModel ? [matchedPreset.defaultModel] : []),
+        ...(conn.provider === "gemini"
+          ? ["gemini-4-hydrogen", "gemini-4-argon", "gemini-3.1-flash-lite"]
+          : []),
+      ])
+    ).filter(Boolean);
+
+    for (const modelId of poolModels) {
+      const dedupKey = `${conn.id}:${modelId}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+
+      if (presetId === "free-pool" && !isModelKnownFree(conn.provider, modelId)) {
+        continue;
+      }
+
+      const health = healthMap[modelId];
+      const healthOk = health ? health.ok : true;
+      const latencyMs = health?.latencyMs ?? conn.lastLatencyMs ?? 1200;
+      const lower = modelId.toLowerCase();
+      const spec = getModelSpec(conn.provider, modelId);
+      let score = healthOk ? 20 : -80;
+      if (modelId === conn.defaultModel) score += 10;
+
+      if (presetId === "fast-chat") {
+        if (["groq", "cerebras", "sambanova"].includes(prefix)) score += 40;
+        if (
+          /(flash|hydrogen|mini|lite|haiku|instant|nano|8b|fast|luna)/i.test(
+            lower
+          )
+        ) {
+          score += 35;
+        }
+        if (spec?.capabilities.includes("fast")) score += 20;
+        if (/(opus|r1|reasoner|405b)/i.test(lower)) score -= 25;
+        score += Math.max(0, 20 - Math.floor(latencyMs / 150));
+      } else if (presetId === "coding-pro") {
+        if (
+          /(coder|codestral|sonnet|opus|gpt-6|gpt-5|gpt-4\.1|deepseek|qwen|gemini-4|grok|llama-3\.3-70b|llama-4)/i.test(
+            lower
+          )
+        ) {
+          score += 40;
+        }
+        if (spec?.capabilities.includes("coding")) score += 25;
+        if (spec?.capabilities.includes("tools")) score += 10;
+        if (/(nano|8b)/i.test(lower)) score -= 15;
+      } else if (presetId === "deep-reasoning") {
+        if (
+          /(r1|reasoner|thinking|o4|o3|o1|argon|carbon|opus|qwq|sonar-reasoning|pro|large|grok-4)/i.test(
+            lower
+          )
+        ) {
+          score += 45;
+        }
+        if (spec?.capabilities.includes("reasoning")) score += 25;
+        if (spec?.tierRank === "flagship") score += 15;
+        if (/(mini|lite|nano|haiku)/i.test(lower)) score -= 20;
+      } else if (presetId === "budget-saver") {
+        const unitCost = getModelUnitCost(conn.provider, modelId);
+        score += Math.max(0, 60 - Math.round(unitCost * 5));
+        if (isModelKnownFree(conn.provider, modelId)) score += 30;
+      } else if (presetId === "free-pool") {
+        score += Math.max(0, 30 - Math.floor(latencyMs / 120));
+      } else {
+        // smart-auto: balanced multi-capability mix
+        if (spec?.tierRank === "flagship") score += 20;
+        else if (spec?.tierRank === "balanced") score += 18;
+        if (spec?.capabilities.includes("tools")) score += 10;
+        if (spec?.capabilities.includes("coding")) score += 10;
+      }
+
+      candidates.push({
+        connectionId: conn.id,
+        upstreamModel: modelId,
+        score,
+        latencyMs,
+        healthOk,
+      });
+    }
+  }
+
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.latencyMs - b.latencyMs;
+  });
+
+  // First pick the top model per unique connection so failover spans multiple providers
+  const selected: ScoredCandidate[] = [];
+  const usedKeys = new Set<string>();
+  const seenConns = new Set<string>();
+
+  for (const item of candidates) {
+    if (seenConns.has(item.connectionId)) continue;
+    seenConns.add(item.connectionId);
+    selected.push(item);
+    usedKeys.add(`${item.connectionId}:${item.upstreamModel}`);
+    if (selected.length >= 12) break;
+  }
+
+  // Fill remaining slots up to 12 with highest-scoring backups
+  for (const item of candidates) {
+    if (selected.length >= 12) break;
+    const key = `${item.connectionId}:${item.upstreamModel}`;
+    if (usedKeys.has(key)) continue;
+    usedKeys.add(key);
+    selected.push(item);
+  }
+
+  return selected.map((s) => ({
+    connectionId: s.connectionId,
+    upstreamModel: s.upstreamModel,
+    score: s.score,
+  }));
+}
+
+combosRouter.post(
+  "/combos/preset",
+  requireSession,
+  async (req: AuthedRequest, res: Response) => {
+    try {
+      const userId = req.authUser!.id;
+      const presetId = String(req.body?.presetId || "").trim() as ComboPresetId;
+      const preset = READY_MADE_COMBO_PRESETS.find((p) => p.id === presetId);
+      if (!preset) {
+        return res.status(400).json({ error: "Unknown combo preset." });
+      }
+
+      const activeConns = await db
+        .select()
+        .from(providerConnections)
+        .where(
+          and(
+            eq(providerConnections.userId, userId),
+            eq(providerConnections.isActive, true)
+          )
+        );
+
+      if (activeConns.length === 0) {
+        return res.status(400).json({
+          error: "Connect and enable at least one provider first.",
+        });
+      }
+
+      const pickedTiers = buildReadyMadeComboTiers(preset.id, activeConns);
+      if (pickedTiers.length === 0) {
+        return res.status(400).json({
+          error:
+            preset.id === "free-pool"
+              ? "No verified free models found across active providers. Run 'Sync free' on a provider or connect Groq/Gemini/OpenRouter first."
+              : "No usable models found across active connections.",
+        });
+      }
+
+      const userCombos = await db
+        .select()
+        .from(combos)
+        .where(eq(combos.userId, userId));
+      const existing = userCombos.find(
+        (c) => c.name.trim().toLowerCase() === preset.name.toLowerCase()
+      );
+
+      let comboRow: typeof combos.$inferSelect;
+      if (existing) {
+        const [updated] = await db
+          .update(combos)
+          .set({
+            description: preset.description,
+            strategy: preset.strategy,
+            compressPrompt: preset.compressPrompt,
+            freeOnly: preset.freeOnly,
+            enableCache: preset.enableCache,
+            isActive: true,
+          })
+          .where(eq(combos.id, existing.id))
+          .returning();
+        comboRow = updated;
+        await db.delete(comboTiers).where(eq(comboTiers.comboId, existing.id));
+      } else {
+        const [created] = await db
+          .insert(combos)
+          .values({
+            id: `combo_${crypto.randomBytes(8).toString("hex")}`,
+            userId,
+            name: preset.name,
+            description: preset.description,
+            strategy: preset.strategy,
+            compressPrompt: preset.compressPrompt,
+            freeOnly: preset.freeOnly,
+            enableCache: preset.enableCache,
+            isActive: true,
+          })
+          .returning();
+        comboRow = created;
+      }
+
+      const tierValues = pickedTiers.map((item, i) => ({
+        id: `tier_${crypto.randomBytes(8).toString("hex")}`,
+        comboId: comboRow.id,
+        connectionId: item.connectionId,
+        upstreamModel: item.upstreamModel,
+        priority: i,
+        weight: 100,
+        maxRetries: 1,
+      }));
+      const insertedTiers = await db
+        .insert(comboTiers)
+        .values(tierValues)
+        .returning();
+
+      const comboPayload = { ...comboRow, tiers: insertedTiers };
+      publishWorkspaceMutation(userId, {
+        entity: "combo",
+        action: "upsert",
+        id: comboRow.id,
+        record: comboPayload,
+      });
+
+      return res.json({
+        combo: comboPayload,
+        tierCount: insertedTiers.length,
+        updated: Boolean(existing),
+      });
+    } catch (err) {
+      console.error("[AS ROUTER] Create ready-made combo error:", err);
+      return res
+        .status(500)
+        .json({ error: "Failed to build ready-made combo" });
     }
   }
 );

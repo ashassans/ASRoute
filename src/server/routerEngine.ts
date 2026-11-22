@@ -10,6 +10,7 @@ import {
   wildcardRoutes,
 } from "../db/schema.ts";
 import {
+  getConnectionPrefix,
   getModelSpec,
   getModelUnitCost,
   isModelKnownFree,
@@ -658,14 +659,22 @@ export async function resolveRoutingTarget(
     return { combo: exactCombo, tiers: enriched, matchedVia: "combo" };
   }
 
-  // 3. Direct provider/model syntax
+  // 3. Direct provider/model or preset-prefix/model syntax
   const slashIdx = requestedModel.indexOf("/");
   if (slashIdx > 0) {
     const providerPrefix = requestedModel.slice(0, slashIdx).toLowerCase();
     const modelName = requestedModel.slice(slashIdx + 1);
     const matchingConns = userConns
-      .filter((c) => c.provider.toLowerCase() === providerPrefix && c.isActive)
+      .filter(
+        (c) =>
+          c.isActive &&
+          (c.provider.toLowerCase() === providerPrefix ||
+            getConnectionPrefix(c) === providerPrefix)
+      )
       .sort((a, b) => {
+        const aExactPrefix = getConnectionPrefix(a) === providerPrefix ? 1 : 0;
+        const bExactPrefix = getConnectionPrefix(b) === providerPrefix ? 1 : 0;
+        if (aExactPrefix !== bExactPrefix) return bExactPrefix - aExactPrefix;
         const aOwns = connHasModel(a, modelName) ? 1 : 0;
         const bOwns = connHasModel(b, modelName) ? 1 : 0;
         return bOwns - aOwns;

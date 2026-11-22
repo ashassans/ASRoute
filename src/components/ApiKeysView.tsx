@@ -7,7 +7,6 @@ import type { BootstrapPayload, Combo, GatewayApiKey } from "../types/gateway.ts
 interface ApiKeysViewProps {
   keys: GatewayApiKey[];
   combos: Combo[];
-  gatewayEndpoint: string;
   openCreateCounter: number;
   onRefresh: () => Promise<void>;
   onUpdateWorkspace: React.Dispatch<React.SetStateAction<BootstrapPayload | null>>;
@@ -17,7 +16,6 @@ interface ApiKeysViewProps {
 export function ApiKeysView({
   keys,
   combos,
-  gatewayEndpoint,
   openCreateCounter,
   onRefresh,
   onUpdateWorkspace,
@@ -102,16 +100,16 @@ export function ApiKeysView({
       }
       const savedKey = data.key as GatewayApiKey | undefined;
       if (savedKey) {
-        onUpdateWorkspace((prev) =>
-          prev
-            ? {
-                ...prev,
-                keys: isEdit
-                  ? prev.keys.map((k) => (k.id === savedKey.id ? savedKey : k))
-                  : [savedKey, ...prev.keys],
-              }
-            : prev
-        );
+        onUpdateWorkspace((prev) => {
+          if (!prev) return prev;
+          const exists = prev.keys.some((k) => k.id === savedKey.id);
+          return {
+            ...prev,
+            keys: exists
+              ? prev.keys.map((k) => (k.id === savedKey.id ? savedKey : k))
+              : [savedKey, ...prev.keys],
+          };
+        });
       } else {
         await onRefresh();
       }
@@ -194,13 +192,10 @@ export function ApiKeysView({
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <h2 className="font-display text-lg font-semibold text-white shrink-0">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-white">
             API Keys
           </h2>
-          <code className="text-xs font-mono text-amber-400/90 truncate max-w-[210px] sm:max-w-md">
-            {gatewayEndpoint}
-          </code>
         </div>
         <button
           type="button"
