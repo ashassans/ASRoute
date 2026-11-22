@@ -36,8 +36,10 @@ function getOrCreateDb(): AppDatabase {
     const pool = new Pool({
       connectionString,
       ssl: isLocal ? false : { rejectUnauthorized: false },
-      max: 10,
+      max: process.env.VERCEL === "1" ? 5 : 10,
+      idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 15000,
+      allowExitOnIdle: true,
     });
 
     pool.on("error", (err) => {
@@ -277,7 +279,23 @@ async function initRuntimeVaultSecret(): Promise<void> {
 async function executeSchemaInit(): Promise<void> {
   const batchedSql = `${DDL_STATEMENTS.join(";\n")};`;
   if (global._asRouterPool) {
-    await global._asRouterPool.query(batchedSql);
+    const check = await global._asRouterPool.query<{ ready: boolean }>(`
+      SELECT (
+        to_regclass('public.system_config') IS NOT NULL AND
+        to_regclass('public.request_logs') IS NOT NULL AND
+        EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'combos' AND column_name = 'enable_cache'
+        ) AND
+        EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'provider_connections' AND column_name = 'model_health'
+        )
+      ) AS ready
+    `);
+    if (!check.rows[0]?.ready) {
+      await global._asRouterPool.query(batchedSql);
+    }
   } else if (global._asRouterPglite) {
     await global._asRouterPglite.waitReady;
     await global._asRouterPglite.exec(batchedSql);

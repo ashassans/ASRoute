@@ -217,6 +217,12 @@ analyticsRouter.get(
     req.socket?.setNoDelay?.(true);
     res.flushHeaders?.();
 
+    if (process.env.VERCEL === "1") {
+      res.write("event: serverless_mode\ndata: {\"vercel\":true}\n\n");
+      res.end();
+      return;
+    }
+
     const unsubscribe = subscribeUserLogs(userId, res);
     req.on("close", () => {
       unsubscribe();

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import {
   Activity,
@@ -200,6 +200,9 @@ export default function App() {
     []
   );
 
+  const lastBootstrapAtRef = useRef(0);
+  const sessionUserId = session?.user?.id ?? null;
+
   const fetchBootstrap = useCallback(
     async (opts?: { silent?: boolean }) => {
       if (!opts?.silent) {
@@ -212,6 +215,7 @@ export default function App() {
           throw new Error("Failed to load AS ROUTER workspace.");
         }
         const data = (await res.json()) as BootstrapPayload;
+        lastBootstrapAtRef.current = Date.now();
         setWorkspace(data);
         setHasMoreLogs(data.logs.length >= 100);
       } catch (err: unknown) {
@@ -235,25 +239,28 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (session?.user) {
+    if (sessionUserId) {
       fetchBootstrap();
     } else {
+      lastBootstrapAtRef.current = 0;
       setWorkspace(null);
     }
-  }, [session?.user, fetchBootstrap]);
+  }, [sessionUserId, fetchBootstrap]);
 
   // Real-time SSE Log, Live Activity, Circuit, Telemetry & Workspace Stream
   useEffect(() => {
-    if (!session?.user || streamPaused) {
+    if (!sessionUserId || streamPaused) {
       setSseConnected(false);
       setActiveRoutes([]);
       return;
     }
 
     let wasDisconnected = false;
+    let disabledByServerless = false;
     const es = new EventSource("/api/logs/stream");
 
     const markConnected = () => {
+      if (disabledByServerless) return;
       setSseConnected(true);
       if (wasDisconnected) {
         wasDisconnected = false;
@@ -263,6 +270,12 @@ export default function App() {
 
     es.onopen = markConnected;
     es.addEventListener("connected", markConnected);
+    es.addEventListener("serverless_mode", () => {
+      disabledByServerless = true;
+      wasDisconnected = false;
+      setSseConnected(false);
+      es.close();
+    });
 
     es.addEventListener("active_snapshot", (ev) => {
       try {
@@ -560,12 +573,16 @@ export default function App() {
     });
 
     es.onerror = () => {
+      if (disabledByServerless) return;
       setSseConnected(false);
       wasDisconnected = true;
     };
 
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastBootstrapAtRef.current >= 30_000
+      ) {
         void fetchBootstrap({ silent: true });
       }
     };
@@ -584,7 +601,7 @@ export default function App() {
       es.close();
       setSseConnected(false);
     };
-  }, [session?.user, streamPaused, fetchBootstrap]);
+  }, [sessionUserId, streamPaused, fetchBootstrap]);
 
   const handleSignOut = async () => {
     await authClient.signOut();

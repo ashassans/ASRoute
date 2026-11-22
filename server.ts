@@ -191,6 +191,9 @@ export class ErrorOverlay {}
     console.log(
       `[AS ROUTER] Unified AI Gateway listening on http://0.0.0.0:${PORT} (DB mode: ${databaseMode})`
     );
+    void ensureSchema().catch((err) => {
+      console.error("[AS ROUTER] Background schema warmup failed:", err);
+    });
   });
 
   const shutdown = async () => {
