@@ -17,6 +17,7 @@ import { gatewayRouter } from "./src/server/routes/gateway.ts";
 import { keysRouter } from "./src/server/routes/keys.ts";
 import { playgroundRouter } from "./src/server/routes/playground.ts";
 import { providersRouter } from "./src/server/routes/providers.ts";
+import { searchRouter } from "./src/server/routes/search.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -124,6 +125,7 @@ app.use("/api/providers", providersRouter);
 app.use("/api", combosRouter);
 app.use("/api", analyticsRouter);
 app.use("/api/playground", playgroundRouter);
+app.use("/api/search", searchRouter);
 
 async function startServer() {
   const httpServer = http.createServer(app);

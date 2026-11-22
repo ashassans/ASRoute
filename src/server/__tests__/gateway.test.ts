@@ -12,7 +12,10 @@ import {
   getConnectionPrefix,
   getProviderSpec,
   isModelKnownFree,
+  isSearchProvider,
+  LLM_PROVIDER_PRESETS,
   READY_MADE_PROVIDER_PRESETS,
+  SEARCH_PROVIDER_PRESETS,
 } from "../../shared/catalog.ts";
 import {
   decryptSecret,
@@ -31,7 +34,14 @@ import {
   resolveRoutingTarget,
 } from "../routerEngine.ts";
 import { isModelAllowedForKey } from "../routes/gateway.ts";
-import { buildReadyMadeComboTiers } from "../routes/combos.ts";
+import {
+  buildReadyMadeComboTiers,
+  validateLlmComboConnections,
+} from "../routes/combos.ts";
+import {
+  extractReadableContentFromHtml,
+  parseDuckDuckGoHtml,
+} from "../searchEngine.ts";
 import { isBlockedHost, validateOutboundUrl } from "../urlSafety.ts";
 import { serializeEncryptedKeyPool } from "../utils/connections.ts";
 
@@ -969,4 +979,168 @@ test("buildReadyMadeComboTiers ranks providers by preset intent and free eligibi
     )
   );
 });
+
+test("search catalog helpers distinguish search engines from LLM providers and presets include Tavily/Brave/Exa", () => {
+  assert.equal(isSearchProvider("tavily"), true);
+  assert.equal(isSearchProvider("brave-search"), true);
+  assert.equal(isSearchProvider("exa"), true);
+  assert.equal(isSearchProvider("openai"), false);
+  assert.equal(isSearchProvider("custom"), false);
+  assert.equal(getProviderSpec("custom").id, "custom");
+
+  const searchPresets = READY_MADE_PROVIDER_PRESETS.filter(
+    (p) => p.category === "search"
+  );
+  const keys = searchPresets.map((p) => p.key);
+  assert.ok(keys.includes("tavily"));
+  assert.ok(keys.includes("brave-search"));
+  assert.ok(keys.includes("exa"));
+
+  // Search providers must be excluded from automated LLM combo tier builders
+  const mixedConns = [
+    makeConn({
+      id: "c_tavily",
+      provider: "tavily",
+      name: "Tavily",
+      defaultModel: "tavily-search",
+      availableModels: JSON.stringify(["tavily-search"]),
+    }),
+    makeConn({
+      id: "c_groq",
+      provider: "groq",
+      name: "Groq",
+      defaultModel: "llama-3.3-70b-versatile",
+      availableModels: JSON.stringify(["llama-3.3-70b-versatile"]),
+    }),
+  ];
+  const tiers = buildReadyMadeComboTiers("smart-auto", mixedConns);
+  assert.equal(tiers.length, 1);
+  assert.equal(tiers[0]?.connectionId, "c_groq");
+});
+
+test("parseDuckDuckGoHtml unwraps redirect URLs and applies include/exclude domain filters", () => {
+  const sampleHtml = `
+    <div class="result">
+      <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdocs.example.com%2Fguide">Example Docs Guide</a>
+      <div class="result__snippet">Complete developer guide for unified routing.</div>
+    </div>
+    <div class="result">
+      <a class="result__a" href="https://spam.blocked.org/post">Blocked Post</a>
+      <div class="result__snippet">Should be excluded cleanly.</div>
+    </div>
+    <div class="result">
+      <a class="result__a" href="https://github.com/org/repo">Repo Readme</a>
+      <a class="result__snippet">Open-source gateway implementation.</a>
+    </div>
+  `;
+
+  const all = parseDuckDuckGoHtml(sampleHtml, [], ["blocked.org"], 5);
+  assert.equal(all.length, 2);
+  assert.equal(all[0]?.url, "https://docs.example.com/guide");
+  assert.equal(all[0]?.title, "Example Docs Guide");
+  assert.equal(all[0]?.content, "Complete developer guide for unified routing.");
+  assert.equal(all[1]?.url, "https://github.com/org/repo");
+
+  const scoped = parseDuckDuckGoHtml(sampleHtml, ["github.com"], [], 5);
+  assert.equal(scoped.length, 1);
+  assert.equal(scoped[0]?.url, "https://github.com/org/repo");
+});
+
+test("extractReadableContentFromHtml strips scripts/styles, converts to Markdown, and filters by focus query", () => {
+  const html = `
+    <html>
+      <head><title>Routing Benchmark &amp; Docs</title><style>.hidden{display:none}</style></head>
+      <body>
+        <nav><a href="/home">Home Nav</a></nav>
+        <script>window.secret = "ignore-me";</script>
+        <h1>Overview of Failover</h1>
+        <p>Standard introductory paragraph discussing unrelated baseline metrics in general.</p>
+        <h2>Tavily Failover Benchmarks</h2>
+        <p>Our gateway achieves 99.95% uptime by rotating Tavily, Brave Search, and Exa keys with automatic circuit cooldowns.</p>
+        <ul>
+          <li>Supports <a href="https://docs.tavily.com">Tavily API</a> format</li>
+        </ul>
+      </body>
+    </html>
+  `;
+
+  const full = extractReadableContentFromHtml(html, "markdown");
+  assert.equal(full.title, "Routing Benchmark & Docs");
+  assert.ok(!full.content.includes("ignore-me"));
+  assert.ok(!full.content.includes("Home Nav"));
+  assert.ok(full.content.includes("# Overview of Failover"));
+  assert.ok(full.content.includes("[Tavily API](https://docs.tavily.com)"));
+
+  const focused = extractReadableContentFromHtml(
+    html,
+    "markdown",
+    "Tavily circuit cooldowns"
+  );
+  assert.ok(focused.content.includes("Tavily, Brave Search, and Exa"));
+  assert.ok(!focused.content.includes("unrelated baseline metrics"));
+});
+
+test("LLM and Search presets are disjoint and search providers are blocked from AI combos and LLM routing", async () => {
+  assert.equal(
+    LLM_PROVIDER_PRESETS.length + SEARCH_PROVIDER_PRESETS.length,
+    READY_MADE_PROVIDER_PRESETS.length
+  );
+  assert.ok(LLM_PROVIDER_PRESETS.every((p) => p.category !== "search"));
+  assert.ok(SEARCH_PROVIDER_PRESETS.every((p) => p.category === "search"));
+
+  await ensureSchema();
+  const uid = "user_search_combo_block";
+  await db.delete(user).where(eq(user.id, uid));
+  await db.insert(user).values({
+    id: uid,
+    name: "Search Isolation Test",
+    email: "search-isolation@example.com",
+  });
+
+  await db.insert(providerConnections).values([
+    {
+      id: "conn_iso_tavily",
+      userId: uid,
+      provider: "tavily",
+      name: "Tavily Search",
+      defaultModel: "tavily-search",
+      encryptedApiKey: encryptSecret("tvly-test-key"),
+      isActive: true,
+    },
+    {
+      id: "conn_iso_groq",
+      userId: uid,
+      provider: "groq",
+      name: "Groq LLM",
+      defaultModel: "llama-3.3-70b-versatile",
+      encryptedApiKey: encryptSecret("gsk-test-key"),
+      isActive: true,
+    },
+  ]);
+
+  const mixedCheck = await validateLlmComboConnections(uid, [
+    "conn_iso_groq",
+    "conn_iso_tavily",
+  ]);
+  assert.equal(mixedCheck.ok, false);
+  if (!mixedCheck.ok) {
+    assert.match(mixedCheck.error, /cannot be added to AI combos/i);
+  }
+
+  const llmOnlyCheck = await validateLlmComboConnections(uid, ["conn_iso_groq"]);
+  assert.equal(llmOnlyCheck.ok, true);
+
+  const directSearchTarget = await resolveRoutingTarget(uid, "tavily/tavily-search");
+  assert.ok(
+    directSearchTarget.tiers.every((t) => !isSearchProvider(t.connection.provider))
+  );
+
+  const defaultTarget = await resolveRoutingTarget(uid, "unknown-chat-model");
+  assert.ok(
+    defaultTarget.tiers.every((t) => !isSearchProvider(t.connection.provider))
+  );
+  assert.equal(defaultTarget.tiers[0]?.connection.id, "conn_iso_groq");
+});
+
+
 

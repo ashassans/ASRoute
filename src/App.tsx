@@ -5,6 +5,7 @@ import {
   Check,
   Copy,
   Cpu,
+  Globe,
   Home,
   KeyRound,
   Layers,
@@ -13,12 +14,17 @@ import {
   Menu,
   Plug,
   Plus,
+  Search,
   Server,
   Settings,
   Terminal,
   X,
 } from "lucide-react";
-import { READY_MADE_PROVIDER_PRESETS } from "./shared/catalog.ts";
+import {
+  isSearchProvider,
+  LLM_PROVIDER_PRESETS,
+  SEARCH_PROVIDER_PRESETS,
+} from "./shared/catalog.ts";
 import { AccountSettingsModal } from "./components/AccountSettingsModal.tsx";
 import { ApiKeysView } from "./components/ApiKeysView.tsx";
 import { AuthGate } from "./components/AuthGate.tsx";
@@ -29,6 +35,7 @@ import { ModelsView } from "./components/ModelsView.tsx";
 import { OverviewView } from "./components/OverviewView.tsx";
 import { PlaygroundView } from "./components/PlaygroundView.tsx";
 import { ProvidersView } from "./components/ProvidersView.tsx";
+import { SearchView } from "./components/SearchView.tsx";
 import { authClient } from "./lib/auth-client.ts";
 import type {
   BootstrapPayload,
@@ -48,6 +55,8 @@ type NavTab =
   | "models"
   | "combos"
   | "keys"
+  | "search"
+  | "search-providers"
   | "logs"
   | "playground";
 
@@ -62,6 +71,8 @@ const NAV_ITEMS: Array<{
   { id: "models", label: "Models", icon: Cpu },
   { id: "combos", label: "Combos", icon: Layers },
   { id: "keys", label: "API Keys", icon: KeyRound },
+  { id: "search", label: "Search", icon: Search },
+  { id: "search-providers", label: "Search Providers", icon: Globe },
   { id: "logs", label: "Live Logs", icon: Activity },
   { id: "playground", label: "Playground", icon: Terminal },
 ];
@@ -73,6 +84,8 @@ const VALID_TABS = new Set<NavTab>([
   "models",
   "combos",
   "keys",
+  "search",
+  "search-providers",
   "logs",
   "playground",
 ]);
@@ -801,12 +814,30 @@ export default function App() {
                 </span>
                 {item.id === "provider-list" && (
                   <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
-                    {READY_MADE_PROVIDER_PRESETS.length}
+                    {LLM_PROVIDER_PRESETS.length}
                   </span>
                 )}
                 {item.id === "provider-connected" && workspace && (
                   <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
-                    {workspace.connections.length}
+                    {
+                      workspace.connections.filter(
+                        (c) => !isSearchProvider(c.provider)
+                      ).length
+                    }
+                  </span>
+                )}
+                {item.id === "search-providers" && (
+                  <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                    {(() => {
+                      const sc = workspace
+                        ? workspace.connections.filter((c) =>
+                            isSearchProvider(c.provider)
+                          ).length
+                        : 0;
+                      return sc > 0
+                        ? `${sc}/${SEARCH_PROVIDER_PRESETS.length}`
+                        : SEARCH_PROVIDER_PRESETS.length;
+                    })()}
                   </span>
                 )}
                 {item.id === "logs" && workspace && (
@@ -925,12 +956,30 @@ export default function App() {
                       </span>
                       {item.id === "provider-list" && (
                         <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
-                          {READY_MADE_PROVIDER_PRESETS.length}
+                          {LLM_PROVIDER_PRESETS.length}
                         </span>
                       )}
                       {item.id === "provider-connected" && workspace && (
                         <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
-                          {workspace.connections.length}
+                          {
+                            workspace.connections.filter(
+                              (c) => !isSearchProvider(c.provider)
+                            ).length
+                          }
+                        </span>
+                      )}
+                      {item.id === "search-providers" && (
+                        <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                          {(() => {
+                            const sc = workspace
+                              ? workspace.connections.filter((c) =>
+                                  isSearchProvider(c.provider)
+                                ).length
+                              : 0;
+                            return sc > 0
+                              ? `${sc}/${SEARCH_PROVIDER_PRESETS.length}`
+                              : SEARCH_PROVIDER_PRESETS.length;
+                          })()}
                         </span>
                       )}
                       {item.id === "logs" && workspace && (
@@ -1144,10 +1193,15 @@ export default function App() {
                   />
                 )}
                 {(activeTab === "provider-list" ||
-                  activeTab === "provider-connected") && (
+                  activeTab === "provider-connected" ||
+                  activeTab === "search-providers") && (
                   <ProvidersView
                     section={
-                      activeTab === "provider-list" ? "list" : "connected"
+                      activeTab === "provider-list"
+                        ? "list"
+                        : activeTab === "search-providers"
+                          ? "search"
+                          : "connected"
                     }
                     connections={workspace.connections}
                     serverGeminiKeyAvailable={Boolean(
@@ -1155,9 +1209,14 @@ export default function App() {
                     )}
                     onNavigateSection={(sec) =>
                       navigateTab(
-                        sec === "list" ? "provider-list" : "provider-connected"
+                        sec === "list"
+                          ? "provider-list"
+                          : sec === "search"
+                            ? "search-providers"
+                            : "provider-connected"
                       )
                     }
+                    onOpenSearchTab={() => navigateTab("search")}
                     onRefresh={refreshWorkspace}
                     onUpdateWorkspace={setWorkspace}
                     onNotify={notify}
@@ -1188,6 +1247,17 @@ export default function App() {
                     openCreateCounter={openCreateKeyCounter}
                     onRefresh={refreshWorkspace}
                     onUpdateWorkspace={setWorkspace}
+                    onNotify={notify}
+                  />
+                )}
+                {activeTab === "search" && (
+                  <SearchView
+                    connections={workspace.connections}
+                    gatewayEndpoint={workspace.environment.gatewayEndpoint}
+                    onConnectSearchProvider={() =>
+                      navigateTab("search-providers")
+                    }
+                    onRefresh={refreshWorkspace}
                     onNotify={notify}
                   />
                 )}

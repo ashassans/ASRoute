@@ -14,6 +14,7 @@ import {
   getModelSpec,
   getModelUnitCost,
   isModelKnownFree,
+  isSearchProvider,
   type DetectedIntent,
   type RoutingStrategy,
 } from "../shared/catalog.ts";
@@ -618,7 +619,8 @@ export async function resolveRoutingTarget(
         .orderBy(asc(comboTiers.priority)),
     ]);
 
-  const connMap = new Map(userConns.map((c) => [c.id, c]));
+  const llmConns = userConns.filter((c) => !isSearchProvider(c.provider));
+  const connMap = new Map(llmConns.map((c) => [c.id, c]));
   const tiersByComboId = new Map<string, TierRow[]>();
   for (const row of allUserTierRows) {
     const list = tiersByComboId.get(row.tier.comboId) || [];
@@ -664,7 +666,7 @@ export async function resolveRoutingTarget(
   if (slashIdx > 0) {
     const providerPrefix = requestedModel.slice(0, slashIdx).toLowerCase();
     const modelName = requestedModel.slice(slashIdx + 1);
-    const matchingConns = userConns
+    const matchingConns = llmConns
       .filter(
         (c) =>
           c.isActive &&
@@ -732,12 +734,12 @@ export async function resolveRoutingTarget(
                     : null;
 
   const providerMatches = inferredProvider
-    ? userConns.filter((c) => c.provider === inferredProvider && c.isActive)
+    ? llmConns.filter((c) => c.provider === inferredProvider && c.isActive)
     : [];
   const baseMatches =
     providerMatches.length > 0
       ? providerMatches
-      : userConns.filter((c) => c.isActive);
+      : llmConns.filter((c) => c.isActive);
 
   const matchingConns = [...baseMatches].sort((a, b) => {
     const aOwns = connHasModel(a, trimmedModel) ? 1 : 0;

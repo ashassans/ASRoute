@@ -10,6 +10,7 @@ import {
   estimateModelCostUsd,
   getProviderSpec,
   isModelKnownFree,
+  isSearchProvider,
 } from "../shared/catalog.ts";
 import type { ModelHealthEntry } from "../types/gateway.ts";
 import { validateOutboundUrl, validateOutboundUrlWithDns } from "./urlSafety.ts";
@@ -1711,6 +1712,102 @@ export async function testProviderConnection(params: {
       };
     }
 
+    if (provider === "tavily") {
+      const cleanBase = validateOutboundUrl(
+        (baseUrl || "https://api.tavily.com").replace(/\/+$/, ""),
+        "provider base URL"
+      )
+        .toString()
+        .replace(/\/+$/, "");
+      const res = await fetch(`${cleanBase}/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          query: "test",
+          max_results: 1,
+          search_depth: "basic",
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        return {
+          ok: false,
+          latencyMs: Date.now() - start,
+          detail: `HTTP ${res.status}: ${body.slice(0, 120)}`,
+        };
+      }
+      return {
+        ok: true,
+        latencyMs: Date.now() - start,
+        detail: "Tavily Search API authenticated and responsive.",
+      };
+    }
+
+    if (provider === "brave-search") {
+      const cleanBase = validateOutboundUrl(
+        (baseUrl || "https://api.search.brave.com/res/v1").replace(/\/+$/, ""),
+        "provider base URL"
+      )
+        .toString()
+        .replace(/\/+$/, "");
+      const res = await fetch(`${cleanBase}/web/search?q=test&count=1`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "X-Subscription-Token": apiKey,
+        },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        return {
+          ok: false,
+          latencyMs: Date.now() - start,
+          detail: `HTTP ${res.status}: ${body.slice(0, 120)}`,
+        };
+      }
+      return {
+        ok: true,
+        latencyMs: Date.now() - start,
+        detail: "Brave Search API authenticated and responsive.",
+      };
+    }
+
+    if (provider === "exa") {
+      const cleanBase = validateOutboundUrl(
+        (baseUrl || "https://api.exa.ai").replace(/\/+$/, ""),
+        "provider base URL"
+      )
+        .toString()
+        .replace(/\/+$/, "");
+      const res = await fetch(`${cleanBase}/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({ query: "test", numResults: 1 }),
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        return {
+          ok: false,
+          latencyMs: Date.now() - start,
+          detail: `HTTP ${res.status}: ${body.slice(0, 120)}`,
+        };
+      }
+      return {
+        ok: true,
+        latencyMs: Date.now() - start,
+        detail: "Exa Search API authenticated and responsive.",
+      };
+    }
+
     const spec = getProviderSpec(provider);
     const resolvedBase = validateOutboundUrl(
       (baseUrl || spec.defaultBaseUrl).replace(/\/+$/, ""),
@@ -1792,6 +1889,10 @@ export async function fetchProviderModels(params: {
 
   if (!apiKey) {
     throw new Error("API key is required to fetch upstream models.");
+  }
+
+  if (isSearchProvider(provider)) {
+    return spec.models.map((m) => m.id);
   }
 
   if (provider === "gemini") {

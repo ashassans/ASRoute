@@ -14,6 +14,7 @@ import {
   getModelSpec,
   getModelUnitCost,
   isModelKnownFree,
+  isSearchProvider,
   matchPresetForConnection,
   READY_MADE_COMBO_PRESETS,
 } from "../../shared/catalog.ts";
@@ -27,14 +28,19 @@ import { parseAvailableModels, parseModelHealth } from "../utils/connections.ts"
 
 export const combosRouter = Router();
 
-async function verifyOwnedConnections(
+export async function validateLlmComboConnections(
   userId: string,
   connectionIds: string[]
-): Promise<boolean> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const uniqueIds = Array.from(new Set(connectionIds.filter(Boolean)));
-  if (uniqueIds.length === 0) return false;
+  if (uniqueIds.length === 0) {
+    return { ok: false, error: "Each tier must reference a valid connection." };
+  }
   const rows = await db
-    .select({ id: providerConnections.id })
+    .select({
+      id: providerConnections.id,
+      provider: providerConnections.provider,
+    })
     .from(providerConnections)
     .where(
       and(
@@ -42,7 +48,20 @@ async function verifyOwnedConnections(
         inArray(providerConnections.id, uniqueIds)
       )
     );
-  return rows.length === uniqueIds.length;
+  if (rows.length !== uniqueIds.length) {
+    return {
+      ok: false,
+      error: "One or more selected provider connections were not found.",
+    };
+  }
+  if (rows.some((r) => isSearchProvider(r.provider))) {
+    return {
+      ok: false,
+      error:
+        "Web search providers (Tavily, Brave Search, Exa) cannot be added to AI combos.",
+    };
+  }
+  return { ok: true };
 }
 
 combosRouter.post(
@@ -78,11 +97,9 @@ combosRouter.post(
           .status(400)
           .json({ error: "Each tier must reference a valid connection." });
       }
-      const allOwned = await verifyOwnedConnections(userId, tierConnIds);
-      if (!allOwned) {
-        return res.status(400).json({
-          error: "One or more selected provider connections were not found.",
-        });
+      const tierCheck = await validateLlmComboConnections(userId, tierConnIds);
+      if (!tierCheck.ok) {
+        return res.status(400).json({ error: tierCheck.error });
       }
 
       const cleanName = name.trim();
@@ -188,6 +205,7 @@ combosRouter.post(
       const seen = new Set<string>();
 
       for (const conn of activeConns) {
+        if (isSearchProvider(conn.provider)) continue;
         const healthMap = parseModelHealth(conn.modelHealth);
         const connModels = Array.from(
           new Set([
@@ -322,6 +340,7 @@ export function buildReadyMadeComboTiers(
   const seen = new Set<string>();
 
   for (const conn of activeConns) {
+    if (isSearchProvider(conn.provider)) continue;
     const prefix = getConnectionPrefix(conn);
     const matchedPreset = matchPresetForConnection(conn);
     const healthMap = parseModelHealth(conn.modelHealth);
@@ -469,13 +488,17 @@ combosRouter.post(
           )
         );
 
-      if (activeConns.length === 0) {
+      const activeLlmConns = activeConns.filter(
+        (c) => !isSearchProvider(c.provider)
+      );
+      if (activeLlmConns.length === 0) {
         return res.status(400).json({
-          error: "Connect and enable at least one provider first.",
+          error:
+            "Connect and enable at least one AI model provider first. Web search providers cannot be combined into AI combos.",
         });
       }
 
-      const pickedTiers = buildReadyMadeComboTiers(preset.id, activeConns);
+      const pickedTiers = buildReadyMadeComboTiers(preset.id, activeLlmConns);
       if (pickedTiers.length === 0) {
         return res.status(400).json({
           error:
@@ -604,11 +627,12 @@ combosRouter.patch(
             .status(400)
             .json({ error: "Each tier must reference a valid connection." });
         }
-        const allOwned = await verifyOwnedConnections(userId, tierConnIds);
-        if (!allOwned) {
-          return res.status(400).json({
-            error: "One or more selected provider connections were not found.",
-          });
+        const tierCheck = await validateLlmComboConnections(
+          userId,
+          tierConnIds
+        );
+        if (!tierCheck.ok) {
+          return res.status(400).json({ error: tierCheck.error });
         }
       }
 

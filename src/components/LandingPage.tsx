@@ -44,7 +44,7 @@ const ORBIT_PROVIDERS = [
     id: "anthropic",
     name: "Anthropic",
     short: "A",
-    color: "#FBBF24",
+    color: "#FDDF8A",
     angle: 205,
     ring: 1,
     models: [
@@ -76,7 +76,7 @@ const ORBIT_PROVIDERS = [
     id: "mistral",
     name: "Mistral AI",
     short: "M",
-    color: "#F59E0B",
+    color: "#FCD34D",
     angle: 342,
     ring: 3,
     models: ["mistral-large-latest", "mistral-small-latest", "ministral-8b-latest"],
@@ -648,7 +648,7 @@ const msg = await client.messages.create({
             className="pointer-events-none absolute inset-0"
             style={{
               background:
-                "radial-gradient(circle at 68% 45%, rgba(251,191,36,0.07), transparent 55%)",
+                "radial-gradient(circle at 68% 45%, rgba(253,223,138,0.06), transparent 55%)",
             }}
           />
 
@@ -732,8 +732,8 @@ const msg = await client.messages.create({
                 >
                   <defs>
                     <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
-                      <stop offset="0%" stopColor="rgba(251,191,36,0.22)" />
-                      <stop offset="100%" stopColor="rgba(251,191,36,0)" />
+                      <stop offset="0%" stopColor="rgba(253,223,138,0.2)" />
+                      <stop offset="100%" stopColor="rgba(253,223,138,0)" />
                     </radialGradient>
                   </defs>
 
@@ -802,7 +802,7 @@ const msg = await client.messages.create({
                             (210 + ny) / 2 - (idx % 2 === 0 ? 18 : -18)
                           }, ${nx.toFixed(1)} ${ny.toFixed(1)}`}
                           fill="none"
-                          stroke={isFocused ? "rgba(251,191,36,0.45)" : "#1F1F24"}
+                          stroke={isFocused ? "rgba(253,223,138,0.45)" : "#1F1F24"}
                           strokeWidth={isFocused ? "1.5" : "1"}
                         />
 
@@ -818,12 +818,12 @@ const msg = await client.messages.create({
                             cx={nx + dx}
                             cy={ny + dy}
                             r={dIdx === 0 ? 2 : 1.3}
-                            fill={isFocused ? "#FBBF24" : "#3F3F46"}
+                            fill={isFocused ? "#FDDF8A" : "#3F3F46"}
                             opacity={isFocused ? 0.95 : 0.65}
                           />
                         ))}
 
-                        <circle r={isFocused ? 3.2 : 2.2} fill="#FBBF24">
+                        <circle r={isFocused ? 3.2 : 2.2} fill="#FDDF8A">
                           <animateMotion
                             dur={`${2.8 + (idx % 3) * 0.7}s`}
                             repeatCount="indefinite"
@@ -888,7 +888,7 @@ const msg = await client.messages.create({
                         whileHover={{ scale: 1.12 }}
                         className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg border flex items-center justify-center font-mono text-xs font-bold transition-colors ${
                           isFocused
-                            ? "bg-[#18181B] border-amber-400 text-amber-400 shadow-[0_0_18px_rgba(251,191,36,0.22)]"
+                            ? "bg-[#18181B] border-amber-400 text-amber-400 shadow-[0_0_18px_rgba(253,223,138,0.2)]"
                             : "bg-[#111114] border-[#27272A] text-[#D4D4D8] hover:border-[#52525B]"
                         }`}
                         title={p.name}
@@ -1020,7 +1020,7 @@ const msg = await client.messages.create({
                       stroke="#27272A"
                       strokeWidth="1.5"
                     />
-                    <circle r="3" fill="#FBBF24">
+                    <circle r="3" fill="#FDDF8A">
                       <animateMotion dur="1.4s" repeatCount="indefinite">
                         <mpath href="#landing-in" />
                       </animateMotion>
@@ -1036,13 +1036,13 @@ const msg = await client.messages.create({
                             d={`M 82 105 C 145 105, 175 ${ty}, 256 ${ty}`}
                             fill="none"
                             stroke={
-                              isPrimary ? "rgba(251,191,36,0.55)" : "#27272A"
+                              isPrimary ? "rgba(253,223,138,0.55)" : "#27272A"
                             }
                             strokeWidth={isPrimary ? "1.6" : "1.15"}
                           />
                           <circle
                             r={isPrimary ? 3.2 : 2.3}
-                            fill={isPrimary ? "#FBBF24" : "#A1A1AA"}
+                            fill={isPrimary ? "#FDDF8A" : "#A1A1AA"}
                           >
                             <animateMotion
                               dur={`${1.6 + idx * 0.35}s`}

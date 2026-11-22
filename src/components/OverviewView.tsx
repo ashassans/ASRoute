@@ -44,7 +44,7 @@ const KEY_DOT_COLORS = [
   "#3B82F6", // blue
   "#2DD4BF", // teal
   "#F472B6", // pink
-  "#FBBF24", // existing yellow/amber
+  "#FDDF8A", // light yellow/amber
   "#84CC16", // lime
 ];
 
@@ -54,7 +54,7 @@ const MODEL_SERIES_COLORS = [
   "#3B82F6", // blue
   "#10B981", // emerald
   "#84CC16", // lime
-  "#FBBF24", // existing yellow/amber
+  "#FDDF8A", // light yellow/amber
 ];
 
 const PROVIDER_BADGE_MAP: Record<
@@ -63,10 +63,10 @@ const PROVIDER_BADGE_MAP: Record<
 > = {
   gemini: { short: "G", color: "#60A5FA", bg: "rgba(59,130,246,0.14)" },
   openai: { short: "O", color: "#FAFAFA", bg: "rgba(255,255,255,0.10)" },
-  anthropic: { short: "A", color: "#F59E0B", bg: "rgba(245,158,11,0.14)" },
+  anthropic: { short: "A", color: "#FCD34D", bg: "rgba(252,211,77,0.14)" },
   groq: { short: "Q", color: "#F97316", bg: "rgba(249,115,22,0.14)" },
   deepseek: { short: "D", color: "#38BDF8", bg: "rgba(56,189,248,0.14)" },
-  mistral: { short: "M", color: "#FBBF24", bg: "rgba(251,191,36,0.14)" },
+  mistral: { short: "M", color: "#FDDF8A", bg: "rgba(253,223,138,0.14)" },
   openrouter: { short: "R", color: "#EC4899", bg: "rgba(236,72,153,0.14)" },
   xai: { short: "X", color: "#E4E4E7", bg: "rgba(228,228,231,0.12)" },
   cerebras: { short: "Cb", color: "#22D3EE", bg: "rgba(34,211,238,0.14)" },
@@ -825,7 +825,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                           ? "rgba(16,185,129,0.65)"
                           : node?.status === "error"
                             ? "rgba(244,63,94,0.38)"
-                            : "rgba(251,191,36,0.28)";
+                            : "rgba(253,223,138,0.28)";
                       return (
                         <g key={pid}>
                           <path

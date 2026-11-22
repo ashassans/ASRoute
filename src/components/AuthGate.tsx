@@ -356,7 +356,7 @@ export function AuthGate({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(circle at 50% 20%, rgba(251,191,36,0.06), transparent 55%)",
+            "radial-gradient(circle at 50% 20%, rgba(253,223,138,0.05), transparent 55%)",
         }}
       />
 

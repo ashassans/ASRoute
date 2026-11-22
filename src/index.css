@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+@theme {
+  --color-amber-200: #fef3c7;
+  --color-amber-300: #feebb3;
+  --color-amber-400: #fddf8a;
+  --color-amber-500: #fcd34d;
+}
+
 @layer base {
   :root {
     color-scheme: dark;
@@ -9,8 +16,8 @@
     --border-hairline: #27272a;
     --text-primary: #fafafa;
     --text-secondary: #a1a1aa;
-    --accent-primary: #fbbf24;
-    --accent-amber: #fbbf24;
+    --accent-primary: #fddf8a;
+    --accent-amber: #fddf8a;
     --accent-hover: #059669;
   }
 

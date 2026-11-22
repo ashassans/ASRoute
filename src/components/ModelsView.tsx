@@ -1,6 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { Check, Copy, Search } from "lucide-react";
-import { getConnectionPrefix, getProviderSpec } from "../shared/catalog.ts";
+import {
+  getConnectionPrefix,
+  getProviderSpec,
+  isSearchProvider,
+} from "../shared/catalog.ts";
 import type { Combo, ProviderConnection } from "../types/gateway.ts";
 
 interface ModelsViewProps {
@@ -44,7 +48,7 @@ export function ModelsView({
     }
 
     for (const conn of connections) {
-      if (!conn.isActive) continue;
+      if (!conn.isActive || isSearchProvider(conn.provider)) continue;
       const spec = getProviderSpec(conn.provider);
       const prefix = getConnectionPrefix(conn);
       const providerName =

@@ -4,6 +4,7 @@ import {
   Activity,
   CheckCircle2,
   ChevronDown,
+  Globe,
   KeyRound,
   MoreHorizontal,
   Pencil,
@@ -15,24 +16,27 @@ import {
   Zap,
 } from "lucide-react";
 import {
+  LLM_PROVIDER_PRESETS,
   PROVIDER_CATALOG,
   PROVIDER_PRESET_CATEGORIES,
   type ProviderFreeTier,
   type ProviderPresetCategory,
-  READY_MADE_PROVIDER_PRESETS,
   type ReadyMadeProviderPreset,
+  SEARCH_PROVIDER_PRESETS,
   getConnectionPrefix,
   getProviderSpec,
+  isSearchProvider,
   matchPresetForConnection,
 } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import type { BootstrapPayload, ProviderConnection } from "../types/gateway.ts";
 
 interface ProvidersViewProps {
-  section: "list" | "connected";
+  section: "list" | "connected" | "search";
   connections: ProviderConnection[];
   serverGeminiKeyAvailable?: boolean;
-  onNavigateSection?: (section: "list" | "connected") => void;
+  onNavigateSection?: (section: "list" | "connected" | "search") => void;
+  onOpenSearchTab?: () => void;
   onRefresh: () => Promise<void>;
   onUpdateWorkspace: React.Dispatch<React.SetStateAction<BootstrapPayload | null>>;
   onNotify: (msg: string, tone?: "success" | "error") => void;
@@ -68,6 +72,7 @@ export function ProvidersView({
   connections,
   serverGeminiKeyAvailable = false,
   onNavigateSection,
+  onOpenSearchTab,
   onRefresh,
   onUpdateWorkspace,
   onNotify,
@@ -79,7 +84,7 @@ export function ProvidersView({
   );
   const [showQuickCustomize, setShowQuickCustomize] = useState(false);
   const [providerCategory, setProviderCategory] = useState<
-    "all" | "connected" | "free" | ProviderPresetCategory
+    "all" | "connected" | "free" | Exclude<ProviderPresetCategory, "search">
   >("all");
   const [freeTierFilter, setFreeTierFilter] = useState<
     "all" | "any-free" | ProviderFreeTier
@@ -147,6 +152,8 @@ export function ProvidersView({
   }, [showAdd, openMenuId]);
 
   const selectedSpec = getProviderSpec(provider);
+  const llmConnections = connections.filter((c) => !isSearchProvider(c.provider));
+  const searchConnections = connections.filter((c) => isSearchProvider(c.provider));
 
   const openModal = (initialProvider = "openai") => {
     setEditingId(null);
@@ -565,7 +572,7 @@ export function ProvidersView({
   };
 
   const handleProbeAllFree = async () => {
-    const activeConns = connections.filter((c) => c.isActive);
+    const activeConns = llmConnections.filter((c) => c.isActive);
     if (activeConns.length === 0) return;
     setProbingAll(true);
     let totalHealthy = 0;
@@ -684,6 +691,100 @@ export function ProvidersView({
 
   const resetCountdown = getUtcResetCountdown();
 
+  const renderPresetCard = (preset: ReadyMadeProviderPreset) => {
+    const matchingConns = getMatchingConnections(preset, connections);
+    const activeCount = matchingConns.filter((c) => c.isActive).length;
+    const isConnected = matchingConns.length > 0;
+    const isSearchPreset = preset.category === "search";
+
+    return (
+      <div
+        key={preset.key}
+        className="bg-[#111114] border border-[#222227] hover:border-[#3F3F46] rounded-xl p-4 flex flex-col justify-between gap-4 transition-colors"
+      >
+        <div className="space-y-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-lg bg-[#18181B] border border-[#27272A] flex items-center justify-center font-mono text-xs font-bold text-amber-400 shrink-0">
+                {preset.badge}
+              </div>
+              <div className="min-w-0">
+                <div className="font-display text-sm font-semibold text-white truncate">
+                  {preset.label}
+                </div>
+                <div className="text-xs text-[#8B8B95] truncate">
+                  {preset.tagline}
+                </div>
+              </div>
+            </div>
+
+            {isConnected && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>
+                  {activeCount > 0
+                    ? `${matchingConns.length} connected`
+                    : `${matchingConns.length} paused`}
+                </span>
+              </span>
+            )}
+          </div>
+
+          <div className="bg-[#09090B] border border-[#1D1D22] rounded-lg px-3 py-2 space-y-1 text-[11px] font-mono">
+            <div
+              className="text-[#A1A1AA] truncate"
+              title={preset.defaultBaseUrl}
+            >
+              {preset.defaultBaseUrl}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[#71717A] truncate">
+                {isSearchPreset ? "Engine: " : "Prefix: "}
+                <span className="text-emerald-400">
+                  {isSearchPreset ? preset.key : `${preset.key}/`}
+                </span>
+              </span>
+              <span
+                className="text-[#D4D4D8] truncate max-w-[55%]"
+                title={isSearchPreset ? "Search & URL Extract" : preset.defaultModel}
+              >
+                {isSearchPreset ? "Search & Extract" : preset.defaultModel}
+              </span>
+            </div>
+            <div className="pt-0.5 flex items-center justify-between gap-2 border-t border-[#16161B]">
+              {preset.freeTier === "free-tier" ? (
+                <span className="text-emerald-400 truncate">
+                  Free Tier · {preset.freeTierNote}
+                </span>
+              ) : preset.freeTier === "free-credits" ? (
+                <span className="text-sky-400 truncate">
+                  Free Tokens · {preset.freeTierNote}
+                </span>
+              ) : (
+                <span className="text-[#71717A] truncate">
+                  Paid API · Pay-as-you-go
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => openQuickConnect(preset)}
+          className={`w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+            isConnected
+              ? "bg-[#18181B] hover:bg-[#222227] text-[#FAFAFA] border border-[#27272A]"
+              : "bg-amber-400 hover:bg-amber-300 text-[#09090B]"
+          }`}
+        >
+          <KeyRound className="w-3.5 h-3.5" />
+          <span>{isConnected ? "Add Another Key" : "Connect"}</span>
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Bar */}
@@ -691,23 +792,31 @@ export function ProvidersView({
         <div>
           <div className="flex items-center gap-2.5">
             <h2 className="font-display text-lg font-semibold text-white">
-              {section === "list" ? "Provider List" : "Provider Connected"}
+              {section === "list"
+                ? "Provider List"
+                : section === "search"
+                  ? "Web Search Providers"
+                  : "Provider Connected"}
             </h2>
             <span className="px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#18181B] border border-[#27272A] text-[#D4D4D8] tabular-nums">
               {section === "list"
-                ? READY_MADE_PROVIDER_PRESETS.length
-                : connections.length}
+                ? LLM_PROVIDER_PRESETS.length
+                : section === "search"
+                  ? SEARCH_PROVIDER_PRESETS.length
+                  : llmConnections.length}
             </span>
           </div>
           <p className="mt-0.5 text-xs text-[#8B8B95]">
             {section === "list"
-              ? "Ready-made providers with pre-configured Base URLs — connect using your API key only."
-              : "Manage active upstream API connections, health checks, and usage quotas."}
+              ? "Ready-made AI model providers — connect instantly using your API key only."
+              : section === "search"
+                ? "Connect Tavily, Brave Search, or Exa for /v1/search & /v1/extract — kept separate from AI models & combos."
+                : "Manage active AI model connections, key pools, quotas, and circuit health."}
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {section === "connected" && connections.some((c) => c.isActive) && (
+          {section === "connected" && llmConnections.some((c) => c.isActive) && (
             <button
               type="button"
               onClick={handleProbeAllFree}
@@ -730,14 +839,26 @@ export function ProvidersView({
               <span>Provider List</span>
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => openModal("custom")}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Custom Provider</span>
-          </button>
+          {section === "search" && onOpenSearchTab && (
+            <button
+              type="button"
+              onClick={onOpenSearchTab}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
+            >
+              <Search className="w-4 h-4" />
+              <span>Open Search</span>
+            </button>
+          )}
+          {section !== "search" && (
+            <button
+              type="button"
+              onClick={() => openModal("custom")}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Custom Provider</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -752,16 +873,30 @@ export function ProvidersView({
         />
       )}
 
-      {/* Section: Provider Connected */}
+      {/* Section: Provider Connected (AI Model Providers only) */}
       {section === "connected" && (
         <section className="space-y-3.5">
-        {connections.length === 0 ? (
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h3 className="font-display text-sm font-semibold text-white">
+              AI Model Providers
+            </h3>
+            <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#18181B] border border-[#27272A] text-[#D4D4D8] tabular-nums">
+              {llmConnections.length}
+            </span>
+          </div>
+          <span className="text-xs text-[#71717A] hidden sm:inline">
+            Eligible for Models, Combos &amp; Playground
+          </span>
+        </div>
+
+        {llmConnections.length === 0 ? (
           <div className="bg-[#111114] border border-[#222227] rounded-lg p-10 text-center">
             <p className="text-sm font-medium text-white">
-              No providers connected yet
+              No AI model providers connected yet
             </p>
             <p className="mt-1 text-xs text-[#8B8B95]">
-              Pick any ready-made provider from Provider List and paste your API key to connect.
+              Pick any ready-made AI provider from Provider List and paste your API key to connect.
             </p>
             <div className="mt-4 flex items-center justify-center gap-2.5 flex-wrap">
               {onNavigateSection && (
@@ -794,13 +929,13 @@ export function ProvidersView({
             !conn.isActive || conn.circuitStatus !== "healthy";
 
           const connectedCounts = {
-            all: connections.length,
-            free: connections.filter(isConnFreeEligible).length,
-            "token-quota": connections.filter(hasConnTokenQuota).length,
-            paused: connections.filter(isConnPausedOrIssue).length,
+            all: llmConnections.length,
+            free: llmConnections.filter(isConnFreeEligible).length,
+            "token-quota": llmConnections.filter(hasConnTokenQuota).length,
+            paused: llmConnections.filter(isConnPausedOrIssue).length,
           };
 
-          const filteredConnections = connections.filter((conn) => {
+          const filteredConnections = llmConnections.filter((conn) => {
             if (connectedFilter === "free") return isConnFreeEligible(conn);
             if (connectedFilter === "token-quota") return hasConnTokenQuota(conn);
             if (connectedFilter === "paused") return isConnPausedOrIssue(conn);
@@ -847,7 +982,7 @@ export function ProvidersView({
               })}
             </div>
             <span className="text-xs text-[#8B8B95] tabular-nums">
-              Showing {filteredConnections.length} of {connections.length}
+              Showing {filteredConnections.length} of {llmConnections.length}
             </span>
           </div>
 
@@ -1424,39 +1559,39 @@ export function ProvidersView({
         </>
         );
         })()}
-      </section>
+        </section>
       )}
 
-      {/* Section: Provider List (Ready-Made Presets) */}
+      {/* Section: Provider List (AI Model Providers only) */}
       {section === "list" && (() => {
         const searchQ = providerSearch.trim().toLowerCase();
         const categoryCounts: Record<string, number> = {
-          all: READY_MADE_PROVIDER_PRESETS.length,
-          connected: READY_MADE_PROVIDER_PRESETS.filter(
+          all: LLM_PROVIDER_PRESETS.length,
+          connected: LLM_PROVIDER_PRESETS.filter(
             (p) => getMatchingConnections(p, connections).length > 0
           ).length,
-          free: READY_MADE_PROVIDER_PRESETS.filter((p) => Boolean(p.freeTier))
+          free: LLM_PROVIDER_PRESETS.filter((p) => Boolean(p.freeTier))
             .length,
         };
-        for (const preset of READY_MADE_PROVIDER_PRESETS) {
+        for (const preset of LLM_PROVIDER_PRESETS) {
           categoryCounts[preset.category] =
             (categoryCounts[preset.category] || 0) + 1;
         }
 
         const freeCounts = {
-          all: READY_MADE_PROVIDER_PRESETS.length,
-          "any-free": READY_MADE_PROVIDER_PRESETS.filter((p) =>
+          all: LLM_PROVIDER_PRESETS.length,
+          "any-free": LLM_PROVIDER_PRESETS.filter((p) =>
             Boolean(p.freeTier)
           ).length,
-          "free-tier": READY_MADE_PROVIDER_PRESETS.filter(
+          "free-tier": LLM_PROVIDER_PRESETS.filter(
             (p) => p.freeTier === "free-tier"
           ).length,
-          "free-credits": READY_MADE_PROVIDER_PRESETS.filter(
+          "free-credits": LLM_PROVIDER_PRESETS.filter(
             (p) => p.freeTier === "free-credits"
           ).length,
         };
 
-        const filteredPresets = READY_MADE_PROVIDER_PRESETS.filter((preset) => {
+        const filteredPresets = LLM_PROVIDER_PRESETS.filter((preset) => {
           const isConnected =
             getMatchingConnections(preset, connections).length > 0;
           if (providerCategory === "connected" && !isConnected) return false;
@@ -1589,14 +1724,14 @@ export function ProvidersView({
 
               <span className="text-xs text-[#8B8B95] tabular-nums shrink-0">
                 Showing {filteredPresets.length} of{" "}
-                {READY_MADE_PROVIDER_PRESETS.length} providers
+                {LLM_PROVIDER_PRESETS.length} AI providers
               </span>
             </div>
 
             {filteredPresets.length === 0 ? (
               <div className="bg-[#111114] border border-[#222227] rounded-xl p-10 text-center space-y-2.5">
                 <p className="text-sm font-medium text-white">
-                  No providers match this filter
+                  No AI providers match this filter
                 </p>
                 <button
                   type="button"
@@ -1612,110 +1747,209 @@ export function ProvidersView({
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {filteredPresets.map((preset) => {
-                  const matchingConns = getMatchingConnections(
-                    preset,
-                    connections
-                  );
-                  const activeCount = matchingConns.filter(
-                    (c) => c.isActive
-                  ).length;
-                  const isConnected = matchingConns.length > 0;
+                {filteredPresets.map(renderPresetCard)}
+              </div>
+            )}
+          </section>
+        );
+      })()}
+
+      {/* Section: Search Providers (Dedicated Side Panel Tab) */}
+      {section === "search" && (
+        <div className="space-y-8">
+          {/* Connected Web Search Keys */}
+          <section className="space-y-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-amber-400" />
+                <h3 className="font-display text-sm font-semibold text-white">
+                  Connected Search Keys
+                </h3>
+                <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#18181B] border border-[#27272A] text-[#D4D4D8] tabular-nums">
+                  {searchConnections.length}
+                </span>
+              </div>
+              <span className="text-xs text-[#71717A] hidden sm:inline">
+                Failover priority · Excluded from AI combos
+              </span>
+            </div>
+
+            {searchConnections.length === 0 ? (
+              <div className="bg-[#111114] border border-[#222227] rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-[#8B8B95]">
+                  No external search keys connected yet. Built-in web search works automatically with 0 keys — add Tavily, Brave Search, or Exa below for higher limits and multi-engine failover.
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {searchConnections.map((conn) => {
+                  const matchedPreset = matchPresetForConnection(conn);
+                  const testInfo = testResults[conn.id];
+                  const circuitLabel = !conn.isActive
+                    ? "Disabled"
+                    : conn.circuitStatus === "open"
+                      ? `Open (${conn.failureCount} fails)`
+                      : conn.circuitStatus === "half_open"
+                        ? "Half-Open"
+                        : "Healthy";
+                  const circuitColor = !conn.isActive
+                    ? "text-[#A1A1AA]"
+                    : conn.circuitStatus === "open"
+                      ? "text-red-400"
+                      : conn.circuitStatus === "half_open"
+                        ? "text-amber-400"
+                        : "text-emerald-400";
 
                   return (
                     <div
-                      key={preset.key}
-                      className="bg-[#111114] border border-[#222227] hover:border-[#3F3F46] rounded-xl p-4 flex flex-col justify-between gap-4 transition-colors"
+                      key={conn.id}
+                      className="bg-[#111114] border border-[#222227] rounded-xl p-4 space-y-3"
                     >
-                      <div className="space-y-2.5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 rounded-lg bg-[#18181B] border border-[#27272A] flex items-center justify-center font-mono text-xs font-bold text-amber-400 shrink-0">
-                              {preset.badge}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-display text-sm font-semibold text-white truncate">
-                                {preset.label}
-                              </div>
-                              <div className="text-xs text-[#8B8B95] truncate">
-                                {preset.tagline}
-                              </div>
-                            </div>
-                          </div>
-
-                          {isConnected && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 shrink-0">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>
-                                {activeCount > 0
-                                  ? `${matchingConns.length} connected`
-                                  : `${matchingConns.length} paused`}
-                              </span>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm text-white truncate">
+                              {conn.name}
                             </span>
-                          )}
-                        </div>
-
-                        <div className="bg-[#09090B] border border-[#1D1D22] rounded-lg px-3 py-2 space-y-1 text-[11px] font-mono">
-                          <div
-                            className="text-[#A1A1AA] truncate"
-                            title={preset.defaultBaseUrl}
-                          >
-                            {preset.defaultBaseUrl}
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[#71717A] truncate">
-                              Prefix:{" "}
-                              <span className="text-emerald-400">
-                                {preset.key}/
-                              </span>
-                            </span>
-                            <span
-                              className="text-[#D4D4D8] truncate max-w-[55%]"
-                              title={preset.defaultModel}
-                            >
-                              {preset.defaultModel}
-                            </span>
-                          </div>
-                          <div className="pt-0.5 flex items-center justify-between gap-2 border-t border-[#16161B]">
-                            {preset.freeTier === "free-tier" ? (
-                              <span className="text-emerald-400 truncate">
-                                Free Tier · {preset.freeTierNote}
-                              </span>
-                            ) : preset.freeTier === "free-credits" ? (
-                              <span className="text-sky-400 truncate">
-                                Free Tokens · {preset.freeTierNote}
-                              </span>
-                            ) : (
-                              <span className="text-[#71717A] truncate">
-                                Paid API · Pay-as-you-go
+                            {matchedPreset?.freeTier && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
+                                {matchedPreset.freeTier === "free-tier"
+                                  ? "Free Tier"
+                                  : "Free Tokens"}
                               </span>
                             )}
                           </div>
+                          <div className="mt-0.5 text-xs font-mono text-[#A1A1AA] truncate">
+                            <span className="text-amber-400">{conn.provider}</span>
+                            {" · Search & Extract"}
+                          </div>
+                        </div>
+                        <span className={`text-xs font-medium shrink-0 ${circuitColor}`}>
+                          {circuitLabel}
+                        </span>
+                      </div>
+
+                      <div className="bg-[#09090B] border border-[#1D1D22] rounded-lg px-3 py-2 text-[11px] font-mono text-[#A1A1AA] space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate">{conn.maskedKey}</span>
+                          {conn.poolKeyCount > 0 && (
+                            <span className="text-emerald-400 shrink-0">
+                              +{conn.poolKeyCount} pool
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-[#8B8B95] tabular-nums">
+                          <span>{conn.usedRequestsToday.toLocaleString()} req today</span>
+                          <span>
+                            {conn.lastLatencyMs !== null
+                              ? `${conn.lastLatencyMs}ms`
+                              : "—"}
+                          </span>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => openQuickConnect(preset)}
-                        className={`w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
-                          isConnected
-                            ? "bg-[#18181B] hover:bg-[#222227] text-[#FAFAFA] border border-[#27272A]"
-                            : "bg-amber-400 hover:bg-amber-300 text-[#09090B]"
-                        }`}
-                      >
-                        <KeyRound className="w-3.5 h-3.5" />
-                        <span>
-                          {isConnected ? "Add Another Key" : "Connect"}
-                        </span>
-                      </button>
+                      {conn.lastError && (
+                        <div className="text-xs text-red-400 truncate">
+                          {conn.lastError}
+                        </div>
+                      )}
+                      {testInfo && (
+                        <div
+                          className={`text-xs ${
+                            testInfo.ok ? "text-emerald-400" : "text-red-400"
+                          }`}
+                        >
+                          {testInfo.detail} ({testInfo.latencyMs}ms)
+                        </div>
+                      )}
+
+                      <div className="pt-2 border-t border-[#1D1D22] flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleTest(conn.id)}
+                            disabled={testingId === conn.id}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-[#D4D4D8] hover:text-white"
+                          >
+                            <Zap className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{testingId === conn.id ? "Testing..." : "Test"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(conn)}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-[#A1A1AA] hover:text-white"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                          {conn.circuitStatus !== "healthy" && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetCircuit(conn.id)}
+                              className="text-xs font-medium text-amber-300 hover:text-amber-200"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggle(conn)}
+                            className="text-xs text-[#A1A1AA] hover:text-white"
+                          >
+                            {conn.isActive ? "Disable" : "Enable"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirmDeleteId === conn.id) {
+                                setConfirmDeleteId(null);
+                                handleDelete(conn.id);
+                              } else {
+                                setConfirmDeleteId(conn.id);
+                              }
+                            }}
+                            className={`text-xs font-medium ${
+                              confirmDeleteId === conn.id
+                                ? "text-red-300 underline underline-offset-2"
+                                : "text-red-400 hover:text-red-300"
+                            }`}
+                          >
+                            {confirmDeleteId === conn.id ? "Confirm?" : "Delete"}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
               </div>
             )}
           </section>
-        );
-      })()}
+
+          {/* Available Web Search Providers */}
+          <section className="pt-6 border-t border-[#222227] space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="font-display text-sm font-semibold text-white">
+                  Available Web Search Providers
+                </h3>
+                <p className="mt-0.5 text-xs text-[#8B8B95]">
+                  Connect any engine below to enable API failover for the Search tab, POST /v1/search, and POST /v1/extract.
+                </p>
+              </div>
+              <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#18181B] border border-[#27272A] text-[#D4D4D8] tabular-nums">
+                {SEARCH_PROVIDER_PRESETS.length}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {SEARCH_PROVIDER_PRESETS.map(renderPresetCard)}
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Add / Quick Connect / Edit Provider Modal */}
       <AnimatePresence>
@@ -1770,9 +2004,15 @@ export function ProvidersView({
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[#8B8B95]">Default Model</span>
+                    <span className="text-[#8B8B95]">
+                      {isSearchProvider(quickPreset.id)
+                        ? "Capability"
+                        : "Default Model"}
+                    </span>
                     <span className="font-mono text-amber-400 truncate">
-                      {defaultModel || quickPreset.defaultModel}
+                      {isSearchProvider(quickPreset.id)
+                        ? "Web Search & Extract (No AI Combos)"
+                        : defaultModel || quickPreset.defaultModel}
                     </span>
                   </div>
                 </div>
@@ -1790,11 +2030,24 @@ export function ProvidersView({
                       onChange={(e) => handleProviderChange(e.target.value)}
                       className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-60 focus:outline-none focus:border-amber-400"
                     >
-                      {PROVIDER_CATALOG.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.label}
-                        </option>
-                      ))}
+                      <optgroup label="AI Model Providers">
+                        {PROVIDER_CATALOG.filter((p) => p.kind !== "search").map(
+                          (p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.label}
+                            </option>
+                          )
+                        )}
+                      </optgroup>
+                      <optgroup label="Web Search Providers (Search Tab Only)">
+                        {PROVIDER_CATALOG.filter((p) => p.kind === "search").map(
+                          (p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.label}
+                            </option>
+                          )
+                        )}
+                      </optgroup>
                     </select>
                   </div>
 
@@ -1882,75 +2135,77 @@ export function ProvidersView({
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                      Model ID
-                    </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    list="provider-model-suggestions"
-                    value={defaultModel}
-                    onChange={(e) => setDefaultModel(e.target.value)}
-                    className="flex-1 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleFetchModels()}
-                    disabled={fetchingModels}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#18181B] hover:bg-[#222227] disabled:opacity-60 text-white border border-[#27272A] rounded-lg transition-colors whitespace-nowrap shrink-0"
-                  >
-                    <RefreshCw
-                      className={`w-3.5 h-3.5 ${fetchingModels ? "animate-spin" : ""}`}
-                    />
-                    <span>{fetchingModels ? "Fetching..." : "Fetch"}</span>
-                  </button>
-                </div>
-                <div className="mt-2.5 px-1">
-                  <ToggleSwitch
-                    checked={freeOnly}
-                    onChange={setFreeOnly}
-                    label="Import free models only"
-                  />
-                </div>
-                <datalist id="provider-model-suggestions">
-                  {Array.from(
-                    new Set([
-                      ...fetchedModels,
-                      ...selectedSpec.models.map((m) => m.id),
-                    ])
-                  ).map((id) => (
-                    <option key={id} value={id} />
-                  ))}
-                </datalist>
-
-                {fetchedModels.length > 0 && (
-                  <select
-                    value={
-                      fetchedModels.includes(defaultModel) ? defaultModel : ""
-                    }
-                    onChange={(e) => {
-                      if (e.target.value) setDefaultModel(e.target.value);
-                    }}
-                    className="mt-2 w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-400"
-                  >
-                    <option value="">
-                      Fetched models ({fetchedModels.length})
-                    </option>
-                    {fetchedModels.map((id) => (
-                      <option key={id} value={id}>
-                        {id}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                    {fetchError && (
-                      <div className="mt-1.5 text-xs text-red-400">
-                        {fetchError}
+                  {!isSearchProvider(provider) && (
+                    <div>
+                      <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                        Model ID
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          list="provider-model-suggestions"
+                          value={defaultModel}
+                          onChange={(e) => setDefaultModel(e.target.value)}
+                          className="flex-1 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleFetchModels()}
+                          disabled={fetchingModels}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#18181B] hover:bg-[#222227] disabled:opacity-60 text-white border border-[#27272A] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                        >
+                          <RefreshCw
+                            className={`w-3.5 h-3.5 ${fetchingModels ? "animate-spin" : ""}`}
+                          />
+                          <span>{fetchingModels ? "Fetching..." : "Fetch"}</span>
+                        </button>
                       </div>
-                    )}
-                  </div>
+                      <div className="mt-2.5 px-1">
+                        <ToggleSwitch
+                          checked={freeOnly}
+                          onChange={setFreeOnly}
+                          label="Import free models only"
+                        />
+                      </div>
+                      <datalist id="provider-model-suggestions">
+                        {Array.from(
+                          new Set([
+                            ...fetchedModels,
+                            ...selectedSpec.models.map((m) => m.id),
+                          ])
+                        ).map((id) => (
+                          <option key={id} value={id} />
+                        ))}
+                      </datalist>
+
+                      {fetchedModels.length > 0 && (
+                        <select
+                          value={
+                            fetchedModels.includes(defaultModel) ? defaultModel : ""
+                          }
+                          onChange={(e) => {
+                            if (e.target.value) setDefaultModel(e.target.value);
+                          }}
+                          className="mt-2 w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-400"
+                        >
+                          <option value="">
+                            Fetched models ({fetchedModels.length})
+                          </option>
+                          {fetchedModels.map((id) => (
+                            <option key={id} value={id}>
+                              {id}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      {fetchError && (
+                        <div className="mt-1.5 text-xs text-red-400">
+                          {fetchError}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 

@@ -253,3 +253,83 @@ export interface LiveRouteActivity {
   timestamp: string;
 }
 
+export type SearchEnginePreference =
+  | "auto"
+  | "tavily"
+  | "brave-search"
+  | "exa"
+  | "builtin";
+
+export interface GatewaySearchRequest {
+  query: string;
+  search_depth?: "basic" | "advanced";
+  topic?: "general" | "news" | "finance";
+  max_results?: number;
+  include_answer?: boolean | "basic" | "advanced";
+  include_raw_content?: boolean | "markdown" | "text";
+  include_domains?: string[];
+  exclude_domains?: string[];
+  time_range?: "day" | "week" | "month" | "year";
+  days?: number;
+  provider?: SearchEnginePreference;
+}
+
+export interface GatewaySearchResultItem {
+  title: string;
+  url: string;
+  content: string;
+  score: number;
+  raw_content: string | null;
+  published_date: string | null;
+}
+
+export interface GatewaySearchResponse {
+  query: string;
+  answer: string | null;
+  results: GatewaySearchResultItem[];
+  response_time: number;
+  usage: {
+    credits: number;
+  };
+  x_asrouter: {
+    resolved_provider: string;
+    connection_name: string | null;
+    answer_model: string | null;
+    latency_ms: number;
+    fallback_hops: FallbackHop[];
+  };
+}
+
+export interface GatewayExtractRequest {
+  urls: string | string[];
+  extract_depth?: "basic" | "advanced";
+  query?: string;
+  format?: "markdown" | "text";
+  provider?: "auto" | "tavily" | "exa" | "builtin";
+}
+
+export interface GatewayExtractResultItem {
+  url: string;
+  title?: string;
+  raw_content: string;
+}
+
+export interface GatewayExtractFailedItem {
+  url: string;
+  error: string;
+}
+
+export interface GatewayExtractResponse {
+  results: GatewayExtractResultItem[];
+  failed_results: GatewayExtractFailedItem[];
+  response_time: number;
+  usage: {
+    credits: number;
+  };
+  x_asrouter: {
+    resolved_provider: string;
+    connection_name: string | null;
+    latency_ms: number;
+    fallback_hops: FallbackHop[];
+  };
+}

@@ -20,6 +20,7 @@ import {
   ROUTING_STRATEGIES,
   getConnectionPrefix,
   getProviderSpec,
+  isSearchProvider,
 } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import type {
@@ -127,10 +128,13 @@ export function CombosView({
     steps: SimulationStep[];
   } | null>(null);
 
+  const llmConnections = connections.filter(
+    (c) => !isSearchProvider(c.provider)
+  );
   const connMap = new Map(connections.map((c) => [c.id, c]));
 
   const openCreateBuilder = () => {
-    const firstConn = connections[0];
+    const firstConn = llmConnections[0];
     const firstSpec = firstConn
       ? getProviderSpec(firstConn.provider)
       : PROVIDER_CATALOG[0];
@@ -168,19 +172,24 @@ export function CombosView({
     setFreeOnly(Boolean(combo.freeOnly));
     setEnableCache(Boolean(combo.enableCache));
     setTiers(
-      combo.tiers.map((t) => ({
-        connectionId: t.connectionId,
-        upstreamModel: t.upstreamModel,
-        weight: t.weight,
-        maxRetries: t.maxRetries ?? 1,
-      }))
+      combo.tiers
+        .filter((t) => {
+          const c = connMap.get(t.connectionId);
+          return !c || !isSearchProvider(c.provider);
+        })
+        .map((t) => ({
+          connectionId: t.connectionId,
+          upstreamModel: t.upstreamModel,
+          weight: t.weight,
+          maxRetries: t.maxRetries ?? 1,
+        }))
     );
     setShowBuilder(true);
   };
 
   const addDraftTier = () => {
-    if (connections.length === 0) return;
-    const conn = connections[tiers.length % connections.length];
+    if (llmConnections.length === 0) return;
+    const conn = llmConnections[tiers.length % llmConnections.length];
     const spec = getProviderSpec(conn.provider);
     setTiers((prev) => [
       ...prev,
@@ -211,7 +220,18 @@ export function CombosView({
   const handleSaveCombo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (tiers.length === 0) {
-      onNotify("Add at least one provider tier.", "error");
+      onNotify("Add at least one AI provider tier.", "error");
+      return;
+    }
+    const hasSearchTier = tiers.some((t) => {
+      const conn = connMap.get(t.connectionId);
+      return conn ? isSearchProvider(conn.provider) : false;
+    });
+    if (hasSearchTier) {
+      onNotify(
+        "Web search providers cannot be combined into AI combos.",
+        "error"
+      );
       return;
     }
     setSubmitting(true);
@@ -570,7 +590,7 @@ export function CombosView({
           <button
             type="button"
             onClick={handleAutoBuildFreeCombo}
-            disabled={connections.length === 0 || buildingFreeAuto}
+            disabled={llmConnections.length === 0 || buildingFreeAuto}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#111114] hover:bg-[#18181B] disabled:opacity-50 text-[#D4D4D8] hover:text-white border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
@@ -581,7 +601,7 @@ export function CombosView({
           <button
             type="button"
             onClick={openCreateBuilder}
-            disabled={connections.length === 0}
+            disabled={llmConnections.length === 0}
             className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -589,6 +609,12 @@ export function CombosView({
           </button>
         </div>
       </div>
+
+      {llmConnections.length === 0 && connections.some((c) => isSearchProvider(c.provider)) && (
+        <div className="bg-[#111114] border border-[#222227] rounded-lg px-4 py-3 text-xs text-[#A1A1AA]">
+          Web Search providers (Tavily, Brave Search, Exa) are kept separate in the <span className="text-white font-medium">Search</span> tab and cannot be combined with AI models. Connect at least one AI model provider to build combos.
+        </div>
+      )}
 
       {/* Ready-Made Combo Templates */}
       <section className="bg-[#111114] border border-[#222227] rounded-xl p-5 space-y-4">
@@ -609,7 +635,7 @@ export function CombosView({
           <button
             type="button"
             onClick={handleBuildAllPresetCombos}
-            disabled={connections.length === 0 || creatingAllPresets}
+            disabled={llmConnections.length === 0 || creatingAllPresets}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#18181B] hover:bg-[#222227] disabled:opacity-50 text-[#FAFAFA] border border-[#27272A] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -664,7 +690,7 @@ export function CombosView({
                   </span>
                   <button
                     type="button"
-                    disabled={connections.length === 0 || isBusy}
+                    disabled={llmConnections.length === 0 || isBusy}
                     onClick={() => handleBuildPresetCombo(preset)}
                     className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 ${
                       existingCombo
@@ -1020,13 +1046,13 @@ export function CombosView({
             </div>
           </form>
 
-          {connections.length > 0 && (
+          {llmConnections.length > 0 && (
             <div className="pt-1">
               <div className="text-xs text-[#A1A1AA] mb-1.5">
                 Simulate 429 faults:
               </div>
               <div className="flex flex-wrap gap-2">
-                {connections.map((c) => {
+                {llmConnections.map((c) => {
                   const active = faultIds.includes(c.id);
                   return (
                     <button
@@ -1225,7 +1251,7 @@ export function CombosView({
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-[#D4D4D8]">
-                    Provider Tiers (Drag handles to reorder fallback priority)
+                    AI Provider Tiers (Drag handles to reorder fallback · Search providers excluded)
                   </span>
                   <button
                     type="button"
@@ -1298,7 +1324,7 @@ export function CombosView({
                             }}
                             className="w-full bg-[#111114] border border-[#222227] rounded-md px-2.5 py-1.5 text-xs text-white"
                           >
-                            {connections.map((c) => (
+                            {llmConnections.map((c) => (
                               <option key={c.id} value={c.id}>
                                 {c.name} ({c.provider})
                               </option>

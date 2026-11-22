@@ -11,7 +11,7 @@ import {
   SquarePen,
   X,
 } from "lucide-react";
-import { getProviderSpec } from "../shared/catalog.ts";
+import { getProviderSpec, isSearchProvider } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import type {
   Combo,
@@ -182,7 +182,7 @@ export function PlaygroundView({
     }
     const seen = new Set<string>();
     for (const conn of connections) {
-      if (!conn.isActive) continue;
+      if (!conn.isActive || isSearchProvider(conn.provider)) continue;
       const spec = getProviderSpec(conn.provider);
       const connModels = Array.from(
         new Set([

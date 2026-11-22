@@ -11,6 +11,9 @@ export type ProviderId =
   | "together"
   | "fireworks"
   | "perplexity"
+  | "tavily"
+  | "brave-search"
+  | "exa"
   | "custom";
 
 export type RoutingStrategy =
@@ -49,6 +52,7 @@ export interface ProviderSpec {
   label: string;
   defaultBaseUrl: string;
   supportsServerKey: boolean;
+  kind?: "llm" | "search";
   models: ModelSpec[];
 }
 
@@ -598,6 +602,73 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     ],
   },
   {
+    id: "tavily",
+    label: "Tavily Search",
+    defaultBaseUrl: "https://api.tavily.com",
+    supportsServerKey: false,
+    kind: "search",
+    models: [
+      {
+        id: "tavily-search",
+        label: "Tavily Web Search",
+        inputPer1MUsd: 0,
+        outputPer1MUsd: 0,
+        capabilities: ["fast", "tools"],
+        tierRank: "balanced",
+      },
+      {
+        id: "tavily-extract",
+        label: "Tavily URL Extract",
+        inputPer1MUsd: 0,
+        outputPer1MUsd: 0,
+        capabilities: ["fast"],
+        tierRank: "balanced",
+      },
+    ],
+  },
+  {
+    id: "brave-search",
+    label: "Brave Search",
+    defaultBaseUrl: "https://api.search.brave.com/res/v1",
+    supportsServerKey: false,
+    kind: "search",
+    models: [
+      {
+        id: "brave-web-search",
+        label: "Brave Web Index",
+        inputPer1MUsd: 0,
+        outputPer1MUsd: 0,
+        capabilities: ["fast"],
+        tierRank: "balanced",
+      },
+    ],
+  },
+  {
+    id: "exa",
+    label: "Exa Search",
+    defaultBaseUrl: "https://api.exa.ai",
+    supportsServerKey: false,
+    kind: "search",
+    models: [
+      {
+        id: "exa-search",
+        label: "Exa Neural Search",
+        inputPer1MUsd: 0,
+        outputPer1MUsd: 0,
+        capabilities: ["fast", "tools"],
+        tierRank: "balanced",
+      },
+      {
+        id: "exa-contents",
+        label: "Exa Contents Extract",
+        inputPer1MUsd: 0,
+        outputPer1MUsd: 0,
+        capabilities: ["fast"],
+        tierRank: "balanced",
+      },
+    ],
+  },
+  {
     id: "custom",
     label: "Custom OpenAI-Compatible",
     defaultBaseUrl: "https://api.example.com/v1",
@@ -620,12 +691,13 @@ export type ProviderPresetCategory =
   | "inference"
   | "cloud"
   | "regional"
-  | "aggregators";
+  | "aggregators"
+  | "search";
 
 export type ProviderFreeTier = "free-tier" | "free-credits";
 
 export const PROVIDER_PRESET_CATEGORIES: Array<{
-  id: "all" | "connected" | "free" | ProviderPresetCategory;
+  id: "all" | "connected" | "free" | Exclude<ProviderPresetCategory, "search">;
   label: string;
 }> = [
   { id: "all", label: "All" },
@@ -1530,7 +1602,52 @@ export const READY_MADE_PROVIDER_PRESETS: ReadyMadeProviderPreset[] = [
     badge: "SY",
     keyPlaceholder: "syn_...",
   },
+  {
+    key: "tavily",
+    id: "tavily",
+    category: "search",
+    label: "Tavily",
+    tagline: "AI-native web search, URL extract & research answers",
+    defaultBaseUrl: "https://api.tavily.com",
+    defaultModel: "tavily-search",
+    badge: "TV",
+    keyPlaceholder: "tvly-...",
+    freeTier: "free-credits",
+    freeTierNote: "1,000 free API credits/month",
+  },
+  {
+    key: "brave-search",
+    id: "brave-search",
+    category: "search",
+    label: "Brave Search",
+    tagline: "Independent web index & fast JSON search snippets",
+    defaultBaseUrl: "https://api.search.brave.com/res/v1",
+    defaultModel: "brave-web-search",
+    badge: "BV",
+    keyPlaceholder: "BSA...",
+    freeTier: "free-tier",
+    freeTierNote: "Free Search tier / monthly credits",
+  },
+  {
+    key: "exa",
+    id: "exa",
+    category: "search",
+    label: "Exa Search",
+    tagline: "Neural web search & clean page content extraction",
+    defaultBaseUrl: "https://api.exa.ai",
+    defaultModel: "exa-search",
+    badge: "EX",
+    keyPlaceholder: "exa-...",
+    freeTier: "free-credits",
+    freeTierNote: "Free welcome API credits",
+  },
 ];
+
+export const LLM_PROVIDER_PRESETS: ReadyMadeProviderPreset[] =
+  READY_MADE_PROVIDER_PRESETS.filter((p) => p.category !== "search");
+
+export const SEARCH_PROVIDER_PRESETS: ReadyMadeProviderPreset[] =
+  READY_MADE_PROVIDER_PRESETS.filter((p) => p.category === "search");
 
 export type ComboPresetId =
   | "smart-auto"
@@ -1675,6 +1792,10 @@ export function getProviderSpec(providerId: string): ProviderSpec {
     PROVIDER_CATALOG.find((p) => p.id === providerId) ||
     PROVIDER_CATALOG[PROVIDER_CATALOG.length - 1]
   );
+}
+
+export function isSearchProvider(providerId: string): boolean {
+  return getProviderSpec(providerId).kind === "search";
 }
 
 export function getModelSpec(providerId: string, modelId: string): ModelSpec | undefined {
