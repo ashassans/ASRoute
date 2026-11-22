@@ -275,17 +275,6 @@ For authentication cookies and OAuth redirects, production URLs must match `APP_
 - Provider credentials are workspace-specific
 - The optional Gemini server key is not the primary provider-connection flow
 
-## Scripts
-
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Start Express with Vite middleware |
-| `npm start` | Start the application server |
-| `npm run build` | Build the React frontend |
-| `npm run preview` | Preview the Vite build |
-| `npm run lint` | Run TypeScript type checking |
-| `npm run clean` | Remove generated build output |
-
 ## API endpoints
 
 | Endpoint | Method | Authentication | Purpose |
