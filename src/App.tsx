@@ -99,16 +99,51 @@ function parseRoute(pathname: string): {
   return { area: "home", tab: "overview" };
 }
 
+const AUTH_HINT_STORAGE_KEY = "asrouter_auth_hint";
+
+function readAuthHint(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(AUTH_HINT_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeAuthHint(authenticated: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    if (authenticated) {
+      window.localStorage.setItem(AUTH_HINT_STORAGE_KEY, "1");
+    } else {
+      window.localStorage.removeItem(AUTH_HINT_STORAGE_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export default function App() {
   const { data: session, isPending: sessionLoading, refetch } =
     authClient.useSession();
   const [initialSessionChecked, setInitialSessionChecked] = useState(false);
+  const [hasAuthHint, setHasAuthHint] = useState<boolean>(() => readAuthHint());
 
   useEffect(() => {
     if (!sessionLoading) {
       setInitialSessionChecked(true);
     }
   }, [sessionLoading]);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      writeAuthHint(true);
+      setHasAuthHint(true);
+    } else if (!sessionLoading) {
+      writeAuthHint(false);
+      setHasAuthHint(false);
+    }
+  }, [session?.user?.id, sessionLoading]);
 
   const initialRoute =
     typeof window !== "undefined"
@@ -201,6 +236,7 @@ export default function App() {
   );
 
   const lastBootstrapAtRef = useRef(0);
+  const bootstrapStartedRef = useRef(false);
   const sessionUserId = session?.user?.id ?? null;
 
   const fetchBootstrap = useCallback(
@@ -211,6 +247,12 @@ export default function App() {
       setLoadError(null);
       try {
         const res = await fetch("/api/bootstrap");
+        if (res.status === 401) {
+          bootstrapStartedRef.current = false;
+          writeAuthHint(false);
+          setHasAuthHint(false);
+          return;
+        }
         if (!res.ok) {
           throw new Error("Failed to load AS ROUTER workspace.");
         }
@@ -239,13 +281,20 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (sessionUserId) {
-      fetchBootstrap();
-    } else {
+    if (
+      sessionUserId ||
+      (routeArea === "dashboard" && sessionLoading && hasAuthHint)
+    ) {
+      if (!bootstrapStartedRef.current) {
+        bootstrapStartedRef.current = true;
+        void fetchBootstrap();
+      }
+    } else if (!sessionLoading) {
+      bootstrapStartedRef.current = false;
       lastBootstrapAtRef.current = 0;
       setWorkspace(null);
     }
-  }, [sessionUserId, fetchBootstrap]);
+  }, [sessionUserId, routeArea, sessionLoading, hasAuthHint, fetchBootstrap]);
 
   // Real-time SSE Log, Live Activity, Circuit, Telemetry & Workspace Stream
   useEffect(() => {
@@ -604,6 +653,10 @@ export default function App() {
   }, [sessionUserId, streamPaused, fetchBootstrap]);
 
   const handleSignOut = async () => {
+    writeAuthHint(false);
+    setHasAuthHint(false);
+    bootstrapStartedRef.current = false;
+    lastBootstrapAtRef.current = 0;
     await authClient.signOut();
     setWorkspace(null);
     setSettingsOpen(false);
@@ -660,7 +713,7 @@ export default function App() {
   if (routeArea === "home") {
     return (
       <LandingPage
-        isAuthenticated={Boolean(session?.user)}
+        isAuthenticated={Boolean(session?.user) || (sessionLoading && hasAuthHint)}
         onOpenDashboard={() => navigateTo("/dashboard")}
         onOpenAuth={(mode) => {
           navigateTo(mode === "signup" ? "/signup" : "/login");
@@ -675,6 +728,8 @@ export default function App() {
         initialMode={routeArea === "signup" ? "signup" : "signin"}
         onBackHome={() => navigateTo("/")}
         onAuthenticated={async () => {
+          writeAuthHint(true);
+          setHasAuthHint(true);
           navigateTo("/dashboard", true);
           await refetch();
         }}

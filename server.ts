@@ -9,7 +9,7 @@ import express, {
   type Response,
 } from "express";
 import { toNodeHandler } from "better-auth/node";
-import { databaseMode, ensureSchema } from "./src/db/index.ts";
+import { databaseMode, ensureSchema, isNeonConfigured } from "./src/db/index.ts";
 import { auth } from "./src/server/auth.ts";
 import { analyticsRouter } from "./src/server/routes/analytics.ts";
 import { combosRouter } from "./src/server/routes/combos.ts";
@@ -90,11 +90,26 @@ app.use("/api", apiCors);
 // Better Auth handler MUST precede express.json()
 app.all("/api/auth/*", async (req: Request, res: Response) => {
   try {
+    const isReadOnlySessionCheck =
+      req.method === "GET" && req.path === "/api/auth/get-session";
+
+    if (isReadOnlySessionCheck && (isNeonConfigured || !req.headers.cookie)) {
+      try {
+        return await authHandler(req, res);
+      } catch (err) {
+        if (res.headersSent) throw err;
+        await ensureSchema();
+        return await authHandler(req, res);
+      }
+    }
+
     await ensureSchema();
-    return authHandler(req, res);
+    return await authHandler(req, res);
   } catch (err) {
     console.error("[AS ROUTER] Auth handler error:", err);
-    return res.status(500).json({ error: "Authentication service error" });
+    if (!res.headersSent) {
+      return res.status(500).json({ error: "Authentication service error" });
+    }
   }
 });
 

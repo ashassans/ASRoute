@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { fromNodeHeaders } from "better-auth/node";
-import { ensureSchema } from "../../db/index.ts";
+import { ensureSchema, isNeonConfigured } from "../../db/index.ts";
 import { auth } from "../auth.ts";
 
 export interface AuthedRequest extends Request {
@@ -17,10 +17,25 @@ export async function requireSession(
   next: NextFunction
 ) {
   try {
-    await ensureSchema();
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers),
-    });
+    const headers = fromNodeHeaders(req.headers);
+    let session;
+    if (isNeonConfigured) {
+      let lookupFailed = false;
+      const [, resolved] = await Promise.all([
+        ensureSchema(),
+        auth.api.getSession({ headers }).catch(() => {
+          lookupFailed = true;
+          return null;
+        }),
+      ]);
+      session = lookupFailed
+        ? await auth.api.getSession({ headers })
+        : resolved;
+    } else {
+      await ensureSchema();
+      session = await auth.api.getSession({ headers });
+    }
+
     if (!session || !session.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
