@@ -275,21 +275,6 @@ For authentication cookies and OAuth redirects, production URLs must match `APP_
 - Provider credentials are workspace-specific
 - The optional Gemini server key is not the primary provider-connection flow
 
-## API endpoints
-
-| Endpoint | Method | Authentication | Purpose |
-|---|---|---|---|
-| `/api/health` | `GET` | None | Service and database health |
-| `/v1/models` | `GET` | Gateway key | List available models |
-| `/v1/chat/completions` | `POST` | Gateway key | OpenAI-compatible chat completions |
-| `/v1/messages` | `POST` | Gateway key | Anthropic-compatible messages |
-| `/api/bootstrap` | `GET` | Session | Load dashboard workspace |
-| `/api/providers` | CRUD | Session | Manage provider connections |
-| `/api/combos` | CRUD | Session | Manage routing combos |
-| `/api/keys` | CRUD | Session | Manage gateway keys |
-| `/api/analytics` | `GET` | Session | Workspace analytics |
-| `/api/logs/stream` | `GET` | Session (SSE) | Live request logs |
-| `/api/playground/chat` | `POST` | Session | Execute playground chat |
 
 ## Contributing
 
