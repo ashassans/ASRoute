@@ -1,24 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  --color-amber-200: #fef3c7;
-  --color-amber-300: #feebb3;
-  --color-amber-400: #fddf8a;
-  --color-amber-500: #fcd34d;
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-300: #a5b4fc;
+  --color-indigo-400: #818cf8;
+  --color-indigo-500: #6467f2;
+  --color-indigo-600: #5558e6;
 }
 
 @layer base {
   :root {
     color-scheme: dark;
-    --bg-canvas: #09090b;
-    --bg-surface: #111114;
-    --bg-elevated: #18181b;
-    --border-hairline: #27272a;
-    --text-primary: #fafafa;
-    --text-secondary: #a1a1aa;
-    --accent-primary: #fddf8a;
-    --accent-amber: #fddf8a;
-    --accent-hover: #059669;
+    --bg-canvas: #101422;
+    --bg-surface: #171C2E;
+    --bg-elevated: #1F263D;
+    --border-hairline: #2B334E;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --accent-primary: #6467f2;
+    --accent-indigo: #6467f2;
+    --accent-hover: #5558e6;
   }
 
   html {
@@ -83,12 +84,52 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: #101422;
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: #2B334E;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: #333a56;
+}
+
+@keyframes auroraFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.72;
+  }
+  50% {
+    transform: translate3d(12px, -10px, 0) scale(1.06);
+    opacity: 1;
+  }
+}
+
+@keyframes spectrumFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-aurora-float {
+  animation: auroraFloat 9s ease-in-out infinite;
+}
+
+.animate-spectrum-text {
+  background-size: 200% 200%;
+  animation: spectrumFlow 7s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-aurora-float,
+  .animate-spectrum-text {
+    animation: none;
+  }
 }

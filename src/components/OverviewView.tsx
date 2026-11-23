@@ -7,7 +7,13 @@ import {
   Copy,
   Network,
 } from "lucide-react";
-import { PROVIDER_CATALOG } from "../shared/catalog.ts";
+import {
+  PROVIDER_CATALOG,
+  getConnectionPrefix,
+  getProviderSpec,
+  isSearchProvider,
+} from "../shared/catalog.ts";
+import { getProviderVisual } from "../lib/providerVisuals.ts";
 import type {
   AnalyticsSummary,
   Combo,
@@ -41,40 +47,32 @@ interface OverviewViewProps {
 }
 
 const KEY_DOT_COLORS = [
-  "#3B82F6", // blue
+  "#38BDF8", // sky
   "#2DD4BF", // teal
   "#F472B6", // pink
-  "#FDDF8A", // light yellow/amber
-  "#84CC16", // lime
+  "#A855F7", // violet
+  "#FB923C", // orange
 ];
 
 const MODEL_SERIES_COLORS = [
-  "#F97316", // orange
-  "#EC4899", // coral pink
-  "#3B82F6", // blue
+  "#FB923C", // orange
+  "#F472B6", // pink
+  "#38BDF8", // sky
   "#10B981", // emerald
-  "#84CC16", // lime
-  "#FDDF8A", // light yellow/amber
+  "#A855F7", // violet
+  "#FBBF24", // amber
 ];
 
-const PROVIDER_BADGE_MAP: Record<
-  string,
-  { short: string; color: string; bg: string }
-> = {
-  gemini: { short: "G", color: "#60A5FA", bg: "rgba(59,130,246,0.14)" },
-  openai: { short: "O", color: "#FAFAFA", bg: "rgba(255,255,255,0.10)" },
-  anthropic: { short: "A", color: "#FCD34D", bg: "rgba(252,211,77,0.14)" },
-  groq: { short: "Q", color: "#F97316", bg: "rgba(249,115,22,0.14)" },
-  deepseek: { short: "D", color: "#38BDF8", bg: "rgba(56,189,248,0.14)" },
-  mistral: { short: "M", color: "#FDDF8A", bg: "rgba(253,223,138,0.14)" },
-  openrouter: { short: "R", color: "#EC4899", bg: "rgba(236,72,153,0.14)" },
-  xai: { short: "X", color: "#E4E4E7", bg: "rgba(228,228,231,0.12)" },
-  cerebras: { short: "Cb", color: "#22D3EE", bg: "rgba(34,211,238,0.14)" },
-  together: { short: "T", color: "#818CF8", bg: "rgba(129,140,248,0.14)" },
-  fireworks: { short: "Fw", color: "#FB923C", bg: "rgba(251,146,60,0.14)" },
-  perplexity: { short: "Px", color: "#2DD4BF", bg: "rgba(45,212,191,0.14)" },
-  custom: { short: "C", color: "#10B981", bg: "rgba(16,185,129,0.14)" },
-};
+const POLICY_CHECK_COLORS = [
+  "#818CF8",
+  "#38BDF8",
+  "#34D399",
+  "#C084FC",
+  "#F472B6",
+  "#FB923C",
+  "#2DD4BF",
+  "#FBBF24",
+];
 
 function formatCompactNumber(value: number): string {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
@@ -523,7 +521,20 @@ export function OverviewView({
     return indices;
   }, [buckets]);
 
-  const defaultModelAlias = combos[0]?.name || "gemini-4-hydrogen";
+  const firstActiveLlmConn = connections.find(
+    (c) => c.isActive && !isSearchProvider(c.provider)
+  );
+  const firstActiveModelId = firstActiveLlmConn
+    ? firstActiveLlmConn.defaultModel ||
+      firstActiveLlmConn.availableModels?.[0] ||
+      getProviderSpec(firstActiveLlmConn.provider).models[0]?.id
+    : null;
+  const defaultModelAlias =
+    combos.find((c) => c.isActive)?.name ||
+    combos[0]?.name ||
+    (firstActiveLlmConn && firstActiveModelId
+      ? `${getConnectionPrefix(firstActiveLlmConn)}/${firstActiveModelId}`
+      : "YOUR_PROVIDER/MODEL");
   const openaiCurlSnippet = `curl ${environment.gatewayEndpoint}/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer ${keys[0]?.keyPrefix || "sk-asr-YOUR_KEY"}" \\
@@ -602,7 +613,7 @@ curl ${environment.gatewayEndpoint}/messages \\
           Overview
         </h2>
 
-        <div className="inline-flex items-center gap-1 p-1 bg-[#111114] border border-[#27272A] rounded-lg self-start">
+        <div className="inline-flex items-center gap-1 p-1 bg-[#171C2E] border border-[#343E5E] rounded-lg self-start">
           {(
             [
               ["24h", "24 Hours"],
@@ -624,7 +635,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                 <motion.span
                   layoutId="overview-range-pill"
                   transition={{ type: "spring", stiffness: 360, damping: 30 }}
-                  className="absolute inset-0 bg-[#18181B] rounded-md"
+                  className="absolute inset-0 bg-[#1F263D] rounded-md"
                 />
               )}
               <span className="relative z-10">{label}</span>
@@ -633,14 +644,16 @@ curl ${environment.gatewayEndpoint}/messages \\
         </div>
       </div>
 
-      {/* Top 5 OpenRouter-Style Sparkline KPI Cards */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5"
-      >
-        <div className="bg-[#111114] border border-[#222227] rounded-xl p-4 flex flex-col justify-between hover:border-[#303038] transition-colors">
+      {/* Top 5 Multi-Color Sparkline KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0 }}
+          whileHover={{ y: -2 }}
+          className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] hover:border-emerald-500/40 rounded-xl p-4 flex flex-col justify-between transition-colors"
+        >
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-emerald-400/80 via-teal-400/40 to-transparent" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="text-xs text-[#A1A1AA] leading-snug">
@@ -653,9 +666,16 @@ curl ${environment.gatewayEndpoint}/messages \\
             <MiniSparkline values={spendSeries} stroke="#10B981" />
           </div>
           <DeltaLabel pct={deltas?.spendPct} />
-        </div>
+        </motion.div>
 
-        <div className="bg-[#111114] border border-[#222227] rounded-xl p-4 flex flex-col justify-between hover:border-[#303038] transition-colors">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          whileHover={{ y: -2 }}
+          className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] hover:border-sky-500/40 rounded-xl p-4 flex flex-col justify-between transition-colors"
+        >
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-sky-400/80 via-cyan-400/40 to-transparent" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="text-xs text-[#A1A1AA] leading-snug">
@@ -672,14 +692,21 @@ curl ${environment.gatewayEndpoint}/messages \\
                 deltas?.requestsPct !== undefined &&
                 deltas.requestsPct < 0
                   ? "#F43F5E"
-                  : "#10B981"
+                  : "#38BDF8"
               }
             />
           </div>
           <DeltaLabel pct={deltas?.requestsPct} />
-        </div>
+        </motion.div>
 
-        <div className="bg-[#111114] border border-[#222227] rounded-xl p-4 flex flex-col justify-between hover:border-[#303038] transition-colors">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          whileHover={{ y: -2 }}
+          className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] hover:border-purple-500/40 rounded-xl p-4 flex flex-col justify-between transition-colors"
+        >
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-purple-400/80 via-fuchsia-400/40 to-transparent" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="text-xs text-[#A1A1AA] leading-snug">
@@ -689,12 +716,19 @@ curl ${environment.gatewayEndpoint}/messages \\
                 {formatCompactNumber(totalTokens)}
               </div>
             </div>
-            <MiniSparkline values={tokensSeries} stroke="#10B981" />
+            <MiniSparkline values={tokensSeries} stroke="#C084FC" />
           </div>
           <DeltaLabel pct={deltas?.tokensPct} />
-        </div>
+        </motion.div>
 
-        <div className="bg-[#111114] border border-[#222227] rounded-xl p-4 flex flex-col justify-between hover:border-[#303038] transition-colors">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.15 }}
+          whileHover={{ y: -2 }}
+          className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] hover:border-teal-500/40 rounded-xl p-4 flex flex-col justify-between transition-colors"
+        >
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-teal-400/80 via-emerald-400/40 to-transparent" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="text-xs text-[#A1A1AA] leading-snug">
@@ -704,15 +738,22 @@ curl ${environment.gatewayEndpoint}/messages \\
                 {successRate.toFixed(1)}%
               </div>
             </div>
-            <MiniSparkline values={successSeries} stroke="#10B981" />
+            <MiniSparkline values={successSeries} stroke="#2DD4BF" />
           </div>
           <DeltaLabel
             pct={deltas?.successRatePct}
             fallbackText={`${fallbackRecovered} fallback recovered`}
           />
-        </div>
+        </motion.div>
 
-        <div className="bg-[#111114] border border-[#222227] rounded-xl p-4 flex flex-col justify-between hover:border-[#303038] transition-colors">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          whileHover={{ y: -2 }}
+          className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] hover:border-orange-500/40 rounded-xl p-4 flex flex-col justify-between transition-colors"
+        >
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-orange-400/80 via-amber-400/40 to-transparent" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="text-xs text-[#A1A1AA] leading-snug">
@@ -722,11 +763,11 @@ curl ${environment.gatewayEndpoint}/messages \\
                 {formatUsdSmart(blendedCostPer1M)}
               </div>
             </div>
-            <MiniSparkline values={blendedSeries} stroke="#10B981" />
+            <MiniSparkline values={blendedSeries} stroke="#FB923C" />
           </div>
           <DeltaLabel pct={deltas?.blendedPct} invertNegativeColor />
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
 
       {/* SECTION 1 (Landing-Style Animated): Better, faster, cheaper. Route smarter. */}
       <motion.section
@@ -745,12 +786,12 @@ curl ${environment.gatewayEndpoint}/messages \\
             className="inline-flex items-center gap-2 text-xs font-medium text-[#D4D4D8] hover:text-[#FAFAFA] transition-colors whitespace-nowrap"
           >
             <span>Configure combos & routing</span>
-            <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+            <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
           </button>
         </div>
 
-        <div className="lg:col-span-7 bg-[#111114] border border-[#222227] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#222227] flex items-center justify-between gap-3">
+        <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <span className="text-xs font-medium text-[#FAFAFA] whitespace-nowrap">
                 Provider Topology
@@ -804,7 +845,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                       d="M 0 100 L 58 100"
                       fill="none"
                       stroke={
-                        isLiveActive ? "rgba(16,185,129,0.55)" : "#27272A"
+                        isLiveActive ? "rgba(16,185,129,0.55)" : "#343E5E"
                       }
                       strokeWidth={isLiveActive ? "1.6" : "1.25"}
                     />
@@ -820,12 +861,15 @@ curl ${environment.gatewayEndpoint}/messages \\
                     {branchYs.map((ty, idx) => {
                       const node = topologyNodes[idx];
                       const pid = `ov-branch-${idx}`;
+                      const nodeVisual = getProviderVisual(
+                        node?.provider || "custom"
+                      );
                       const strokeColor =
                         node?.status === "active"
-                          ? "rgba(16,185,129,0.65)"
+                          ? nodeVisual.color
                           : node?.status === "error"
-                            ? "rgba(244,63,94,0.38)"
-                            : "rgba(253,223,138,0.28)";
+                            ? "rgba(244,63,94,0.45)"
+                            : nodeVisual.border;
                       return (
                         <g key={pid}>
                           <path
@@ -833,10 +877,11 @@ curl ${environment.gatewayEndpoint}/messages \\
                             d={`M 82 100 C 145 100, 175 ${ty}, 256 ${ty}`}
                             fill="none"
                             stroke={strokeColor}
-                            strokeWidth={node?.status === "active" ? "1.75" : "1.2"}
+                            strokeOpacity={node?.status === "active" ? 0.72 : 0.48}
+                            strokeWidth={node?.status === "active" ? "1.8" : "1.25"}
                           />
                           {node?.status === "active" && (
-                            <circle r="3.2" fill="#10B981">
+                            <circle r="3.4" fill={nodeVisual.color}>
                               <animateMotion
                                 dur={`${1.05 + idx * 0.2}s`}
                                 repeatCount="indefinite"
@@ -865,35 +910,31 @@ curl ${environment.gatewayEndpoint}/messages \\
                           }
                         : { duration: 0.25 }
                     }
-                    className={`absolute top-1/2 -translate-y-1/2 left-[48px] w-10 h-10 rounded-full bg-[#09090B] border flex items-center justify-center transition-all ${
+                    className={`absolute top-1/2 -translate-y-1/2 left-[42px] w-12 h-10 flex items-center justify-center transition-all ${
                       isLiveActive
-                        ? "border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.35)]"
-                        : "border-[#27272A]"
+                        ? "drop-shadow-[0_0_18px_rgba(56,189,248,0.5)]"
+                        : "drop-shadow-[0_0_12px_rgba(100,103,242,0.3)]"
                     }`}
                     title="AS ROUTER Engine"
                   >
-                    <span
-                      className={`font-display text-xs font-bold ${
-                        isLiveActive ? "text-emerald-400" : "text-amber-400"
-                      }`}
-                    >
-                      AS
-                    </span>
+                    <img
+                      src="/assets/as-logo.png"
+                      alt="AS ROUTER"
+                      className="w-11 h-auto object-contain"
+                    />
                   </motion.div>
                 </div>
 
                 {/* Right Active / Recent Provider + Model Nodes */}
                 <div className="col-span-8 sm:col-span-7 h-[200px] flex flex-col justify-center gap-3 py-1">
                   {topologyNodes.map((node, idx) => {
-                    const badge =
-                      PROVIDER_BADGE_MAP[node.provider] ||
-                      PROVIDER_BADGE_MAP.custom;
+                    const badge = getProviderVisual(node.provider);
                     const borderTone =
                       node.status === "active"
                         ? "border-emerald-400/60 shadow-[0_0_14px_rgba(16,185,129,0.14)]"
                         : node.status === "error"
                           ? "border-rose-500/40"
-                          : "border-[#27272A]";
+                          : "border-[#343E5E]";
                     const dotTone =
                       node.status === "active"
                         ? "bg-emerald-400 animate-pulse"
@@ -910,7 +951,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                         className="flex items-center justify-between gap-2.5"
                       >
                         <div
-                          className={`flex items-center gap-2 px-3 py-1.5 bg-[#18181B] border rounded-full min-w-0 flex-1 ${borderTone}`}
+                          className={`flex items-center gap-2 px-3 py-1.5 bg-[#1F263D] border rounded-full min-w-0 flex-1 ${borderTone}`}
                         >
                           <span
                             className={`w-2 h-2 rounded-full shrink-0 ${dotTone}`}
@@ -919,7 +960,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                             className="w-4 h-4 rounded-full flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
                             style={{
                               color: badge.color,
-                              backgroundColor: badge.bg,
+                              backgroundColor: badge.softBg,
                             }}
                           >
                             {badge.short}
@@ -947,7 +988,7 @@ curl ${environment.gatewayEndpoint}/messages \\
             )}
           </div>
 
-          <div className="px-5 py-3 border-t border-[#222227] flex items-center justify-between gap-3 text-xs">
+          <div className="px-5 py-3 border-t border-[#2B334E] flex items-center justify-between gap-3 text-xs">
             <span className="text-[#A1A1AA] truncate font-mono">
               {isLiveActive
                 ? `Active: ${activeRoutes[0].provider}/${activeRoutes[0].model}`
@@ -955,7 +996,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                   ? `Recent: ${recentNodes[0].provider}/${recentNodes[0].model}`
                   : "Idle"}
             </span>
-            <span className="font-mono font-semibold text-amber-400 tabular-nums whitespace-nowrap shrink-0">
+            <span className="font-mono font-semibold text-indigo-400 tabular-nums whitespace-nowrap shrink-0">
               {formatCompactNumber(totalTokens)} tok · {formatUsdSmart(totalCostUsd)}
             </span>
           </div>
@@ -970,8 +1011,8 @@ curl ${environment.gatewayEndpoint}/messages \\
         transition={{ duration: 0.4 }}
         className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-2"
       >
-        <div className="lg:col-span-7 bg-[#111114] border border-[#222227] rounded-xl overflow-hidden order-2 lg:order-1">
-          <div className="px-5 py-3 border-b border-[#222227] flex items-center justify-between">
+        <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden order-2 lg:order-1">
+          <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between">
             <span className="text-xs font-medium text-[#A1A1AA]">
               Providers
             </span>
@@ -987,9 +1028,7 @@ curl ${environment.gatewayEndpoint}/messages \\
               </div>
             ) : (
               failoverRows.rows.map((row) => {
-                const badge =
-                  PROVIDER_BADGE_MAP[row.provider] ||
-                  PROVIDER_BADGE_MAP.custom;
+                const badge = getProviderVisual(row.provider);
                 return (
                   <div key={row.id} className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
@@ -998,7 +1037,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                           className="w-5 h-5 rounded flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
                           style={{
                             color: badge.color,
-                            backgroundColor: badge.bg,
+                            backgroundColor: badge.softBg,
                           }}
                         >
                           {badge.short}
@@ -1029,7 +1068,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                                 ? "bg-rose-500"
                                 : state === "amber"
                                   ? "bg-amber-400"
-                                  : "bg-[#1C1C21]"
+                                  : "bg-[#28304A]"
                           }`}
                         />
                       ))}
@@ -1040,7 +1079,7 @@ curl ${environment.gatewayEndpoint}/messages \\
             )}
 
             {/* Aggregated Through AS ROUTER strip */}
-            <div className="pt-3.5 border-t border-[#222227] space-y-2">
+            <div className="pt-3.5 border-t border-[#2B334E] space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium text-[#FAFAFA]">
                   Through AS ROUTER
@@ -1060,7 +1099,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                         ? "bg-[#10B981]"
                         : state === "fail"
                           ? "bg-rose-500"
-                          : "bg-[#1C1C21]"
+                          : "bg-[#28304A]"
                     }`}
                   />
                 ))}
@@ -1079,7 +1118,7 @@ curl ${environment.gatewayEndpoint}/messages \\
             className="inline-flex items-center gap-2 text-xs font-medium text-[#D4D4D8] hover:text-[#FAFAFA] transition-colors whitespace-nowrap"
           >
             <span>See live failover traces</span>
-            <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+            <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
           </button>
         </div>
       </motion.section>
@@ -1092,8 +1131,8 @@ curl ${environment.gatewayEndpoint}/messages \\
         transition={{ duration: 0.4 }}
         className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-2"
       >
-        <div className="lg:col-span-6 bg-[#111114] border border-[#222227] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#222227] flex items-center justify-between text-xs">
+        <div className="lg:col-span-6 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between text-xs">
             <span className="font-medium text-[#FAFAFA]">
               {activeCombo?.name || "Production"}
             </span>
@@ -1102,7 +1141,7 @@ curl ${environment.gatewayEndpoint}/messages \\
             </span>
           </div>
 
-          <div className="divide-y divide-[#1C1C21]">
+          <div className="divide-y divide-[#28304A]">
             {/* Row 1: Prompt Compression Toggle */}
             <div className="px-5 py-3.5 flex items-center justify-between gap-4">
               <span className="text-xs sm:text-sm text-[#D4D4D8]">
@@ -1117,13 +1156,13 @@ curl ${environment.gatewayEndpoint}/messages \\
                   updateGatewayPolicy({ compressPrompt: !localCompress })
                 }
                 className={`w-10 h-5.5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-                  localCompress ? "bg-amber-400" : "bg-[#27272A]"
+                  localCompress ? "bg-indigo-500" : "bg-[#343E5E]"
                 }`}
               >
                 <motion.span
                   layout
                   transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                  className={`w-4.5 h-4.5 rounded-full bg-[#09090B] ${
+                  className={`w-4.5 h-4.5 rounded-full bg-white ${
                     localCompress ? "ml-auto" : "mr-auto"
                   }`}
                 />
@@ -1150,14 +1189,14 @@ curl ${environment.gatewayEndpoint}/messages \\
                 }
                 className={`w-10 h-5.5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
                   localStrategy === "intent_auto"
-                    ? "bg-amber-400"
-                    : "bg-[#27272A]"
+                    ? "bg-indigo-500"
+                    : "bg-[#343E5E]"
                 }`}
               >
                 <motion.span
                   layout
                   transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                  className={`w-4.5 h-4.5 rounded-full bg-[#09090B] ${
+                  className={`w-4.5 h-4.5 rounded-full bg-white ${
                     localStrategy === "intent_auto" ? "ml-auto" : "mr-auto"
                   }`}
                 />
@@ -1169,7 +1208,7 @@ curl ${environment.gatewayEndpoint}/messages \\
               <span className="text-xs sm:text-sm text-[#D4D4D8]">
                 Routing mode
               </span>
-              <div className="inline-flex items-center p-0.5 bg-[#09090B] border border-[#27272A] rounded-md">
+              <div className="inline-flex items-center p-0.5 bg-[#101422] border border-[#343E5E] rounded-md">
                 {(
                   [
                     ["priority", "Priority"],
@@ -1184,7 +1223,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                     onClick={() => updateGatewayPolicy({ strategy: modeId })}
                     className={`relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
                       localStrategy === modeId
-                        ? "text-amber-400"
+                        ? "text-indigo-400"
                         : "text-[#71717A] hover:text-[#D4D4D8]"
                     }`}
                   >
@@ -1196,7 +1235,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                           stiffness: 420,
                           damping: 32,
                         }}
-                        className="absolute inset-0 bg-[#18181B] rounded"
+                        className="absolute inset-0 bg-[#1F263D] rounded"
                       />
                     )}
                     <span className="relative z-10">{label}</span>
@@ -1218,19 +1257,17 @@ curl ${environment.gatewayEndpoint}/messages \\
               >
                 {PROVIDER_CATALOG.filter((spec) => spec.id !== "custom").map((spec) => {
                   const active = connectedProviderSet.has(spec.id);
-                  const badge =
-                    PROVIDER_BADGE_MAP[spec.id] || PROVIDER_BADGE_MAP.custom;
+                  const badge = getProviderVisual(spec.id);
                   return (
                     <span
                       key={spec.id}
-                      className={`w-6 h-6 rounded-full border flex items-center justify-center font-mono text-[10px] font-bold transition-opacity ${
-                        active
-                          ? "border-[#3F3F46] opacity-100"
-                          : "border-[#222227] opacity-35"
+                      className={`w-6 h-6 rounded-full border flex items-center justify-center font-mono text-[10px] font-bold transition-all ${
+                        active ? "opacity-100 scale-105" : "border-[#2B334E] opacity-35"
                       }`}
                       style={{
                         color: active ? badge.color : "#71717A",
-                        backgroundColor: active ? badge.bg : "#09090B",
+                        backgroundColor: active ? badge.softBg : "#101422",
+                        borderColor: active ? badge.border : undefined,
                       }}
                     >
                       {badge.short}
@@ -1257,9 +1294,15 @@ curl ${environment.gatewayEndpoint}/messages \\
               "Real-time telemetry logs",
               "Automatic health probes",
               "Cloud workspace persistence",
-            ].map((item) => (
+            ].map((item, idx) => (
               <div key={item} className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <Check
+                  className="w-3.5 h-3.5 shrink-0"
+                  style={{
+                    color:
+                      POLICY_CHECK_COLORS[idx % POLICY_CHECK_COLORS.length],
+                  }}
+                />
                 <span>{item}</span>
               </div>
             ))}
@@ -1271,14 +1314,14 @@ curl ${environment.gatewayEndpoint}/messages \\
             className="inline-flex items-center gap-2 text-xs font-medium text-[#D4D4D8] hover:text-[#FAFAFA] transition-colors whitespace-nowrap"
           >
             <span>Manage API keys & guardrails</span>
-            <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+            <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
           </button>
         </div>
       </motion.section>
 
       {/* ANALYTICS LEADERBOARDS: Top API Keys & Top Combos / Models */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
-        <div className="bg-[#111114] border border-[#222227] rounded-xl p-5">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
               Top API Keys
@@ -1336,7 +1379,7 @@ curl ${environment.gatewayEndpoint}/messages \\
           )}
         </div>
 
-        <div className="bg-[#111114] border border-[#222227] rounded-xl p-5">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
               Top Combos & Models
@@ -1359,7 +1402,9 @@ curl ${environment.gatewayEndpoint}/messages \\
             </div>
           ) : (
             <div className="space-y-3.5">
-              {topRoutes.map((route, idx) => (
+              {topRoutes.map((route, idx) => {
+                const routeBadge = getProviderVisual(route.provider);
+                return (
                 <div
                   key={`${route.name}-${idx}`}
                   className="flex items-center justify-between gap-3 text-sm"
@@ -1368,8 +1413,15 @@ curl ${environment.gatewayEndpoint}/messages \\
                     <span className="w-4 text-xs font-mono text-[#71717A] tabular-nums shrink-0">
                       {idx + 1}
                     </span>
-                    <div className="w-6 h-6 rounded-md bg-[#18181B] border border-[#27272A] flex items-center justify-center font-mono text-[11px] font-semibold text-[#D4D4D8] uppercase shrink-0">
-                      {route.provider.slice(0, 1)}
+                    <div
+                      className="w-6 h-6 rounded-md border flex items-center justify-center font-mono text-[10px] font-bold uppercase shrink-0"
+                      style={{
+                        color: routeBadge.color,
+                        backgroundColor: routeBadge.softBg,
+                        borderColor: routeBadge.border,
+                      }}
+                    >
+                      {routeBadge.short}
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-[#FAFAFA] truncate">
@@ -1385,14 +1437,15 @@ curl ${environment.gatewayEndpoint}/messages \\
                     <span className="text-xs text-[#71717A]">tok</span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
       {/* Full-Width Stacked Bar Chart: Usage by model */}
-      <div className="bg-[#111114] border border-[#222227] rounded-xl p-5">
+      <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-3">
             <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
@@ -1408,7 +1461,7 @@ curl ${environment.gatewayEndpoint}/messages \\
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="inline-flex items-center gap-0.5 p-0.5 bg-[#09090B] border border-[#27272A] rounded-md">
+            <div className="inline-flex items-center gap-0.5 p-0.5 bg-[#101422] border border-[#343E5E] rounded-md">
               {(
                 [
                   ["spend", "Spend"],
@@ -1430,7 +1483,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                     <motion.span
                       layoutId="overview-metric-pill"
                       transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      className="absolute inset-0 bg-[#18181B] rounded"
+                      className="absolute inset-0 bg-[#1F263D] rounded"
                     />
                   )}
                   <span className="relative z-10">{label}</span>
@@ -1459,13 +1512,13 @@ curl ${environment.gatewayEndpoint}/messages \\
               ))}
             </div>
 
-            <div className="flex-1 h-52 relative border-b border-l border-[#222227]">
+            <div className="flex-1 h-52 relative border-b border-l border-[#2B334E]">
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
                 {[0, 1, 2, 3, 4].map((row) => (
                   <div
                     key={row}
                     className={`w-full ${
-                      row === 4 ? "" : "border-t border-dashed border-[#1F1F24]"
+                      row === 4 ? "" : "border-t border-dashed border-[#28304A]"
                     }`}
                   />
                 ))}
@@ -1518,9 +1571,16 @@ curl ${environment.gatewayEndpoint}/messages \\
                       className="flex-1 h-full flex items-end justify-center border-r border-dashed border-[#1B1B20] last:border-r-0 group relative cursor-pointer"
                     >
                       {heightPct > 0 && segTotal > 0 ? (
-                        <div
+                        <motion.div
+                          initial={{ scaleY: 0 }}
+                          animate={{ scaleY: 1 }}
+                          transition={{
+                            duration: 0.4,
+                            delay: Math.min(bIdx * 0.015, 0.25),
+                            ease: [0.22, 1, 0.36, 1],
+                          }}
                           style={{ height: `${heightPct}%` }}
-                          className="w-[74%] max-w-[26px] flex flex-col-reverse rounded-t-[2px] overflow-hidden transition-[height,opacity] duration-300 ease-out group-hover:opacity-100 opacity-95"
+                          className="w-[74%] max-w-[26px] origin-bottom flex flex-col-reverse rounded-t-[2px] overflow-hidden group-hover:brightness-110 opacity-95"
                         >
                           {segments.map((seg) => (
                             <div
@@ -1535,11 +1595,18 @@ curl ${environment.gatewayEndpoint}/messages \\
                               className="w-full"
                             />
                           ))}
-                        </div>
+                        </motion.div>
                       ) : totalMetric > 0 ? (
-                        <div
+                        <motion.div
+                          initial={{ scaleY: 0 }}
+                          animate={{ scaleY: 1 }}
+                          transition={{
+                            duration: 0.4,
+                            delay: Math.min(bIdx * 0.015, 0.25),
+                            ease: [0.22, 1, 0.36, 1],
+                          }}
                           style={{ height: `${heightPct}%` }}
-                          className="w-[74%] max-w-[26px] bg-amber-400 rounded-t-[2px] transition-[height] duration-300 ease-out"
+                          className="w-[74%] max-w-[26px] origin-bottom bg-gradient-to-t from-indigo-500 via-sky-400 to-cyan-300 rounded-t-[2px]"
                         />
                       ) : null}
                     </div>
@@ -1558,7 +1625,7 @@ curl ${environment.gatewayEndpoint}/messages \\
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-[#1C1C21] flex items-center justify-between gap-4 flex-wrap">
+          <div className="mt-4 pt-3 border-t border-[#28304A] flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4 flex-wrap text-xs text-[#D4D4D8]">
               {modelNames.length === 0 ? (
                 <span className="text-[#71717A]">No usage data</span>
@@ -1597,7 +1664,7 @@ curl ${environment.gatewayEndpoint}/messages \\
       </div>
 
       {/* Gateway Endpoint & Quick cURL Onboarding */}
-      <div className="bg-[#111114] border border-[#222227] rounded-xl p-5">
+      <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3">
           <div className="min-w-0">
             <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
@@ -1605,20 +1672,20 @@ curl ${environment.gatewayEndpoint}/messages \\
                 ? "Anthropic-Compatible Endpoint (/v1/messages)"
                 : "OpenAI-Compatible Gateway Endpoint (/v1/chat/completions)"}
             </h3>
-            <div className="mt-1 font-mono text-xs text-amber-400 truncate">
+            <div className="mt-1 font-mono text-xs text-indigo-400 truncate">
               {endpointMode === "anthropic"
                 ? `${environment.gatewayEndpoint}/messages`
                 : `${environment.gatewayEndpoint}/chat/completions`}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <div className="inline-flex items-center rounded-md bg-[#09090B] border border-[#27272A] p-0.5">
+            <div className="inline-flex items-center rounded-md bg-[#101422] border border-[#343E5E] p-0.5">
               <button
                 type="button"
                 onClick={() => setEndpointMode("openai")}
                 className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
                   endpointMode === "openai"
-                    ? "bg-[#18181B] text-amber-300"
+                    ? "bg-[#1F263D] text-indigo-300"
                     : "text-[#8B8B95] hover:text-white"
                 }`}
               >
@@ -1629,7 +1696,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                 onClick={() => setEndpointMode("anthropic")}
                 className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
                   endpointMode === "anthropic"
-                    ? "bg-[#18181B] text-amber-300"
+                    ? "bg-[#1F263D] text-indigo-300"
                     : "text-[#8B8B95] hover:text-white"
                 }`}
               >
@@ -1639,14 +1706,14 @@ curl ${environment.gatewayEndpoint}/messages \\
             <button
               type="button"
               onClick={() => onNavigate("playground")}
-              className="px-3 py-1.5 text-xs font-medium text-[#FAFAFA] bg-[#18181B] hover:bg-[#27272A] border border-[#27272A] rounded-md transition-colors whitespace-nowrap"
+              className="px-3 py-1.5 text-xs font-medium text-[#FAFAFA] bg-[#1F263D] hover:bg-[#343E5E] border border-[#343E5E] rounded-md transition-colors whitespace-nowrap"
             >
               Open Playground
             </button>
             <button
               type="button"
               onClick={copyCurl}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#09090B] border border-[#27272A] rounded-md transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#343E5E] rounded-md transition-colors whitespace-nowrap"
             >
               {copiedCurl ? (
                 <>
@@ -1663,7 +1730,7 @@ curl ${environment.gatewayEndpoint}/messages \\
           </div>
         </div>
 
-        <pre className="p-3.5 bg-[#09090B] border border-[#27272A] rounded-lg font-mono text-xs text-[#D4D4D8] overflow-x-auto leading-relaxed">
+        <pre className="p-3.5 bg-[#101422] border border-[#343E5E] rounded-lg font-mono text-xs text-[#D4D4D8] overflow-x-auto leading-relaxed">
           {activeSnippet}
         </pre>
       </div>

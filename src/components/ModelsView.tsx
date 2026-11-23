@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from "react";
+import { motion } from "motion/react";
 import { Check, Copy, Search } from "lucide-react";
 import {
   getConnectionPrefix,
   getProviderSpec,
   isSearchProvider,
 } from "../shared/catalog.ts";
+import { getComboAccent, getProviderVisual } from "../lib/providerVisuals.ts";
 import type { Combo, ProviderConnection } from "../types/gateway.ts";
 
 interface ModelsViewProps {
@@ -16,6 +18,8 @@ interface ModelsViewProps {
 
 interface ModelRow {
   key: string;
+  providerKey: string;
+  isCombo?: boolean;
   providerName: string;
   modelId: string;
   copyId: string;
@@ -41,6 +45,8 @@ export function ModelsView({
       seen.add(key);
       list.push({
         key,
+        providerKey: "combo",
+        isCombo: true,
         providerName: "Combo",
         modelId: combo.name,
         copyId: combo.name,
@@ -75,6 +81,7 @@ export function ModelsView({
         seen.add(key);
         list.push({
           key,
+          providerKey: conn.provider,
           providerName,
           modelId,
           copyId: `${prefix}/${modelId}`,
@@ -131,44 +138,69 @@ export function ModelsView({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               aria-label="Filter models"
-              className="w-full bg-[#111114] border border-[#222227] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 transition-colors"
+              className="w-full bg-[#171C2E] border border-[#2B334E] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-400 transition-colors"
             />
           </div>
         )}
       </div>
 
       {rows.length === 0 ? (
-        <div className="bg-[#111114] border border-[#222227] rounded-lg px-6 py-12 text-center space-y-3">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg px-6 py-12 text-center space-y-3">
           <div className="text-sm font-medium text-white">
             No connected models yet
           </div>
           <button
             type="button"
             onClick={onConnectProvider}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors"
           >
             Connect Provider
           </button>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-[#111114] border border-[#222227] rounded-lg px-6 py-10 text-center text-xs text-[#A1A1AA]">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg px-6 py-10 text-center text-xs text-[#A1A1AA]">
           No models match your search.
         </div>
       ) : (
-        <div className="bg-[#111114] border border-[#222227] rounded-lg divide-y divide-[#222227] overflow-hidden">
-          {filtered.map((row) => {
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg divide-y divide-[#2B334E] overflow-hidden">
+          {filtered.map((row, idx) => {
             const isCopied = copiedKey === row.key;
+            const visual = row.isCombo
+              ? getComboAccent(row.modelId)
+              : getProviderVisual(row.providerKey);
+            const shortCode = row.isCombo
+              ? "CB"
+              : getProviderVisual(row.providerKey).short;
+
             return (
-              <button
+              <motion.button
                 key={row.key}
                 type="button"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.2,
+                  delay: Math.min(idx * 0.015, 0.22),
+                }}
                 onClick={() => handleCopy(row)}
-                className="w-full px-4 py-3 flex items-center justify-between gap-4 text-left hover:bg-[#18181B]/70 transition-colors group"
+                className="w-full px-4 py-3 flex items-center justify-between gap-4 text-left hover:bg-[#1F263D]/70 transition-colors group"
               >
                 <div className="min-w-0 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 flex-1">
-                  <span className="text-xs font-medium text-[#A1A1AA] sm:w-36 shrink-0 truncate">
-                    {row.providerName}
-                  </span>
+                  <div className="flex items-center gap-2 sm:w-44 shrink-0 min-w-0">
+                    <span
+                      className="w-5 h-5 rounded border flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
+                      style={{
+                        color: visual.color,
+                        backgroundColor: visual.softBg,
+                        borderColor: visual.border,
+                      }}
+                    >
+                      {shortCode}
+                    </span>
+                    <span className="text-xs font-medium text-[#A1A1AA] truncate">
+                      {row.providerName}
+                    </span>
+                  </div>
                   <span className="text-xs sm:text-sm font-mono text-white truncate">
                     {row.copyId}
                   </span>
@@ -178,7 +210,7 @@ export function ModelsView({
                   className={`inline-flex items-center gap-1.5 text-xs font-medium shrink-0 transition-colors ${
                     isCopied
                       ? "text-emerald-400"
-                      : "text-[#71717A] group-hover:text-amber-400"
+                      : "text-[#71717A] group-hover:text-sky-400"
                   }`}
                 >
                   {isCopied ? (
@@ -193,7 +225,7 @@ export function ModelsView({
                     </>
                   )}
                 </span>
-              </button>
+              </motion.button>
             );
           })}
         </div>

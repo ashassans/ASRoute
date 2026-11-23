@@ -63,18 +63,19 @@ type NavTab =
 const NAV_ITEMS: Array<{
   id: NavTab;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  accent: string;
 }> = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "provider-list", label: "Provider List", icon: Plug },
-  { id: "provider-connected", label: "Provider Connected", icon: Server },
-  { id: "models", label: "Models", icon: Cpu },
-  { id: "combos", label: "Combos", icon: Layers },
-  { id: "keys", label: "API Keys", icon: KeyRound },
-  { id: "search", label: "Search", icon: Search },
-  { id: "search-providers", label: "Search Providers", icon: Globe },
-  { id: "logs", label: "Live Logs", icon: Activity },
-  { id: "playground", label: "Playground", icon: Terminal },
+  { id: "overview", label: "Overview", icon: LayoutDashboard, accent: "#818CF8" },
+  { id: "provider-list", label: "Provider List", icon: Plug, accent: "#38BDF8" },
+  { id: "provider-connected", label: "Provider Connected", icon: Server, accent: "#34D399" },
+  { id: "models", label: "Models", icon: Cpu, accent: "#C084FC" },
+  { id: "combos", label: "Combos", icon: Layers, accent: "#F472B6" },
+  { id: "keys", label: "API Keys", icon: KeyRound, accent: "#FBBF24" },
+  { id: "search", label: "Search", icon: Search, accent: "#22D3EE" },
+  { id: "search-providers", label: "Search Providers", icon: Globe, accent: "#2DD4BF" },
+  { id: "logs", label: "Live Logs", icon: Activity, accent: "#FB923C" },
+  { id: "playground", label: "Playground", icon: Terminal, accent: "#60A5FA" },
 ];
 
 const VALID_TABS = new Set<NavTab>([
@@ -725,61 +726,107 @@ export default function App() {
 
   if (routeArea === "home") {
     return (
-      <LandingPage
-        isAuthenticated={Boolean(session?.user) || (sessionLoading && hasAuthHint)}
-        onOpenDashboard={() => navigateTo("/dashboard")}
-        onOpenAuth={(mode) => {
-          navigateTo(mode === "signup" ? "/signup" : "/login");
-        }}
-      />
+      <MotionConfig reducedMotion="user">
+        <LandingPage
+          isAuthenticated={Boolean(session?.user) || (sessionLoading && hasAuthHint)}
+          onOpenDashboard={() => navigateTo("/dashboard")}
+          onOpenAuth={(mode) => {
+            navigateTo(mode === "signup" ? "/signup" : "/login");
+          }}
+        />
+      </MotionConfig>
     );
   }
 
   if (!session?.user && (routeArea === "login" || routeArea === "signup")) {
     return (
-      <AuthGate
-        initialMode={routeArea === "signup" ? "signup" : "signin"}
-        onBackHome={() => navigateTo("/")}
-        onAuthenticated={async () => {
-          writeAuthHint(true);
-          setHasAuthHint(true);
-          navigateTo("/dashboard", true);
-          await refetch();
-        }}
-      />
+      <MotionConfig reducedMotion="user">
+        <AuthGate
+          initialMode={routeArea === "signup" ? "signup" : "signin"}
+          onBackHome={() => navigateTo("/")}
+          onAuthenticated={async () => {
+            writeAuthHint(true);
+            setHasAuthHint(true);
+            navigateTo("/dashboard", true);
+            await refetch();
+          }}
+        />
+      </MotionConfig>
     );
   }
 
   if (sessionLoading && !initialSessionChecked) {
     return (
-      <div className="min-h-screen bg-[#09090B] text-[#A1A1AA] flex items-center justify-center text-sm">
-        Loading AS ROUTER...
+      <div className="min-h-screen bg-[#101422] text-[#A1A1AA] flex flex-col items-center justify-center gap-3 text-sm">
+        <img
+          src="/assets/as-logo.png"
+          alt="AS ROUTER"
+          className="h-10 w-auto object-contain animate-pulse drop-shadow-[0_0_18px_rgba(99,102,241,0.35)]"
+        />
+        <span>Loading AS ROUTER...</span>
       </div>
     );
   }
 
   if (!session?.user) {
     return (
-      <LandingPage
-        onOpenAuth={(mode) => {
-          navigateTo(mode === "signup" ? "/signup" : "/login");
-        }}
-      />
+      <MotionConfig reducedMotion="user">
+        <LandingPage
+          onOpenAuth={(mode) => {
+            navigateTo(mode === "signup" ? "/signup" : "/login");
+          }}
+        />
+      </MotionConfig>
     );
   }
 
-  const activeNavLabel =
-    NAV_ITEMS.find((n) => n.id === activeTab)?.label || "Overview";
+  const activeNavItem = NAV_ITEMS.find((n) => n.id === activeTab);
+  const activeNavLabel = activeNavItem?.label || "Overview";
+  const activeNavAccent = activeNavItem?.accent || "#818CF8";
 
   return (
     <MotionConfig reducedMotion="user">
-    <div className="min-h-screen bg-[#09090B] text-[#F3F4F6] flex">
+    <div className="min-h-screen bg-[#101422] text-[#F3F4F6] flex relative overflow-x-hidden">
+      {/* Subtle Multi-Color Ambient Glow */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+        aria-hidden="true"
+      >
+        <div
+          className="animate-aurora-float absolute -top-24 left-[22%] w-[460px] h-[280px] rounded-full blur-[110px]"
+          style={{ background: "rgba(100, 103, 242, 0.08)" }}
+        />
+        <div
+          className="animate-aurora-float absolute top-[20%] right-[-6%] w-[380px] h-[300px] rounded-full blur-[120px]"
+          style={{
+            background: "rgba(56, 189, 248, 0.06)",
+            animationDelay: "-3.5s",
+          }}
+        />
+        <div
+          className="animate-aurora-float absolute bottom-[-10%] left-[42%] w-[360px] h-[260px] rounded-full blur-[120px]"
+          style={{
+            background: "rgba(236, 72, 153, 0.045)",
+            animationDelay: "-6s",
+          }}
+        />
+      </div>
+
       {/* Sidebar Navigation (Desktop 248px) */}
-      <aside className="hidden md:flex md:w-[248px] md:flex-col md:fixed md:inset-y-0 bg-[#09090B] border-r border-[#222227]">
-        <div className="h-16 px-5 flex items-center justify-between border-b border-[#222227]">
-          <span className="font-display text-base font-bold tracking-tight text-white whitespace-nowrap">
-            AS ROUTER
-          </span>
+      <aside className="hidden md:flex md:w-[248px] md:flex-col md:fixed md:inset-y-0 z-20 bg-[#101422]/95 backdrop-blur-md border-r border-[#2B334E]">
+        <div className="h-16 px-5 flex items-center justify-between border-b border-[#2B334E]">
+          <div className="flex items-center gap-2.5">
+            <motion.img
+              src="/assets/as-logo.png"
+              alt="AS ROUTER"
+              whileHover={{ scale: 1.07 }}
+              transition={{ type: "spring", stiffness: 420, damping: 24 }}
+              className="h-7 w-auto object-contain shrink-0 drop-shadow-[0_0_12px_rgba(56,189,248,0.28)]"
+            />
+            <span className="font-display text-base font-bold tracking-tight text-white whitespace-nowrap">
+              AS ROUTER
+            </span>
+          </div>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -787,28 +834,32 @@ export default function App() {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
-              <button
+              <motion.button
                 key={item.id}
                 type="button"
+                whileHover={{ x: 2 }}
+                transition={{ duration: 0.16 }}
                 onClick={() => navigateTab(item.id)}
                 className={`relative w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive
                     ? "text-white"
-                    : "text-[#A1A1AA] hover:text-white hover:bg-[#111114]/60"
+                    : "text-[#A1A1AA] hover:text-white hover:bg-[#171C2E]/60"
                 }`}
               >
                 {isActive && (
                   <motion.span
                     layoutId="sidebar-nav-pill"
-                    transition={{ type: "spring", stiffness: 360, damping: 32 }}
-                    className="absolute inset-0 bg-[#111114] border border-[#222227] rounded-lg"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    className="absolute inset-0 bg-[#171C2E] border border-[#343E5E] rounded-lg"
+                    style={{
+                      boxShadow: `inset 2px 0 0 ${item.accent}, 0 4px 16px -6px ${item.accent}44`,
+                    }}
                   />
                 )}
                 <span className="relative z-10 flex items-center gap-2.5">
                   <Icon
-                    className={`w-4 h-4 ${
-                      isActive ? "text-amber-400" : "text-[#A1A1AA]"
-                    }`}
+                    className="w-4 h-4 transition-colors"
+                    style={{ color: isActive ? item.accent : `${item.accent}B3` }}
                   />
                   <span>{item.label}</span>
                 </span>
@@ -845,12 +896,12 @@ export default function App() {
                     {workspace.logs.length}
                   </span>
                 )}
-              </button>
+              </motion.button>
             );
           })}
         </nav>
 
-        <div className="p-3.5 border-t border-[#222227] flex items-center justify-between gap-2">
+        <div className="p-3.5 border-t border-[#2B334E] flex items-center justify-between gap-2">
           <div className="text-xs min-w-0">
             <div className="text-white font-medium truncate">
               {session.user.name}
@@ -863,16 +914,16 @@ export default function App() {
               onClick={() => navigateTo("/")}
               title="Home"
               aria-label="Home"
-              className="w-8 h-8 inline-flex items-center justify-center bg-[#111114] hover:bg-[#18181B] border border-[#222227] hover:border-amber-400/50 rounded-lg transition-colors"
+              className="w-8 h-8 inline-flex items-center justify-center bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] hover:border-indigo-400/50 rounded-lg transition-colors"
             >
-              <Home className="w-3.5 h-3.5 text-amber-400" />
+              <Home className="w-3.5 h-3.5 text-indigo-400" />
             </button>
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
               title="Account Settings"
               aria-label="Account Settings"
-              className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-amber-400 bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg transition-colors"
+              className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-indigo-400 bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
@@ -881,7 +932,7 @@ export default function App() {
               onClick={handleSignOut}
               title="Sign out"
               aria-label="Sign out"
-              className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-white bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg transition-colors"
+              className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
@@ -906,13 +957,20 @@ export default function App() {
               exit={{ x: "-100%" }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-64 bg-[#09090B] border-r border-[#222227] h-full flex flex-col justify-between p-4"
+              className="w-64 bg-[#101422] border-r border-[#2B334E] h-full flex flex-col justify-between p-4"
             >
             <div>
-              <div className="flex items-center justify-between pb-4 border-b border-[#222227]">
-                <span className="font-display text-base font-bold text-white">
-                  AS ROUTER
-                </span>
+              <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
+                <div className="flex items-center gap-2.5">
+                  <img
+                    src="/assets/as-logo.png"
+                    alt="AS ROUTER"
+                    className="h-6 w-auto object-contain shrink-0 drop-shadow-[0_0_10px_rgba(56,189,248,0.28)]"
+                  />
+                  <span className="font-display text-base font-bold text-white">
+                    AS ROUTER
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}
@@ -943,13 +1001,13 @@ export default function App() {
                         <motion.span
                           layoutId="mobile-nav-pill"
                           transition={{ type: "spring", stiffness: 360, damping: 32 }}
-                          className="absolute inset-0 bg-[#111114] border border-[#222227] rounded-lg"
+                          className="absolute inset-0 bg-[#171C2E] border border-[#343E5E] rounded-lg"
+                          style={{ boxShadow: `inset 2px 0 0 ${item.accent}` }}
                         />
                       )}
                       <Icon
-                        className={`relative z-10 w-4 h-4 ${
-                          isActive ? "text-amber-400" : "text-[#A1A1AA]"
-                        }`}
+                        className="relative z-10 w-4 h-4"
+                        style={{ color: isActive ? item.accent : `${item.accent}B3` }}
                       />
                       <span className="relative z-10 flex-1 text-left">
                         {item.label}
@@ -992,7 +1050,7 @@ export default function App() {
                 })}
               </nav>
             </div>
-            <div className="pt-3 border-t border-[#222227] flex items-center justify-between gap-2">
+            <div className="pt-3 border-t border-[#2B334E] flex items-center justify-between gap-2">
               <div className="text-xs min-w-0">
                 <div className="text-white font-medium truncate">
                   {session.user.name}
@@ -1010,9 +1068,9 @@ export default function App() {
                   }}
                   title="Home"
                   aria-label="Home"
-                  className="w-8 h-8 inline-flex items-center justify-center bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg"
+                  className="w-8 h-8 inline-flex items-center justify-center bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg"
                 >
-                  <Home className="w-3.5 h-3.5 text-amber-400" />
+                  <Home className="w-3.5 h-3.5 text-indigo-400" />
                 </button>
                 <button
                   type="button"
@@ -1022,7 +1080,7 @@ export default function App() {
                   }}
                   title="Account Settings"
                   aria-label="Account Settings"
-                  className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-amber-400 bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg"
+                  className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-indigo-400 bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg"
                 >
                   <Settings className="w-3.5 h-3.5" />
                 </button>
@@ -1031,7 +1089,7 @@ export default function App() {
                   onClick={handleSignOut}
                   title="Sign out"
                   aria-label="Sign out"
-                  className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-white bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg"
+                  className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -1043,9 +1101,9 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content Area */}
-      <div className="flex-1 md:pl-[248px] flex flex-col min-w-0">
+      <div className="flex-1 md:pl-[248px] flex flex-col min-w-0 relative z-10">
         {/* Top Bar Contract */}
-        <header className="h-16 px-4 sm:px-8 border-b border-[#222227] flex items-center justify-between gap-4 sticky top-0 z-30 bg-[#09090B]/95 backdrop-blur-sm">
+        <header className="h-16 px-4 sm:px-8 border-b border-[#2B334E] flex items-center justify-between gap-4 sticky top-0 z-30 bg-[#101422]/90 backdrop-blur-md">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
@@ -1056,11 +1114,19 @@ export default function App() {
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2 text-sm truncate">
+              <img
+                src="/assets/as-logo.png"
+                alt="AS ROUTER"
+                className="h-5 w-auto object-contain sm:hidden shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.25)]"
+              />
               <span className="text-[#A1A1AA] hidden sm:inline">
                 AS ROUTER
               </span>
               <span className="text-[#4B5563] hidden sm:inline">/</span>
-              <span className="font-medium text-white truncate">
+              <span
+                className="font-medium truncate transition-colors"
+                style={{ color: activeNavAccent }}
+              >
                 {activeNavLabel}
               </span>
             </div>
@@ -1085,7 +1151,7 @@ export default function App() {
                   notify("Clipboard access denied", "error");
                 }
               }}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               {copiedBaseUrl ? (
                 <>
@@ -1108,9 +1174,9 @@ export default function App() {
                   navigateTab("keys");
                   setOpenCreateKeyCounter((c) => c + 1);
                 }}
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
               >
-                <Plus className="w-3.5 h-3.5 text-amber-400" />
+                <Plus className="w-3.5 h-3.5 text-indigo-400" />
                 <span className="sm:hidden">New Key</span>
                 <span className="hidden sm:inline">New API Key</span>
               </button>
@@ -1164,19 +1230,19 @@ export default function App() {
                 {[0, 1, 2, 3].map((idx) => (
                   <div
                     key={idx}
-                    className="h-28 bg-[#111114] border border-[#222227] rounded-lg animate-pulse"
+                    className="h-28 bg-[#171C2E] border border-[#2B334E] rounded-lg animate-pulse"
                   />
                 ))}
               </div>
-              <div className="h-64 bg-[#111114] border border-[#222227] rounded-lg animate-pulse" />
+              <div className="h-64 bg-[#171C2E] border border-[#2B334E] rounded-lg animate-pulse" />
             </div>
           ) : workspace ? (
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
+                initial={{ opacity: 0, y: 12, scale: 0.994 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.996 }}
                 transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
               >
                 {activeTab === "overview" && (

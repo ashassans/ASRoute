@@ -36,13 +36,13 @@ export async function sendVerificationOtpEmail(params: {
     subject: `${safeOtp} is your AS ROUTER verification code`,
     text: `Your AS ROUTER email verification code is: ${safeOtp}\n\nThis code expires in 10 minutes. If you did not create an account, you can ignore this email.`,
     html: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#09090B; color:#FAFAFA; padding:32px; border-radius:12px; max-width:460px; margin:0 auto; border:1px solid #222227;">
-        <div style="font-size:14px; font-weight:700; letter-spacing:0.04em; color:#FBBF24; margin-bottom:16px;">AS ROUTER</div>
-        <h2 style="font-size:18px; font-weight:600; margin:0 0 8px 0; color:#FAFAFA;">Verify your email address</h2>
-        <p style="font-size:13px; color:#A1A1AA; line-height:1.5; margin:0 0 20px 0;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#090B12; color:#F8FAFC; padding:32px; border-radius:12px; max-width:460px; margin:0 auto; border:1px solid #23283D;">
+        <div style="font-size:14px; font-weight:700; letter-spacing:0.04em; color:#818CF8; margin-bottom:16px;">AS ROUTER</div>
+        <h2 style="font-size:18px; font-weight:600; margin:0 0 8px 0; color:#F8FAFC;">Verify your email address</h2>
+        <p style="font-size:13px; color:#94A3B8; line-height:1.5; margin:0 0 20px 0;">
           Enter the 6-digit verification code below to finish creating your AS ROUTER workspace.
         </p>
-        <div style="background:#111114; border:1px solid #27272A; border-radius:10px; padding:16px; text-align:center; font-family:monospace; font-size:28px; font-weight:700; letter-spacing:0.35em; color:#FBBF24; margin-bottom:20px;">
+        <div style="background:#111420; border:1px solid #293047; border-radius:10px; padding:16px; text-align:center; font-family:monospace; font-size:28px; font-weight:700; letter-spacing:0.35em; color:#818CF8; margin-bottom:20px;">
           ${safeOtp}
         </div>
         <p style="font-size:12px; color:#71717A; margin:0;">
@@ -79,13 +79,13 @@ export async function sendPasswordResetOtpEmail(params: {
     subject: `${safeOtp} is your AS ROUTER password reset code`,
     text: `Your AS ROUTER password reset code is: ${safeOtp}\n\nThis code expires in 10 minutes. If you did not request a password reset, you can safely ignore this email.`,
     html: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#09090B; color:#FAFAFA; padding:32px; border-radius:12px; max-width:460px; margin:0 auto; border:1px solid #222227;">
-        <div style="font-size:14px; font-weight:700; letter-spacing:0.04em; color:#FBBF24; margin-bottom:16px;">AS ROUTER</div>
-        <h2 style="font-size:18px; font-weight:600; margin:0 0 8px 0; color:#FAFAFA;">Reset your password</h2>
-        <p style="font-size:13px; color:#A1A1AA; line-height:1.5; margin:0 0 20px 0;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#090B12; color:#F8FAFC; padding:32px; border-radius:12px; max-width:460px; margin:0 auto; border:1px solid #23283D;">
+        <div style="font-size:14px; font-weight:700; letter-spacing:0.04em; color:#818CF8; margin-bottom:16px;">AS ROUTER</div>
+        <h2 style="font-size:18px; font-weight:600; margin:0 0 8px 0; color:#F8FAFC;">Reset your password</h2>
+        <p style="font-size:13px; color:#94A3B8; line-height:1.5; margin:0 0 20px 0;">
           Use this 6-digit security code to choose a new password for your AS ROUTER account.
         </p>
-        <div style="background:#111114; border:1px solid #27272A; border-radius:10px; padding:16px; text-align:center; font-family:monospace; font-size:28px; font-weight:700; letter-spacing:0.35em; color:#FBBF24; margin-bottom:20px;">
+        <div style="background:#111420; border:1px solid #293047; border-radius:10px; padding:16px; text-align:center; font-family:monospace; font-size:28px; font-weight:700; letter-spacing:0.35em; color:#818CF8; margin-bottom:20px;">
           ${safeOtp}
         </div>
         <p style="font-size:12px; color:#71717A; margin:0;">

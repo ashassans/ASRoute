@@ -23,6 +23,7 @@ import {
   isSearchProvider,
 } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
+import { getComboAccent, getProviderVisual } from "../lib/providerVisuals.ts";
 import type {
   BootstrapPayload,
   Combo,
@@ -591,7 +592,7 @@ export function CombosView({
             type="button"
             onClick={handleAutoBuildFreeCombo}
             disabled={llmConnections.length === 0 || buildingFreeAuto}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#111114] hover:bg-[#18181B] disabled:opacity-50 text-[#D4D4D8] hover:text-white border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] disabled:opacity-50 text-[#D4D4D8] hover:text-white border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
             <span>
@@ -602,7 +603,7 @@ export function CombosView({
             type="button"
             onClick={openCreateBuilder}
             disabled={llmConnections.length === 0}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg transition-colors whitespace-nowrap shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>New Combo</span>
@@ -611,20 +612,20 @@ export function CombosView({
       </div>
 
       {llmConnections.length === 0 && connections.some((c) => isSearchProvider(c.provider)) && (
-        <div className="bg-[#111114] border border-[#222227] rounded-lg px-4 py-3 text-xs text-[#A1A1AA]">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg px-4 py-3 text-xs text-[#A1A1AA]">
           Web Search providers (Tavily, Brave Search, Exa) are kept separate in the <span className="text-white font-medium">Search</span> tab and cannot be combined with AI models. Connect at least one AI model provider to build combos.
         </div>
       )}
 
       {/* Ready-Made Combo Templates */}
-      <section className="bg-[#111114] border border-[#222227] rounded-xl p-5 space-y-4">
+      <section className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-display text-sm font-semibold text-white">
                 Ready-Made Combos
               </h3>
-              <span className="px-2 py-0.5 text-[11px] font-mono rounded bg-[#18181B] border border-[#27272A] text-[#A1A1AA]">
+              <span className="px-2 py-0.5 text-[11px] font-mono rounded bg-[#1F263D] border border-[#343E5E] text-[#A1A1AA]">
                 {READY_MADE_COMBO_PRESETS.length} presets
               </span>
             </div>
@@ -636,9 +637,9 @@ export function CombosView({
             type="button"
             onClick={handleBuildAllPresetCombos}
             disabled={llmConnections.length === 0 || creatingAllPresets}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#18181B] hover:bg-[#222227] disabled:opacity-50 text-[#FAFAFA] border border-[#27272A] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] disabled:opacity-50 text-[#FAFAFA] border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
             <span>
               {creatingAllPresets ? "Building All..." : "Create All"}
             </span>
@@ -655,16 +656,32 @@ export function CombosView({
             );
             const isBusy =
               creatingPresetId === preset.id || creatingAllPresets;
+            const comboAccent = getComboAccent(preset.name);
 
             return (
-              <div
+              <motion.div
                 key={preset.id}
-                className="bg-[#09090B] border border-[#222227] hover:border-[#3F3F46] rounded-lg p-3.5 flex flex-col justify-between gap-3 transition-colors"
+                whileHover={{ y: -2 }}
+                transition={{ duration: 0.2 }}
+                className="relative overflow-hidden bg-[#101422] border border-[#2B334E] hover:border-[#3A4260] rounded-lg p-3.5 flex flex-col justify-between gap-3 transition-colors"
               >
+                <span
+                  className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-80"
+                  style={{
+                    background: `linear-gradient(90deg, ${comboAccent.color}, transparent 75%)`,
+                  }}
+                />
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-[#18181B] border border-[#27272A] text-amber-400 shrink-0">
+                      <span
+                        className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded border shrink-0"
+                        style={{
+                          color: comboAccent.color,
+                          backgroundColor: comboAccent.softBg,
+                          borderColor: comboAccent.border,
+                        }}
+                      >
                         {preset.badge}
                       </span>
                       <span className="font-mono text-xs font-semibold text-white truncate">
@@ -682,7 +699,7 @@ export function CombosView({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#1D1D22]">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#28304A]">
                   <span className="text-[11px] text-[#71717A] truncate">
                     {stratSpec?.label.split(" ")[0] || preset.strategy}
                     {preset.freeOnly ? " · Free-only" : ""}
@@ -692,10 +709,10 @@ export function CombosView({
                     type="button"
                     disabled={llmConnections.length === 0 || isBusy}
                     onClick={() => handleBuildPresetCombo(preset)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 ${
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap shrink-0 disabled:opacity-50 ${
                       existingCombo
-                        ? "bg-[#18181B] hover:bg-[#222227] text-[#E4E4E7] border border-[#27272A]"
-                        : "bg-amber-400 hover:bg-amber-300 text-[#09090B]"
+                        ? "bg-[#1F263D] hover:bg-[#2B334E] text-[#E4E4E7] border border-[#343E5E]"
+                        : "bg-gradient-to-r from-indigo-500 to-sky-500 hover:brightness-110 text-white"
                     }`}
                   >
                     {creatingPresetId === preset.id
@@ -705,7 +722,7 @@ export function CombosView({
                         : "Create"}
                   </button>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
@@ -713,7 +730,7 @@ export function CombosView({
 
       {/* Combos List */}
       {combos.length === 0 ? (
-        <div className="bg-[#111114] border border-[#222227] rounded-lg p-10 text-center">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-10 text-center">
           <p className="text-sm font-medium text-white">No combos yet</p>
           <p className="mt-1 text-xs text-[#71717A]">
             Pick any Ready-Made Combo above or create a custom failover combo.
@@ -725,11 +742,21 @@ export function CombosView({
             const stratSpec = ROUTING_STRATEGIES.find(
               (s) => s.id === combo.strategy
             );
+            const comboAccent = getComboAccent(combo.name);
             return (
-              <div
+              <motion.div
                 key={combo.id}
-                className="bg-[#111114] border border-[#222227] rounded-lg p-5 flex flex-col justify-between"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25 }}
+                className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] rounded-lg p-5 flex flex-col justify-between"
               >
+                <span
+                  className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-80"
+                  style={{
+                    background: `linear-gradient(90deg, ${comboAccent.color}, transparent 70%)`,
+                  }}
+                />
                 <div>
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -745,7 +772,7 @@ export function CombosView({
                           className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded border transition-colors shrink-0 ${
                             copiedComboId === combo.id
                               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                              : "border-[#222227] bg-[#09090B] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
+                              : "border-[#2B334E] bg-[#101422] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
                           }`}
                         >
                           {copiedComboId === combo.id ? (
@@ -839,9 +866,12 @@ export function CombosView({
                     </p>
                   )}
 
-                  <div className="mt-4 border-t border-[#222227] divide-y divide-[#222227]">
+                  <div className="mt-4 border-t border-[#2B334E] divide-y divide-[#2B334E]">
                     {combo.tiers.map((tier, idx) => {
                       const conn = connMap.get(tier.connectionId);
+                      const tierVisual = getProviderVisual(
+                        conn?.provider || "custom"
+                      );
                       return (
                         <div
                           key={tier.id}
@@ -851,13 +881,25 @@ export function CombosView({
                             <span className="font-mono text-[#A1A1AA] tabular-nums w-5">
                               #{idx + 1}
                             </span>
+                            <span
+                              className="w-5 h-5 rounded border flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
+                              style={{
+                                color: tierVisual.color,
+                                backgroundColor: tierVisual.softBg,
+                                borderColor: tierVisual.border,
+                              }}
+                            >
+                              {tierVisual.short}
+                            </span>
                             <div className="min-w-0">
                               <div className="font-mono text-[#F3F4F6] truncate">
                                 {tier.upstreamModel}
                               </div>
                               <div className="text-[#A1A1AA] truncate">
                                 {conn?.name || "Unknown"} ·{" "}
-                                {conn ? getConnectionPrefix(conn) : "custom"}
+                                <span style={{ color: tierVisual.color }}>
+                                  {conn ? getConnectionPrefix(conn) : "custom"}
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -871,7 +913,7 @@ export function CombosView({
                     })}
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
@@ -880,7 +922,7 @@ export function CombosView({
       {/* Wildcards & Dry-Run Route Simulator */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Wildcard Model Mappings */}
-        <div className="bg-[#111114] border border-[#222227] rounded-lg p-5">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-5">
           <h3 className="font-display text-base font-semibold text-white">
             Wildcard Routes
           </h3>
@@ -891,12 +933,12 @@ export function CombosView({
               aria-label="Wildcard model pattern"
               value={wcPattern}
               onChange={(e) => setWcPattern(e.target.value)}
-              className="w-36 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+              className="w-36 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
             />
             <select
               value={wcComboId}
               onChange={(e) => setWcComboId(e.target.value)}
-              className="flex-1 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+              className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
             >
               <option value="">Select target combo...</option>
               {combos.map((c) => (
@@ -908,13 +950,13 @@ export function CombosView({
             <button
               type="submit"
               disabled={!wcPattern.trim() || !wcComboId}
-              className="px-3.5 py-2 text-xs font-medium bg-[#18181B] hover:bg-[#1F2937] disabled:opacity-50 text-white border border-[#222227] rounded-lg whitespace-nowrap"
+              className="px-3.5 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#1F2937] disabled:opacity-50 text-white border border-[#2B334E] rounded-lg whitespace-nowrap"
             >
               Add Rule
             </button>
           </form>
 
-          <div className="mt-4 border-t border-[#222227] divide-y divide-[#222227]">
+          <div className="mt-4 border-t border-[#2B334E] divide-y divide-[#2B334E]">
             {wildcards.length === 0 ? (
               <p className="py-5 text-xs text-[#A1A1AA] text-center">
                 No wildcard mappings configured.
@@ -936,7 +978,7 @@ export function CombosView({
                         {wc.pattern}
                       </span>
                       <span className="mx-2 text-[#A1A1AA]">→</span>
-                      <span className="text-amber-400">
+                      <span className="text-indigo-400">
                         {target?.name || "Deleted combo"}
                       </span>
                     </div>
@@ -969,7 +1011,7 @@ export function CombosView({
         </div>
 
         {/* Dry-Run Route Simulator */}
-        <div className="bg-[#111114] border border-[#222227] rounded-lg p-5 space-y-3">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-5 space-y-3">
           <h3 className="font-display text-base font-semibold text-white">
             Dry-Run Simulator
           </h3>
@@ -984,14 +1026,14 @@ export function CombosView({
                   type="text"
                   value={simModel}
                   onChange={(e) => setSimModel(e.target.value)}
-                  className="flex-1 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                  className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                 />
                 <button
                   type="submit"
                   disabled={simRunning}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#18181B] hover:bg-[#222227] border border-[#27272A] text-white rounded-lg whitespace-nowrap transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] border border-[#343E5E] text-white rounded-lg whitespace-nowrap transition-colors"
                 >
-                  <Play className="w-3.5 h-3.5 text-amber-400" />
+                  <Play className="w-3.5 h-3.5 text-indigo-400" />
                   <span>{simRunning ? "Simulating..." : "Run"}</span>
                 </button>
               </div>
@@ -1005,7 +1047,7 @@ export function CombosView({
                 type="text"
                 value={simPrompt}
                 onChange={(e) => setSimPrompt(e.target.value)}
-                className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
 
@@ -1015,8 +1057,8 @@ export function CombosView({
                 onClick={() => setSimHasTools((v) => !v)}
                 className={`px-3 py-1.5 rounded-lg border transition-colors ${
                   simHasTools
-                    ? "bg-[#18181B] border-amber-400/50 text-amber-300"
-                    : "bg-[#09090B] border-[#222227] text-[#A1A1AA] hover:text-white"
+                    ? "bg-[#1F263D] border-indigo-500/50 text-indigo-300"
+                    : "bg-[#101422] border-[#2B334E] text-[#A1A1AA] hover:text-white"
                 }`}
               >
                 Tools
@@ -1026,8 +1068,8 @@ export function CombosView({
                 onClick={() => setSimHasImage((v) => !v)}
                 className={`px-3 py-1.5 rounded-lg border transition-colors ${
                   simHasImage
-                    ? "bg-[#18181B] border-amber-400/50 text-amber-300"
-                    : "bg-[#09090B] border-[#222227] text-[#A1A1AA] hover:text-white"
+                    ? "bg-[#1F263D] border-indigo-500/50 text-indigo-300"
+                    : "bg-[#101422] border-[#2B334E] text-[#A1A1AA] hover:text-white"
                 }`}
               >
                 Image
@@ -1037,8 +1079,8 @@ export function CombosView({
                 onClick={() => setSimFreeOnly((v) => !v)}
                 className={`px-3 py-1.5 rounded-lg border transition-colors ${
                   simFreeOnly
-                    ? "bg-[#18181B] border-emerald-500/50 text-emerald-300"
-                    : "bg-[#09090B] border-[#222227] text-[#A1A1AA] hover:text-white"
+                    ? "bg-[#1F263D] border-emerald-500/50 text-emerald-300"
+                    : "bg-[#101422] border-[#2B334E] text-[#A1A1AA] hover:text-white"
                 }`}
               >
                 Free only
@@ -1068,7 +1110,7 @@ export function CombosView({
                       className={`px-2.5 py-1 text-xs rounded-lg border transition-colors whitespace-nowrap ${
                         active
                           ? "bg-red-500/15 border-red-500/40 text-red-300"
-                          : "bg-[#09090B] border-[#222227] text-[#A1A1AA] hover:text-white"
+                          : "bg-[#101422] border-[#2B334E] text-[#A1A1AA] hover:text-white"
                       }`}
                     >
                       {c.name}
@@ -1086,7 +1128,7 @@ export function CombosView({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                className="pt-3 border-t border-[#222227] space-y-2"
+                className="pt-3 border-t border-[#2B334E] space-y-2"
               >
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-[#A1A1AA]">
@@ -1113,7 +1155,7 @@ export function CombosView({
                     : "No eligible tier"}
                 </span>
               </div>
-              <div className="divide-y divide-[#222227] border border-[#222227] rounded-lg bg-[#09090B]">
+              <div className="divide-y divide-[#2B334E] border border-[#2B334E] rounded-lg bg-[#101422]">
                 {simResult.steps.map((step) => (
                   <div
                     key={`${step.order}-${step.connectionId}-${step.model}`}
@@ -1159,9 +1201,9 @@ export function CombosView({
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-2xl bg-[#111114] border border-[#222227] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-2xl bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
             >
-            <div className="flex items-center justify-between pb-4 border-b border-[#222227]">
+            <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
               <h3 className="font-display text-base font-semibold text-white">
                 {editingComboId
                   ? "Edit Routing Combo"
@@ -1187,7 +1229,7 @@ export function CombosView({
                     required
                     value={comboName}
                     onChange={(e) => setComboName(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
@@ -1198,7 +1240,7 @@ export function CombosView({
                   <select
                     value={strategy}
                     onChange={(e) => setStrategy(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                   >
                     {ROUTING_STRATEGIES.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -1223,11 +1265,11 @@ export function CombosView({
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="divide-y divide-[#1D1D22] border-y border-[#1D1D22] py-1">
+              <div className="divide-y divide-[#28304A] border-y border-[#28304A] py-1">
                 <ToggleSwitch
                   checked={compressPrompt}
                   onChange={setCompressPrompt}
@@ -1256,7 +1298,7 @@ export function CombosView({
                   <button
                     type="button"
                     onClick={addDraftTier}
-                    className="text-xs font-medium text-amber-400 hover:text-amber-300"
+                    className="text-xs font-medium text-indigo-400 hover:text-indigo-300"
                   >
                     + Add Tier
                   </button>
@@ -1291,12 +1333,12 @@ export function CombosView({
                           setDragIndex(null);
                           setDragOverIndex(null);
                         }}
-                        className={`p-3 bg-[#09090B] border rounded-lg grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center transition-colors ${
+                        className={`p-3 bg-[#101422] border rounded-lg grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center transition-colors ${
                           isDropTarget
-                            ? "border-amber-400"
+                            ? "border-indigo-500"
                             : isDragged
                               ? "border-[#374151] opacity-60"
-                              : "border-[#222227]"
+                              : "border-[#2B334E]"
                         }`}
                       >
                         <div className="sm:col-span-1 flex items-center gap-1.5 text-[#A1A1AA] cursor-grab active:cursor-grabbing">
@@ -1322,7 +1364,7 @@ export function CombosView({
                                   tier.upstreamModel,
                               });
                             }}
-                            className="w-full bg-[#111114] border border-[#222227] rounded-md px-2.5 py-1.5 text-xs text-white"
+                            className="w-full bg-[#171C2E] border border-[#2B334E] rounded-md px-2.5 py-1.5 text-xs text-white"
                           >
                             {llmConnections.map((c) => (
                               <option key={c.id} value={c.id}>
@@ -1340,7 +1382,7 @@ export function CombosView({
                             onChange={(e) =>
                               updateTier(idx, { upstreamModel: e.target.value })
                             }
-                            className="w-full bg-[#111114] border border-[#222227] rounded-md px-2.5 py-1.5 text-xs font-mono text-white"
+                            className="w-full bg-[#171C2E] border border-[#2B334E] rounded-md px-2.5 py-1.5 text-xs font-mono text-white"
                           />
                           <datalist id={`models-${idx}`}>
                             {Array.from(
@@ -1367,7 +1409,7 @@ export function CombosView({
                               })
                             }
                             title="Weight"
-                            className="w-1/2 bg-[#111114] border border-[#222227] rounded-md px-1.5 py-1.5 text-xs font-mono text-white text-center"
+                            className="w-1/2 bg-[#171C2E] border border-[#2B334E] rounded-md px-1.5 py-1.5 text-xs font-mono text-white text-center"
                           />
                           <select
                             value={tier.maxRetries}
@@ -1378,7 +1420,7 @@ export function CombosView({
                             }
                             title="Retries per request"
                             aria-label="Tier max retries"
-                            className="w-1/2 bg-[#111114] border border-[#222227] rounded-md px-1 py-1.5 text-xs font-mono text-[#D4D4D8]"
+                            className="w-1/2 bg-[#171C2E] border border-[#2B334E] rounded-md px-1 py-1.5 text-xs font-mono text-[#D4D4D8]"
                           >
                             <option value={1}>1x</option>
                             <option value={2}>2x</option>
@@ -1422,18 +1464,18 @@ export function CombosView({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-[#222227] flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-[#2B334E] flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowBuilder(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#09090B] border border-[#222227] rounded-lg whitespace-nowrap"
+                  className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg whitespace-nowrap"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg whitespace-nowrap"
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg whitespace-nowrap"
                 >
                   {submitting
                     ? editingComboId

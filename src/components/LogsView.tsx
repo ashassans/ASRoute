@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Download, Pause, Play, Search, Terminal, Trash2, X } from "lucide-react";
+import { getProviderVisual } from "../lib/providerVisuals.ts";
 import type { FallbackHop, RequestLog } from "../types/gateway.ts";
 
 interface LogsViewProps {
@@ -162,11 +163,11 @@ export function LogsView({
           <button
             type="button"
             onClick={onTogglePause}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#111114] border border-[#222227] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#171C2E] border border-[#2B334E] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
           >
             {streamPaused ? (
               <>
-                <Play className="w-3.5 h-3.5 text-amber-400" />
+                <Play className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Resume</span>
               </>
             ) : (
@@ -182,15 +183,15 @@ export function LogsView({
               <button
                 type="button"
                 onClick={handleExportCsv}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
               >
-                <Download className="w-3.5 h-3.5 text-amber-400" />
+                <Download className="w-3.5 h-3.5 text-indigo-400" />
                 <span>CSV</span>
               </button>
               <button
                 type="button"
                 onClick={handleExportJson}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
               >
                 <Download className="w-3.5 h-3.5 text-[#A1A1AA]" />
                 <span>JSON</span>
@@ -225,7 +226,7 @@ export function LogsView({
 
       {/* Filters & Search */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="inline-flex items-center gap-1 p-1 bg-[#111114] border border-[#222227] rounded-lg self-start overflow-x-auto max-w-full">
+        <div className="inline-flex items-center gap-1 p-1 bg-[#171C2E] border border-[#2B334E] rounded-lg self-start overflow-x-auto max-w-full">
           {(
             [
               ["all", "All"],
@@ -248,7 +249,7 @@ export function LogsView({
                 <motion.span
                   layoutId="logs-filter-pill"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  className="absolute inset-0 bg-[#18181B] rounded-md"
+                  className="absolute inset-0 bg-[#1F263D] rounded-md"
                 />
               )}
               <span className="relative z-10">{label}</span>
@@ -263,13 +264,13 @@ export function LogsView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter by model, provider, intent..."
-            className="w-full bg-[#111114] border border-[#222227] rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-[#8B8B95] focus:outline-none focus:border-amber-400"
+            className="w-full bg-[#171C2E] border border-[#2B334E] rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-[#8B8B95] focus:outline-none focus:border-indigo-400"
           />
         </div>
       </div>
 
       {/* Logs Table / Mobile Cards */}
-      <div className="bg-[#111114] border border-[#222227] rounded-lg overflow-hidden">
+      <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg overflow-hidden">
         {filtered.length === 0 ? (
           <div className="p-10 text-center">
             <p className="text-sm font-medium text-white">
@@ -284,7 +285,7 @@ export function LogsView({
               <button
                 type="button"
                 onClick={onOpenPlayground}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap"
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors whitespace-nowrap"
               >
                 <Terminal className="w-3.5 h-3.5" />
                 <span>Open Playground</span>
@@ -293,7 +294,7 @@ export function LogsView({
           </div>
         ) : (
           <>
-            <div className="md:hidden divide-y divide-[#222227]">
+            <div className="md:hidden divide-y divide-[#2B334E]">
               {filtered.map((log) => {
                 const statusColor =
                   log.outcome === "cache_hit"
@@ -312,13 +313,17 @@ export function LogsView({
                           log.outcome === "success" ? "OK" : "Error"
                         }`;
                 const totalTok = log.promptTokens + log.completionTokens;
+                const provVisual = getProviderVisual(log.resolvedProvider);
 
                 return (
-                  <button
+                  <motion.button
                     key={log.id}
                     type="button"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.18 }}
                     onClick={() => setSelectedLog(log)}
-                    className="w-full text-left p-4 hover:bg-[#18181B]/70 space-y-1.5"
+                    className="w-full text-left p-4 hover:bg-[#1F263D]/70 space-y-1.5"
                   >
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className={`font-mono font-medium ${statusColor}`}>
@@ -329,7 +334,11 @@ export function LogsView({
                       </span>
                     </div>
                     <div className="font-mono text-xs text-white truncate">
-                      {log.resolvedProvider}/{log.resolvedModel}
+                      <span style={{ color: provVisual.color }}>
+                        {log.resolvedProvider}
+                      </span>
+                      <span className="text-[#71717A]">/</span>
+                      <span>{log.resolvedModel}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-[#8B8B95] tabular-nums">
                       <span className="truncate">req: {log.requestedModel}</span>
@@ -337,14 +346,14 @@ export function LogsView({
                         {totalTok.toLocaleString()} tok · ${log.estimatedCostUsd.toFixed(5)}
                       </span>
                     </div>
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
             <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#222227] text-xs text-[#A1A1AA]">
+                <tr className="border-b border-[#2B334E] text-xs text-[#A1A1AA]">
                   <th className="py-2.5 px-4 font-medium">Time</th>
                   <th className="py-2.5 px-4 font-medium">Status</th>
                   <th className="py-2.5 px-4 font-medium">Requested Model</th>
@@ -357,7 +366,7 @@ export function LogsView({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#222227] text-xs">
+              <tbody className="divide-y divide-[#2B334E] text-xs">
                 {filtered.map((log) => {
                   const statusColor =
                     log.outcome === "cache_hit"
@@ -377,12 +386,13 @@ export function LogsView({
                           }`;
                   const hops = parseHops(log.fallbackAttempts);
                   const totalTok = log.promptTokens + log.completionTokens;
+                  const provVisual = getProviderVisual(log.resolvedProvider);
 
                   return (
                     <tr
                       key={log.id}
                       onClick={() => setSelectedLog(log)}
-                      className="h-10 hover:bg-[#18181B]/70 cursor-pointer transition-colors"
+                      className="h-10 hover:bg-[#1F263D]/70 cursor-pointer transition-colors"
                     >
                       <td className="py-2 px-4 font-mono text-[#A1A1AA] tabular-nums whitespace-nowrap">
                         {new Date(log.createdAt).toLocaleTimeString()}
@@ -396,7 +406,12 @@ export function LogsView({
                         {log.requestedModel}
                       </td>
                       <td className="py-2 px-4 font-mono text-[#D4D4D8] truncate max-w-[220px]">
-                        <span>{log.resolvedProvider}</span>
+                        <span
+                          className="font-semibold"
+                          style={{ color: provVisual.color }}
+                        >
+                          {log.resolvedProvider}
+                        </span>
                         <span className="mx-1 text-[#A1A1AA]">/</span>
                         <span>{log.resolvedModel}</span>
                         {hops.length > 1 && (
@@ -433,7 +448,7 @@ export function LogsView({
             type="button"
             onClick={onLoadMoreLogs}
             disabled={loadingMoreLogs}
-            className="px-4 py-2 text-xs font-medium bg-[#111114] hover:bg-[#18181B] disabled:opacity-50 text-[#D4D4D8] hover:text-white border border-[#222227] rounded-lg transition-colors"
+            className="px-4 py-2 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] disabled:opacity-50 text-[#D4D4D8] hover:text-white border border-[#2B334E] rounded-lg transition-colors"
           >
             {loadingMoreLogs ? "Loading older logs..." : "Load More Logs"}
           </button>
@@ -457,9 +472,9 @@ export function LogsView({
               exit={{ x: "100%" }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg bg-[#111114] border-l border-[#222227] h-full overflow-y-auto p-6"
+              className="w-full max-w-lg bg-[#171C2E] border-l border-[#2B334E] h-full overflow-y-auto p-6"
             >
-            <div className="flex items-center justify-between pb-4 border-b border-[#222227]">
+            <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
               <div>
                 <h3 className="font-display text-base font-semibold text-white">
                   Request Trace Inspector
@@ -478,7 +493,7 @@ export function LogsView({
             </div>
 
             <div className="mt-5 space-y-5 text-xs">
-              <div className="grid grid-cols-2 gap-4 bg-[#09090B] border border-[#222227] rounded-lg p-4">
+              <div className="grid grid-cols-2 gap-4 bg-[#101422] border border-[#2B334E] rounded-lg p-4">
                 <div>
                   <div className="text-[#A1A1AA]">Requested Model</div>
                   <div className="mt-1 font-mono text-white">
@@ -525,7 +540,7 @@ export function LogsView({
                 {selectedHops.length === 0 ? (
                   <p className="text-[#A1A1AA]">No hop trace recorded.</p>
                 ) : (
-                  <div className="border border-[#222227] rounded-lg divide-y divide-[#222227] bg-[#09090B]">
+                  <div className="border border-[#2B334E] rounded-lg divide-y divide-[#2B334E] bg-[#101422]">
                     {selectedHops.map((hop, idx) => (
                       <div key={idx} className="p-3 space-y-1">
                         <div className="flex items-center justify-between">

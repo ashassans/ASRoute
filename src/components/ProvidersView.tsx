@@ -29,6 +29,7 @@ import {
   matchPresetForConnection,
 } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
+import { getProviderVisual } from "../lib/providerVisuals.ts";
 import type { BootstrapPayload, ProviderConnection } from "../types/gateway.ts";
 
 interface ProvidersViewProps {
@@ -696,16 +697,34 @@ export function ProvidersView({
     const activeCount = matchingConns.filter((c) => c.isActive).length;
     const isConnected = matchingConns.length > 0;
     const isSearchPreset = preset.category === "search";
+    const visual = getProviderVisual(preset.key);
 
     return (
-      <div
+      <motion.div
         key={preset.key}
-        className="bg-[#111114] border border-[#222227] hover:border-[#3F3F46] rounded-xl p-4 flex flex-col justify-between gap-4 transition-colors"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+        whileHover={{ y: -2 }}
+        className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] hover:border-[#3A4260] rounded-xl p-4 flex flex-col justify-between gap-4 transition-colors"
       >
+        <span
+          className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-75"
+          style={{
+            background: `linear-gradient(90deg, ${visual.color}, transparent 80%)`,
+          }}
+        />
         <div className="space-y-2.5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-[#18181B] border border-[#27272A] flex items-center justify-center font-mono text-xs font-bold text-amber-400 shrink-0">
+              <div
+                className="w-9 h-9 rounded-lg border flex items-center justify-center font-mono text-xs font-bold shrink-0"
+                style={{
+                  color: visual.color,
+                  backgroundColor: visual.softBg,
+                  borderColor: visual.border,
+                }}
+              >
                 {preset.badge}
               </div>
               <div className="min-w-0">
@@ -730,7 +749,7 @@ export function ProvidersView({
             )}
           </div>
 
-          <div className="bg-[#09090B] border border-[#1D1D22] rounded-lg px-3 py-2 space-y-1 text-[11px] font-mono">
+          <div className="bg-[#101422] border border-[#28304A] rounded-lg px-3 py-2 space-y-1 text-[11px] font-mono">
             <div
               className="text-[#A1A1AA] truncate"
               title={preset.defaultBaseUrl}
@@ -740,7 +759,7 @@ export function ProvidersView({
             <div className="flex items-center justify-between gap-2">
               <span className="text-[#71717A] truncate">
                 {isSearchPreset ? "Engine: " : "Prefix: "}
-                <span className="text-emerald-400">
+                <span style={{ color: visual.color }}>
                   {isSearchPreset ? preset.key : `${preset.key}/`}
                 </span>
               </span>
@@ -772,16 +791,16 @@ export function ProvidersView({
         <button
           type="button"
           onClick={() => openQuickConnect(preset)}
-          className={`w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+          className={`w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
             isConnected
-              ? "bg-[#18181B] hover:bg-[#222227] text-[#FAFAFA] border border-[#27272A]"
-              : "bg-amber-400 hover:bg-amber-300 text-[#09090B]"
+              ? "bg-[#1F263D] hover:bg-[#2B334E] text-[#FAFAFA] border border-[#343E5E]"
+              : "bg-gradient-to-r from-indigo-500 to-sky-500 hover:brightness-110 text-white shadow-[0_6px_18px_rgba(99,102,241,0.22)]"
           }`}
         >
           <KeyRound className="w-3.5 h-3.5" />
           <span>{isConnected ? "Add Another Key" : "Connect"}</span>
         </button>
-      </div>
+      </motion.div>
     );
   };
 
@@ -798,7 +817,7 @@ export function ProvidersView({
                   ? "Web Search Providers"
                   : "Provider Connected"}
             </h2>
-            <span className="px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#18181B] border border-[#27272A] text-[#D4D4D8] tabular-nums">
+            <span className="px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#1F263D] border border-[#343E5E] text-[#D4D4D8] tabular-nums">
               {section === "list"
                 ? LLM_PROVIDER_PRESETS.length
                 : section === "search"
@@ -821,7 +840,7 @@ export function ProvidersView({
               type="button"
               onClick={handleProbeAllFree}
               disabled={probingAll}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#111114] hover:bg-[#18181B] text-[#D4D4D8] hover:text-white border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] text-[#D4D4D8] hover:text-white border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               <Activity
                 className={`w-3.5 h-3.5 text-emerald-400 ${probingAll ? "animate-pulse" : ""}`}
@@ -833,9 +852,9 @@ export function ProvidersView({
             <button
               type="button"
               onClick={() => onNavigateSection("list")}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#111114] hover:bg-[#18181B] text-[#D4D4D8] hover:text-white border border-[#222227] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] text-[#D4D4D8] hover:text-white border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
-              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+              <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
               <span>Provider List</span>
             </button>
           )}
@@ -843,7 +862,7 @@ export function ProvidersView({
             <button
               type="button"
               onClick={onOpenSearchTab}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               <Search className="w-4 h-4" />
               <span>Open Search</span>
@@ -853,7 +872,7 @@ export function ProvidersView({
             <button
               type="button"
               onClick={() => openModal("custom")}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               <Plus className="w-4 h-4" />
               <span>Custom Provider</span>
@@ -881,7 +900,7 @@ export function ProvidersView({
             <h3 className="font-display text-sm font-semibold text-white">
               AI Model Providers
             </h3>
-            <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#18181B] border border-[#27272A] text-[#D4D4D8] tabular-nums">
+            <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#1F263D] border border-[#343E5E] text-[#D4D4D8] tabular-nums">
               {llmConnections.length}
             </span>
           </div>
@@ -891,7 +910,7 @@ export function ProvidersView({
         </div>
 
         {llmConnections.length === 0 ? (
-          <div className="bg-[#111114] border border-[#222227] rounded-lg p-10 text-center">
+          <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-10 text-center">
             <p className="text-sm font-medium text-white">
               No AI model providers connected yet
             </p>
@@ -903,7 +922,7 @@ export function ProvidersView({
                 <button
                   type="button"
                   onClick={() => onNavigateSection("list")}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors whitespace-nowrap"
                 >
                   <KeyRound className="w-3.5 h-3.5" />
                   <span>Open Provider List</span>
@@ -912,7 +931,7 @@ export function ProvidersView({
               <button
                 type="button"
                 onClick={() => openModal("custom")}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium bg-[#18181B] hover:bg-[#222227] text-white border border-[#27272A] rounded-lg transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] text-white border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Custom Provider</span>
@@ -965,8 +984,8 @@ export function ProvidersView({
                       active
                         ? tab.id === "free"
                           ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300"
-                          : "bg-amber-400/15 border-amber-400/60 text-amber-300"
-                        : "bg-[#111114] border-[#222227] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
+                          : "bg-indigo-500/15 border-indigo-500/60 text-indigo-300"
+                        : "bg-[#171C2E] border-[#2B334E] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
                     }`}
                   >
                     <span>{tab.label}</span>
@@ -987,14 +1006,14 @@ export function ProvidersView({
           </div>
 
           {filteredConnections.length === 0 ? (
-            <div className="bg-[#111114] border border-[#222227] rounded-lg p-8 text-center space-y-2.5">
+            <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-8 text-center space-y-2.5">
               <p className="text-sm font-medium text-white">
                 No connected providers match this filter
               </p>
               <button
                 type="button"
                 onClick={() => setConnectedFilter("all")}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#18181B] hover:bg-[#222227] text-white border border-[#27272A] rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] text-white border border-[#343E5E] rounded-lg transition-colors"
               >
                 Show all connected
               </button>
@@ -1021,14 +1040,28 @@ export function ProvidersView({
                     ? "text-amber-400"
                     : "text-emerald-400";
 
+              const connVisual = getProviderVisual(conn.provider);
               return (
-                <div
+                <motion.div
                   key={conn.id}
-                  className="bg-[#111114] border border-[#222227] rounded-lg p-4 space-y-3 relative"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22 }}
+                  className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-4 space-y-3 relative"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-6 h-6 rounded-md border flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
+                          style={{
+                            color: connVisual.color,
+                            backgroundColor: connVisual.softBg,
+                            borderColor: connVisual.border,
+                          }}
+                        >
+                          {connVisual.short}
+                        </span>
                         <span className="font-medium text-white truncate">
                           {conn.name}
                         </span>
@@ -1046,8 +1079,8 @@ export function ProvidersView({
                           </span>
                         )}
                       </div>
-                      <div className="mt-0.5 text-xs font-mono text-[#A1A1AA] truncate">
-                        <span className="text-amber-400">
+                      <div className="mt-1 text-xs font-mono text-[#A1A1AA] truncate">
+                        <span style={{ color: connVisual.color }}>
                           {getConnectionPrefix(conn)}/*
                         </span>
                         {conn.defaultModel ? ` · ${conn.defaultModel}` : ""}
@@ -1081,7 +1114,7 @@ export function ProvidersView({
                     </div>
                   )}
 
-                  <div className="pt-2 border-t border-[#1D1D22] flex items-center justify-between gap-2 flex-wrap">
+                  <div className="pt-2 border-t border-[#28304A] flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
@@ -1089,7 +1122,7 @@ export function ProvidersView({
                         disabled={testingId === conn.id}
                         className="inline-flex items-center gap-1 text-xs font-medium text-[#D4D4D8] hover:text-white"
                       >
-                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        <Zap className="w-3.5 h-3.5 text-indigo-400" />
                         <span>{testingId === conn.id ? "Testing..." : "Test"}</span>
                       </button>
                       <button
@@ -1139,16 +1172,16 @@ export function ProvidersView({
                       </button>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
 
-          <div className="hidden md:block bg-[#111114] border border-[#222227] rounded-lg">
+          <div className="hidden md:block bg-[#171C2E] border border-[#2B334E] rounded-lg">
             <div className="overflow-visible">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#222227] text-xs text-[#A1A1AA]">
+                <tr className="border-b border-[#2B334E] text-xs text-[#A1A1AA]">
                   <th className="py-3 px-5 font-medium">Connection</th>
                   <th className="py-3 px-4 font-medium">Credential & Pool</th>
                   <th className="py-3 px-4 font-medium">Circuit & RPM</th>
@@ -1161,7 +1194,7 @@ export function ProvidersView({
                   <th className="py-3 px-5 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#222227] text-sm">
+              <tbody className="divide-y divide-[#2B334E] text-sm">
                 {filteredConnections.map((conn) => {
                   const matchedPreset = matchPresetForConnection(conn);
                   const testInfo = testResults[conn.id];
@@ -1201,13 +1234,24 @@ export function ProvidersView({
                         ? "text-amber-400"
                         : "text-emerald-400";
 
+                  const connVisual = getProviderVisual(conn.provider);
                   return (
                     <tr
                       key={conn.id}
-                      className="hover:bg-[#18181B]/50 transition-colors"
+                      className="hover:bg-[#1F263D]/50 transition-colors"
                     >
                       <td className="py-3.5 px-5 align-top">
                         <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className="w-5 h-5 rounded border flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
+                            style={{
+                              color: connVisual.color,
+                              backgroundColor: connVisual.softBg,
+                              borderColor: connVisual.border,
+                            }}
+                          >
+                            {connVisual.short}
+                          </span>
                           <span className="font-medium text-white">
                             {conn.name}
                           </span>
@@ -1227,11 +1271,11 @@ export function ProvidersView({
                           )}
                         </div>
                         <div className="mt-0.5 text-xs text-[#A1A1AA] font-mono">
-                          <span className="text-emerald-300">
+                          <span style={{ color: connVisual.color }}>
                             {getConnectionPrefix(conn)}/*
                           </span>
                           {conn.defaultModel ? (
-                            <span className="text-amber-400">
+                            <span className="text-indigo-400">
                               {" "}
                               · {conn.defaultModel}
                             </span>
@@ -1366,7 +1410,7 @@ export function ProvidersView({
                           </div>
                         )}
                         {conn.rpmLimit && (
-                          <div className="mt-0.5 font-mono text-[11px] text-amber-300 tabular-nums">
+                          <div className="mt-0.5 font-mono text-[11px] text-indigo-300 tabular-nums">
                             {conn.rpmLimit} RPM queue
                           </div>
                         )}
@@ -1384,7 +1428,7 @@ export function ProvidersView({
                         </div>
                         {(reqPct !== null || tokenPct !== null) && (
                           <>
-                            <div className="mt-1.5 w-24 ml-auto h-1 bg-[#09090B] rounded-full overflow-hidden">
+                            <div className="mt-1.5 w-24 ml-auto h-1 bg-[#101422] rounded-full overflow-hidden">
                               <div
                                 style={{
                                   width: `${Math.max(reqPct ?? 0, tokenPct ?? 0)}%`,
@@ -1416,7 +1460,7 @@ export function ProvidersView({
                             disabled={testingId === conn.id}
                             className="inline-flex items-center gap-1 text-xs font-medium text-[#A1A1AA] hover:text-white transition-colors whitespace-nowrap"
                           >
-                            <Zap className="w-3.5 h-3.5 text-amber-400" />
+                            <Zap className="w-3.5 h-3.5 text-indigo-400" />
                             <span>
                               {testingId === conn.id ? "Testing..." : "Test"}
                             </span>
@@ -1440,7 +1484,7 @@ export function ProvidersView({
                               );
                             }}
                             aria-label="More provider actions"
-                            className="p-1 text-[#A1A1AA] hover:text-white rounded hover:bg-[#18181B] transition-colors"
+                            className="p-1 text-[#A1A1AA] hover:text-white rounded hover:bg-[#1F263D] transition-colors"
                           >
                             <MoreHorizontal className="w-4 h-4" />
                           </button>
@@ -1452,7 +1496,7 @@ export function ProvidersView({
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                                 transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                                className="absolute right-0 top-full mt-1 w-44 z-30 bg-[#18181B] border border-[#27272A] rounded-lg shadow-xl py-1 text-left origin-top-right"
+                                className="absolute right-0 top-full mt-1 w-44 z-30 bg-[#1F263D] border border-[#343E5E] rounded-lg shadow-xl py-1 text-left origin-top-right"
                               >
                                 <button
                                   type="button"
@@ -1461,7 +1505,7 @@ export function ProvidersView({
                                     setOpenMenuId(null);
                                     handleSyncRowModels(conn, false);
                                   }}
-                                  className="w-full px-3 py-1.5 text-xs text-[#E5E7EB] hover:bg-[#222227] flex items-center gap-2"
+                                  className="w-full px-3 py-1.5 text-xs text-[#E5E7EB] hover:bg-[#2B334E] flex items-center gap-2"
                                 >
                                   <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
                                   <span>Sync all models</span>
@@ -1473,7 +1517,7 @@ export function ProvidersView({
                                     setOpenMenuId(null);
                                     handleSyncRowModels(conn, true);
                                   }}
-                                  className="w-full px-3 py-1.5 text-xs text-emerald-300 hover:bg-[#222227] flex items-center gap-2"
+                                  className="w-full px-3 py-1.5 text-xs text-emerald-300 hover:bg-[#2B334E] flex items-center gap-2"
                                 >
                                   <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
                                   <span>Sync free only</span>
@@ -1485,7 +1529,7 @@ export function ProvidersView({
                                     setOpenMenuId(null);
                                     handleProbeFree(conn);
                                   }}
-                                  className="w-full px-3 py-1.5 text-xs text-[#E5E7EB] hover:bg-[#222227] flex items-center gap-2"
+                                  className="w-full px-3 py-1.5 text-xs text-[#E5E7EB] hover:bg-[#2B334E] flex items-center gap-2"
                                 >
                                   <Activity className="w-3.5 h-3.5 text-emerald-400" />
                                   <span>
@@ -1501,20 +1545,20 @@ export function ProvidersView({
                                       setOpenMenuId(null);
                                       handleResetCircuit(conn.id);
                                     }}
-                                    className="w-full px-3 py-1.5 text-xs text-amber-300 hover:bg-[#222227] flex items-center gap-2"
+                                    className="w-full px-3 py-1.5 text-xs text-amber-300 hover:bg-[#2B334E] flex items-center gap-2"
                                   >
                                     <RefreshCw className="w-3.5 h-3.5" />
                                     <span>Reset circuit</span>
                                   </button>
                                 )}
-                                <div className="my-1 border-t border-[#27272A]" />
+                                <div className="my-1 border-t border-[#343E5E]" />
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setOpenMenuId(null);
                                     handleToggle(conn);
                                   }}
-                                  className="w-full px-3 py-1.5 text-xs text-[#D4D4D8] hover:bg-[#222227] flex items-center justify-between"
+                                  className="w-full px-3 py-1.5 text-xs text-[#D4D4D8] hover:bg-[#2B334E] flex items-center justify-between"
                                 >
                                   <span>{conn.isActive ? "Disable" : "Enable"}</span>
                                 </button>
@@ -1529,7 +1573,7 @@ export function ProvidersView({
                                       setConfirmDeleteId(conn.id);
                                     }
                                   }}
-                                  className={`w-full px-3 py-1.5 text-xs hover:bg-[#222227] flex items-center gap-2 ${
+                                  className={`w-full px-3 py-1.5 text-xs hover:bg-[#2B334E] flex items-center gap-2 ${
                                     confirmDeleteId === conn.id
                                       ? "text-red-300 font-semibold"
                                       : "text-red-400"
@@ -1643,8 +1687,8 @@ export function ProvidersView({
                       active
                         ? cat.id === "free"
                           ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300"
-                          : "bg-amber-400/15 border-amber-400/60 text-amber-300"
-                        : "bg-[#111114] border-[#222227] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
+                          : "bg-indigo-500/15 border-indigo-500/60 text-indigo-300"
+                        : "bg-[#171C2E] border-[#2B334E] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
                     }`}
                   >
                     <span>{cat.label}</span>
@@ -1653,7 +1697,7 @@ export function ProvidersView({
                         active
                           ? cat.id === "free"
                             ? "text-emerald-200"
-                            : "text-amber-200"
+                            : "text-indigo-200"
                           : "text-[#71717A]"
                       }`}
                     >
@@ -1673,7 +1717,7 @@ export function ProvidersView({
                     value={providerSearch}
                     onChange={(e) => setProviderSearch(e.target.value)}
                     placeholder="Search providers, prefix or base URL..."
-                    className="w-full bg-[#111114] border border-[#222227] rounded-lg pl-8 pr-8 py-2 text-xs text-white placeholder-[#71717A] focus:outline-none focus:border-amber-400"
+                    className="w-full bg-[#171C2E] border border-[#2B334E] rounded-lg pl-8 pr-8 py-2 text-xs text-white placeholder-[#71717A] focus:outline-none focus:border-indigo-500"
                   />
                   {providerSearch && (
                     <button
@@ -1687,7 +1731,7 @@ export function ProvidersView({
                   )}
                 </div>
 
-                <div className="inline-flex flex-wrap items-center gap-1 bg-[#111114] border border-[#222227] rounded-lg p-1 self-start">
+                <div className="inline-flex flex-wrap items-center gap-1 bg-[#171C2E] border border-[#2B334E] rounded-lg p-1 self-start">
                   {(
                     [
                       { id: "all", label: "All Tiers" },
@@ -1707,7 +1751,7 @@ export function ProvidersView({
                             ? opt.id === "free-credits"
                               ? "bg-sky-500/20 text-sky-300"
                               : opt.id === "all"
-                                ? "bg-[#222227] text-white"
+                                ? "bg-[#2B334E] text-white"
                                 : "bg-emerald-500/20 text-emerald-300"
                             : "text-[#8B8B95] hover:text-white"
                         }`}
@@ -1729,7 +1773,7 @@ export function ProvidersView({
             </div>
 
             {filteredPresets.length === 0 ? (
-              <div className="bg-[#111114] border border-[#222227] rounded-xl p-10 text-center space-y-2.5">
+              <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-10 text-center space-y-2.5">
                 <p className="text-sm font-medium text-white">
                   No AI providers match this filter
                 </p>
@@ -1740,7 +1784,7 @@ export function ProvidersView({
                     setFreeTierFilter("all");
                     setProviderSearch("");
                   }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#18181B] hover:bg-[#222227] text-white border border-[#27272A] rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] text-white border border-[#343E5E] rounded-lg transition-colors"
                 >
                   Reset filters
                 </button>
@@ -1761,11 +1805,11 @@ export function ProvidersView({
           <section className="space-y-3.5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-amber-400" />
+                <Globe className="w-4 h-4 text-teal-400" />
                 <h3 className="font-display text-sm font-semibold text-white">
                   Connected Search Keys
                 </h3>
-                <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#18181B] border border-[#27272A] text-[#D4D4D8] tabular-nums">
+                <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#1F263D] border border-[#343E5E] text-[#D4D4D8] tabular-nums">
                   {searchConnections.length}
                 </span>
               </div>
@@ -1775,7 +1819,7 @@ export function ProvidersView({
             </div>
 
             {searchConnections.length === 0 ? (
-              <div className="bg-[#111114] border border-[#222227] rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="text-xs text-[#8B8B95]">
                   No external search keys connected yet. Built-in web search works automatically with 0 keys — add Tavily, Brave Search, or Exa below for higher limits and multi-engine failover.
                 </div>
@@ -1800,14 +1844,35 @@ export function ProvidersView({
                         ? "text-amber-400"
                         : "text-emerald-400";
 
+                  const searchVisual = getProviderVisual(conn.provider);
                   return (
-                    <div
+                    <motion.div
                       key={conn.id}
-                      className="bg-[#111114] border border-[#222227] rounded-xl p-4 space-y-3"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      whileHover={{ y: -2 }}
+                      transition={{ duration: 0.22 }}
+                      className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] hover:border-[#3A4260] rounded-xl p-4 space-y-3 transition-colors"
                     >
+                      <span
+                        className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
+                        style={{
+                          background: `linear-gradient(90deg, ${searchVisual.color}, transparent 80%)`,
+                        }}
+                      />
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className="w-6 h-6 rounded-md border flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
+                              style={{
+                                color: searchVisual.color,
+                                backgroundColor: searchVisual.softBg,
+                                borderColor: searchVisual.border,
+                              }}
+                            >
+                              {searchVisual.short}
+                            </span>
                             <span className="font-medium text-sm text-white truncate">
                               {conn.name}
                             </span>
@@ -1819,8 +1884,10 @@ export function ProvidersView({
                               </span>
                             )}
                           </div>
-                          <div className="mt-0.5 text-xs font-mono text-[#A1A1AA] truncate">
-                            <span className="text-amber-400">{conn.provider}</span>
+                          <div className="mt-1 text-xs font-mono text-[#A1A1AA] truncate">
+                            <span style={{ color: searchVisual.color }}>
+                              {conn.provider}
+                            </span>
                             {" · Search & Extract"}
                           </div>
                         </div>
@@ -1829,7 +1896,7 @@ export function ProvidersView({
                         </span>
                       </div>
 
-                      <div className="bg-[#09090B] border border-[#1D1D22] rounded-lg px-3 py-2 text-[11px] font-mono text-[#A1A1AA] space-y-1">
+                      <div className="bg-[#101422] border border-[#28304A] rounded-lg px-3 py-2 text-[11px] font-mono text-[#A1A1AA] space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate">{conn.maskedKey}</span>
                           {conn.poolKeyCount > 0 && (
@@ -1863,7 +1930,7 @@ export function ProvidersView({
                         </div>
                       )}
 
-                      <div className="pt-2 border-t border-[#1D1D22] flex items-center justify-between gap-2 flex-wrap">
+                      <div className="pt-2 border-t border-[#28304A] flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-3">
                           <button
                             type="button"
@@ -1871,7 +1938,7 @@ export function ProvidersView({
                             disabled={testingId === conn.id}
                             className="inline-flex items-center gap-1 text-xs font-medium text-[#D4D4D8] hover:text-white"
                           >
-                            <Zap className="w-3.5 h-3.5 text-amber-400" />
+                            <Zap className="w-3.5 h-3.5 text-indigo-400" />
                             <span>{testingId === conn.id ? "Testing..." : "Test"}</span>
                           </button>
                           <button
@@ -1921,7 +1988,7 @@ export function ProvidersView({
                           </button>
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -1929,7 +1996,7 @@ export function ProvidersView({
           </section>
 
           {/* Available Web Search Providers */}
-          <section className="pt-6 border-t border-[#222227] space-y-4">
+          <section className="pt-6 border-t border-[#2B334E] space-y-4">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h3 className="font-display text-sm font-semibold text-white">
@@ -1939,7 +2006,7 @@ export function ProvidersView({
                   Connect any engine below to enable API failover for the Search tab, POST /v1/search, and POST /v1/extract.
                 </p>
               </div>
-              <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#18181B] border border-[#27272A] text-[#D4D4D8] tabular-nums">
+              <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#1F263D] border border-[#343E5E] text-[#D4D4D8] tabular-nums">
                 {SEARCH_PROVIDER_PRESETS.length}
               </span>
             </div>
@@ -1968,12 +2035,12 @@ export function ProvidersView({
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg bg-[#111114] border border-[#222227] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-lg bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
             >
-            <div className="flex items-center justify-between pb-4 border-b border-[#222227]">
+            <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
               <div className="flex items-center gap-2.5 min-w-0">
                 {quickPreset && (
-                  <span className="w-7 h-7 rounded-md bg-[#18181B] border border-[#27272A] flex items-center justify-center font-mono text-[11px] font-bold text-amber-400 shrink-0">
+                  <span className="w-7 h-7 rounded-md bg-[#1F263D] border border-[#343E5E] flex items-center justify-center font-mono text-[11px] font-bold text-indigo-400 shrink-0">
                     {quickPreset.badge}
                   </span>
                 )}
@@ -1996,7 +2063,7 @@ export function ProvidersView({
 
             <form onSubmit={handleSave} className="mt-5 space-y-4">
               {quickPreset && !editingId && (
-                <div className="bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-xs space-y-1">
+                <div className="bg-[#101422] border border-[#2B334E] rounded-lg px-3.5 py-2.5 text-xs space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[#8B8B95]">Endpoint</span>
                     <span className="font-mono text-[#D4D4D8] truncate">
@@ -2009,7 +2076,7 @@ export function ProvidersView({
                         ? "Capability"
                         : "Default Model"}
                     </span>
-                    <span className="font-mono text-amber-400 truncate">
+                    <span className="font-mono text-indigo-400 truncate">
                       {isSearchProvider(quickPreset.id)
                         ? "Web Search & Extract (No AI Combos)"
                         : defaultModel || quickPreset.defaultModel}
@@ -2028,7 +2095,7 @@ export function ProvidersView({
                       value={provider}
                       disabled={Boolean(editingId) || Boolean(quickPreset)}
                       onChange={(e) => handleProviderChange(e.target.value)}
-                      className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-60 focus:outline-none focus:border-amber-400"
+                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-60 focus:outline-none focus:border-indigo-500"
                     >
                       <optgroup label="AI Model Providers">
                         {PROVIDER_CATALOG.filter((p) => p.kind !== "search").map(
@@ -2060,7 +2127,7 @@ export function ProvidersView({
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
@@ -2098,7 +2165,7 @@ export function ProvidersView({
                         ? "Leave blank to keep existing key"
                         : quickPreset?.keyPlaceholder || "Paste your API key..."
                   }
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] disabled:opacity-50 focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] disabled:opacity-50 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -2131,7 +2198,7 @@ export function ProvidersView({
                       type="url"
                       value={baseUrl}
                       onChange={(e) => setBaseUrl(e.target.value)}
-                      className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
@@ -2146,13 +2213,13 @@ export function ProvidersView({
                           list="provider-model-suggestions"
                           value={defaultModel}
                           onChange={(e) => setDefaultModel(e.target.value)}
-                          className="flex-1 bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                          className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                         />
                         <button
                           type="button"
                           onClick={() => handleFetchModels()}
                           disabled={fetchingModels}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#18181B] hover:bg-[#222227] disabled:opacity-60 text-white border border-[#27272A] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] disabled:opacity-60 text-white border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap shrink-0"
                         >
                           <RefreshCw
                             className={`w-3.5 h-3.5 ${fetchingModels ? "animate-spin" : ""}`}
@@ -2186,7 +2253,7 @@ export function ProvidersView({
                           onChange={(e) => {
                             if (e.target.value) setDefaultModel(e.target.value);
                           }}
-                          className="mt-2 w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-400"
+                          className="mt-2 w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-indigo-300 focus:outline-none focus:border-indigo-500"
                         >
                           <option value="">
                             Fetched models ({fetchedModels.length})
@@ -2209,7 +2276,7 @@ export function ProvidersView({
                 </>
               )}
 
-              <div className="border-t border-[#222227] pt-3">
+              <div className="border-t border-[#2B334E] pt-3">
                 <button
                   type="button"
                   onClick={() => setShowAdvanced((v) => !v)}
@@ -2244,7 +2311,7 @@ export function ProvidersView({
                                 setClearKeyPool((v) => !v);
                                 if (!clearKeyPool) setExtraApiKeys("");
                               }}
-                              className="text-[11px] text-amber-400 hover:text-amber-300"
+                              className="text-[11px] text-indigo-400 hover:text-indigo-300"
                             >
                               {clearKeyPool
                                 ? "Keep pool keys"
@@ -2257,7 +2324,7 @@ export function ProvidersView({
                           disabled={clearKeyPool}
                           value={extraApiKeys}
                           onChange={(e) => setExtraApiKeys(e.target.value)}
-                          className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-xs font-mono text-white disabled:opacity-50 focus:outline-none focus:border-amber-400"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white disabled:opacity-50 focus:outline-none focus:border-indigo-500"
                         />
                         {editingPoolPreview.length > 0 && !clearKeyPool && (
                           <div className="mt-1 text-[11px] font-mono text-[#A1A1AA]">
@@ -2276,7 +2343,7 @@ export function ProvidersView({
                           min={1}
                           value={rpmLimit}
                           onChange={(e) => setRpmLimit(e.target.value)}
-                          className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
@@ -2289,7 +2356,7 @@ export function ProvidersView({
                           min={1}
                           value={rpdLimit}
                           onChange={(e) => setRpdLimit(e.target.value)}
-                          className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
@@ -2302,7 +2369,7 @@ export function ProvidersView({
                           min={1000}
                           value={dailyTokenQuota}
                           onChange={(e) => setDailyTokenQuota(e.target.value)}
-                          className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
@@ -2316,7 +2383,7 @@ export function ProvidersView({
                           min={0.1}
                           value={monthlyUsdQuota}
                           onChange={(e) => setMonthlyUsdQuota(e.target.value)}
-                          className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                         />
                       </div>
                     </div>
@@ -2325,18 +2392,18 @@ export function ProvidersView({
                 </AnimatePresence>
               </div>
 
-              <div className="pt-3 border-t border-[#222227] flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-[#2B334E] flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowAdd(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#09090B] border border-[#222227] rounded-lg whitespace-nowrap"
+                  className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg whitespace-nowrap"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-[#09090B] rounded-lg transition-colors whitespace-nowrap"
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-lg transition-colors whitespace-nowrap"
                 >
                   {submitting
                     ? "Connecting..."

@@ -39,14 +39,14 @@ export function ToggleSwitch({
           e.stopPropagation();
           if (!disabled) onChange(!checked);
         }}
-        className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-300 ease-out flex items-center shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 ${
-          checked ? "bg-amber-400" : "bg-[#27272A]"
+        className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-300 ease-out flex items-center shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 ${
+          checked ? "bg-indigo-500" : "bg-[#343E5E]"
         }`}
       >
         <motion.span
           layout
           transition={{ type: "spring", stiffness: 360, damping: 28 }}
-          className={`w-4 h-4 rounded-full bg-[#09090B] ${
+          className={`w-4 h-4 rounded-full bg-white ${
             checked ? "ml-auto" : "mr-auto"
           }`}
         />

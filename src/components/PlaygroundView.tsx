@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { getProviderSpec, isSearchProvider } from "../shared/catalog.ts";
+import { getProviderVisual } from "../lib/providerVisuals.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import type {
   Combo,
@@ -117,9 +118,9 @@ function AssistantMessageBody({
           return (
             <div
               key={idx}
-              className="rounded-xl border border-[#27272A] bg-[#09090B] overflow-hidden"
+              className="rounded-xl border border-[#343E5E] bg-[#101422] overflow-hidden"
             >
-              <div className="px-3.5 py-1.5 border-b border-[#1D1D22] flex items-center justify-between text-[11px] font-mono text-[#8B8B95]">
+              <div className="px-3.5 py-1.5 border-b border-[#28304A] flex items-center justify-between text-[11px] font-mono text-[#8B8B95]">
                 <span>{lang || "code"}</span>
                 <button
                   type="button"
@@ -211,16 +212,25 @@ export function PlaygroundView({
     return list;
   }, [combos, connections]);
 
+  const activeLlmConnections = useMemo(
+    () => connections.filter((c) => c.isActive && !isSearchProvider(c.provider)),
+    [connections]
+  );
+  const hasActiveLlmOptions = modelOptions.length > 0;
+
   const [selectedModel, setSelectedModel] = useState(
-    modelOptions[0]?.value || "gemini/gemini-4-hydrogen"
+    modelOptions[0]?.value || ""
   );
   const [syncingModels, setSyncingModels] = useState(false);
 
   useEffect(() => {
-    if (
-      modelOptions.length > 0 &&
-      !modelOptions.some((opt) => opt.value === selectedModel)
-    ) {
+    if (modelOptions.length === 0) {
+      if (selectedModel !== "") {
+        setSelectedModel("");
+      }
+      return;
+    }
+    if (!modelOptions.some((opt) => opt.value === selectedModel)) {
       setSelectedModel(modelOptions[0].value);
     }
   }, [modelOptions, selectedModel]);
@@ -291,8 +301,7 @@ export function PlaygroundView({
   };
 
   const handleSyncAllModels = async (onlyFree = false) => {
-    const activeConns = connections.filter((c) => c.isActive);
-    if (activeConns.length === 0) {
+    if (activeLlmConnections.length === 0) {
       onNotify("No active provider connections to sync.", "error");
       return;
     }
@@ -300,7 +309,7 @@ export function PlaygroundView({
     let syncedCount = 0;
     let totalModels = 0;
     try {
-      for (const conn of activeConns) {
+      for (const conn of activeLlmConnections) {
         try {
           const res = await fetch("/api/providers/fetch-models", {
             method: "POST",
@@ -353,7 +362,7 @@ export function PlaygroundView({
   const sendMessage = async (overrideText?: string) => {
     const promptText = (overrideText ?? inputText).trim();
     if ((!promptText && !imageDataUrl) || running) return;
-    if (connections.length === 0) {
+    if (!hasActiveLlmOptions || !selectedModel) {
       onNotify("Add an active provider first.", "error");
       return;
     }
@@ -680,15 +689,14 @@ export function PlaygroundView({
       <div className="flex items-center justify-between gap-2 sm:gap-3 pb-3 relative">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <select
-            value={selectedModel}
+            value={hasActiveLlmOptions ? selectedModel : ""}
+            disabled={!hasActiveLlmOptions}
             onChange={(e) => setSelectedModel(e.target.value)}
             aria-label="Select model or combo"
-            className="flex-1 min-w-0 sm:flex-none sm:max-w-[360px] truncate bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-amber-400 transition-colors"
+            className="flex-1 min-w-0 sm:flex-none sm:max-w-[360px] truncate bg-[#171C2E] hover:bg-[#1F263D] disabled:opacity-75 disabled:cursor-not-allowed border border-[#2B334E] rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-colors"
           >
-            {modelOptions.length === 0 ? (
-              <option value="gemini/gemini-4-hydrogen">
-                No active providers configured
-              </option>
+            {!hasActiveLlmOptions ? (
+              <option value="">No active providers configured</option>
             ) : (
               modelOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -716,8 +724,8 @@ export function PlaygroundView({
             onClick={() => setShowSettings((v) => !v)}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-colors whitespace-nowrap ${
               showSettings
-                ? "bg-[#18181B] border-[#3F3F46] text-white"
-                : "bg-[#111114] hover:bg-[#18181B] border-[#222227] text-[#D4D4D8] hover:text-white"
+                ? "bg-[#1F263D] border-[#3F3F46] text-white"
+                : "bg-[#171C2E] hover:bg-[#1F263D] border-[#2B334E] text-[#D4D4D8] hover:text-white"
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -728,7 +736,7 @@ export function PlaygroundView({
             <button
               type="button"
               onClick={handleNewChat}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#111114] hover:bg-[#18181B] border border-[#222227] rounded-xl text-[#D4D4D8] hover:text-white transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-xl text-[#D4D4D8] hover:text-white transition-colors whitespace-nowrap"
             >
               <SquarePen className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">New chat</span>
@@ -754,7 +762,7 @@ export function PlaygroundView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute right-0 top-11 z-30 w-80 sm:w-96 bg-[#111114] border border-[#27272A] rounded-2xl shadow-2xl p-4 space-y-4 origin-top-right"
+                className="absolute right-0 top-11 z-30 w-80 sm:w-96 bg-[#171C2E] border border-[#343E5E] rounded-2xl shadow-2xl p-4 space-y-4 origin-top-right"
               >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-white">
@@ -777,7 +785,7 @@ export function PlaygroundView({
                   rows={2}
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -785,7 +793,7 @@ export function PlaygroundView({
                 <div>
                   <div className="flex items-center justify-between text-xs text-[#D4D4D8] mb-1">
                     <span>Temperature</span>
-                    <span className="font-mono text-amber-400">
+                    <span className="font-mono text-indigo-400">
                       {temperature.toFixed(1)}
                     </span>
                   </div>
@@ -796,7 +804,7 @@ export function PlaygroundView({
                     step={0.1}
                     value={temperature}
                     onChange={(e) => setTemperature(Number(e.target.value))}
-                    className="w-full accent-amber-400"
+                    className="w-full accent-indigo-500"
                   />
                 </div>
                 <div>
@@ -809,12 +817,12 @@ export function PlaygroundView({
                     max={32768}
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="divide-y divide-[#1D1D22] border-y border-[#1D1D22] py-1">
+              <div className="divide-y divide-[#28304A] border-y border-[#28304A] py-1">
                 <ToggleSwitch
                   checked={streamResponse}
                   onChange={setStreamResponse}
@@ -854,14 +862,14 @@ export function PlaygroundView({
                       rows={5}
                       value={toolsJson}
                       onChange={(e) => setToolsJson(e.target.value)}
-                      className="w-full bg-[#09090B] border border-[#222227] rounded-xl px-3 py-2 text-[11px] font-mono text-[#E5E7EB] focus:outline-none focus:border-amber-400"
+                      className="w-full bg-[#101422] border border-[#2B334E] rounded-xl px-3 py-2 text-[11px] font-mono text-[#E5E7EB] focus:outline-none focus:border-indigo-500"
                     />
                   </motion.div>
                 )}
               </AnimatePresence>
 
               <div className="flex items-center justify-between gap-2 text-xs text-[#A1A1AA]">
-                {connections.some((c) => c.isActive) ? (
+                {activeLlmConnections.length > 0 ? (
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -906,30 +914,44 @@ export function PlaygroundView({
       <div className="flex-1 overflow-y-auto px-1 py-4">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-4">
-            <div className="w-10 h-10 rounded-full bg-[#111114] border border-[#27272A] flex items-center justify-center font-display text-sm font-bold text-amber-400 mb-4">
-              AS
-            </div>
+            <motion.img
+              src="/assets/as-logo.png"
+              alt="AS ROUTER"
+              animate={{ scale: [1, 1.045, 1] }}
+              transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
+              className="h-12 w-auto object-contain mb-4 drop-shadow-[0_0_24px_rgba(129,140,248,0.38)]"
+            />
             <h2 className="font-display text-xl sm:text-2xl font-semibold text-white tracking-tight">
-              {connections.length === 0
+              {!hasActiveLlmOptions
                 ? "Connect a provider to start chatting"
                 : "What would you like to ask?"}
             </h2>
-            <p className="mt-1.5 text-xs text-[#71717A] font-mono">
-              {selectedModel}
-            </p>
+            {hasActiveLlmOptions && selectedModel && (
+              <p className="mt-1.5 text-xs text-[#71717A] font-mono">
+                {selectedModel}
+              </p>
+            )}
 
-            {connections.length > 0 && (
+            {hasActiveLlmOptions && (
               <div className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-w-2xl w-full text-left">
-                {STARTER_PROMPTS.map((starter) => (
-                  <button
-                    key={starter}
-                    type="button"
-                    onClick={() => sendMessage(starter)}
-                    className="p-3.5 rounded-xl bg-[#111114] hover:bg-[#18181B] border border-[#222227] hover:border-[#303038] text-xs text-[#D4D4D8] hover:text-white transition-colors leading-relaxed"
-                  >
-                    {starter}
-                  </button>
-                ))}
+                {STARTER_PROMPTS.map((starter, idx) => {
+                  const starterAccents = [
+                    "hover:border-sky-400/50",
+                    "hover:border-purple-400/50",
+                    "hover:border-emerald-400/50",
+                  ];
+                  return (
+                    <motion.button
+                      key={starter}
+                      type="button"
+                      whileHover={{ y: -2 }}
+                      onClick={() => sendMessage(starter)}
+                      className={`p-3.5 rounded-xl bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] ${starterAccents[idx % starterAccents.length]} text-xs text-[#D4D4D8] hover:text-white transition-colors leading-relaxed`}
+                    >
+                      {starter}
+                    </motion.button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -944,12 +966,12 @@ export function PlaygroundView({
                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                   className="flex justify-end"
                 >
-                  <div className="max-w-[82%] bg-[#18181B] border border-[#27272A] rounded-2xl px-4 py-3 text-sm text-[#F4F4F5] space-y-2.5">
+                  <div className="max-w-[82%] bg-[#1F263D] border border-[#343E5E] rounded-2xl px-4 py-3 text-sm text-[#F4F4F5] space-y-2.5">
                     {msg.imageDataUrl && (
                       <img
                         src={msg.imageDataUrl}
                         alt="Uploaded prompt attachment"
-                        className="max-h-48 rounded-lg border border-[#27272A] object-contain"
+                        className="max-h-48 rounded-lg border border-[#343E5E] object-contain"
                       />
                     )}
                     {msg.content && (
@@ -961,7 +983,7 @@ export function PlaygroundView({
                 </motion.div>
               ) : msg.role === "tool" ? (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[82%] bg-[#09090B] border border-emerald-500/30 rounded-xl px-3.5 py-2 text-xs font-mono text-emerald-300 space-y-1">
+                  <div className="max-w-[82%] bg-[#101422] border border-emerald-500/30 rounded-xl px-3.5 py-2 text-xs font-mono text-emerald-300 space-y-1">
                     <div className="text-[11px] text-emerald-400">
                       tool output ({msg.toolName || msg.toolCallId})
                     </div>
@@ -979,13 +1001,15 @@ export function PlaygroundView({
                   className="flex items-start gap-3.5"
                 >
                   <div
-                    className={`w-7 h-7 rounded-full border flex items-center justify-center font-display text-[11px] font-bold shrink-0 mt-0.5 ${
-                      msg.isError
-                        ? "bg-red-500/10 border-red-500/30 text-red-400"
-                        : "bg-[#111114] border-[#27272A] text-amber-400"
+                    className={`w-8 h-7 flex items-center justify-center shrink-0 mt-0.5 ${
+                      msg.isError ? "opacity-75 grayscale contrast-125" : ""
                     }`}
                   >
-                    AS
+                    <img
+                      src="/assets/as-logo.png"
+                      alt="AS ROUTER"
+                      className="w-7 h-auto object-contain drop-shadow-[0_0_8px_rgba(129,140,248,0.28)]"
+                    />
                   </div>
 
                   <div className="flex-1 min-w-0 space-y-2.5">
@@ -998,7 +1022,7 @@ export function PlaygroundView({
                     )}
 
                     {msg.toolCalls && msg.toolCalls.length > 0 && (
-                      <div className="bg-[#111114] border border-[#222227] rounded-xl p-3.5 space-y-3">
+                      <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-3.5 space-y-3">
                         <div className="text-xs font-medium text-emerald-400">
                           Tool Calls ({msg.toolCalls.length})
                         </div>
@@ -1008,7 +1032,7 @@ export function PlaygroundView({
                         {msg.toolCalls.map((tc) => (
                           <div
                             key={tc.id}
-                            className="pt-2 border-t border-[#222227] flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+                            className="pt-2 border-t border-[#2B334E] flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
                           >
                             <input
                               type="text"
@@ -1023,7 +1047,7 @@ export function PlaygroundView({
                                 }))
                               }
                               aria-label={`Tool response JSON for ${tc.function.name}`}
-                              className="flex-1 bg-[#09090B] border border-[#222227] rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                              className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                             />
                             <button
                               type="button"
@@ -1044,8 +1068,20 @@ export function PlaygroundView({
                       <div className="space-y-1.5 pt-1">
                         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-[#71717A] tabular-nums">
                           <div className="flex flex-wrap items-center gap-x-1.5">
-                            <span className="text-[#A1A1AA]">
-                              {msg.meta.resolvedProvider}/{msg.meta.resolvedModel}
+                            <span>
+                              <span
+                                className="font-semibold"
+                                style={{
+                                  color: getProviderVisual(
+                                    msg.meta.resolvedProvider
+                                  ).color,
+                                }}
+                              >
+                                {msg.meta.resolvedProvider}
+                              </span>
+                              <span className="text-[#A1A1AA]">
+                                /{msg.meta.resolvedModel}
+                              </span>
                             </span>
                             <span>·</span>
                             <span>{msg.meta.latencyMs}ms</span>
@@ -1088,7 +1124,7 @@ export function PlaygroundView({
                                     ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
                                     : hop.status === "failed"
                                       ? "bg-red-500/10 border-red-500/30 text-red-300"
-                                      : "bg-[#111114] border-[#27272A] text-[#A1A1AA]"
+                                      : "bg-[#171C2E] border-[#343E5E] text-[#A1A1AA]"
                                 }`}
                               >
                                 #{hIdx + 1} {hop.provider}/{hop.model} ({hop.status}
@@ -1106,8 +1142,12 @@ export function PlaygroundView({
 
             {running && (
               <div className="flex items-start gap-3.5">
-                <div className="w-7 h-7 rounded-full bg-[#111114] border border-[#27272A] flex items-center justify-center font-display text-[11px] font-bold text-amber-400 shrink-0">
-                  AS
+                <div className="w-8 h-7 flex items-center justify-center shrink-0 mt-0.5">
+                  <img
+                    src="/assets/as-logo.png"
+                    alt="AS ROUTER"
+                    className="w-7 h-auto object-contain animate-pulse drop-shadow-[0_0_10px_rgba(56,189,248,0.38)]"
+                  />
                 </div>
                 <div className="py-1 text-sm text-[#A1A1AA] animate-pulse">
                   Thinking...
@@ -1127,10 +1167,10 @@ export function PlaygroundView({
             e.preventDefault();
             sendMessage();
           }}
-          className="bg-[#111114] border border-[#27272A] focus-within:border-[#3F3F46] rounded-2xl p-3 transition-colors"
+          className="bg-[#171C2E] border border-[#343E5E] focus-within:border-[#3F3F46] rounded-2xl p-3 transition-colors"
         >
           {imageDataUrl && (
-            <div className="mb-2.5 inline-flex items-center gap-2.5 p-1.5 pr-2.5 bg-[#09090B] border border-[#222227] rounded-xl">
+            <div className="mb-2.5 inline-flex items-center gap-2.5 p-1.5 pr-2.5 bg-[#101422] border border-[#2B334E] rounded-xl">
               <img
                 src={imageDataUrl}
                 alt="Attachment preview"
@@ -1159,11 +1199,11 @@ export function PlaygroundView({
               }
             }}
             placeholder={
-              connections.length === 0
+              !hasActiveLlmOptions
                 ? "Connect a provider to start chatting"
                 : "Message AS ROUTER..."
             }
-            disabled={connections.length === 0}
+            disabled={!hasActiveLlmOptions}
             className="w-full bg-transparent resize-none px-1.5 py-1 text-sm text-white placeholder-[#71717A] focus:outline-none max-h-40 leading-relaxed"
           />
 
@@ -1178,9 +1218,10 @@ export function PlaygroundView({
               />
               <button
                 type="button"
+                disabled={!hasActiveLlmOptions}
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach image"
-                className="p-2 rounded-lg text-[#A1A1AA] hover:text-white hover:bg-[#18181B] transition-colors"
+                className="p-2 rounded-lg text-[#A1A1AA] hover:text-white hover:bg-[#1F263D] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ImagePlus className="w-4 h-4" />
               </button>
@@ -1188,7 +1229,7 @@ export function PlaygroundView({
                 type="button"
                 onClick={() => setShowSettings((v) => !v)}
                 title="Options"
-                className="p-2 rounded-lg text-[#A1A1AA] hover:text-white hover:bg-[#18181B] transition-colors"
+                className="p-2 rounded-lg text-[#A1A1AA] hover:text-white hover:bg-[#1F263D] transition-colors"
               >
                 <SlidersHorizontal className="w-4 h-4" />
               </button>
@@ -1208,11 +1249,11 @@ export function PlaygroundView({
               <button
                 type="submit"
                 disabled={
-                  connections.length === 0 ||
+                  !hasActiveLlmOptions ||
                   (!inputText.trim() && !imageDataUrl)
                 }
                 aria-label="Send message"
-                className="w-8 h-8 rounded-full bg-amber-400 hover:bg-amber-300 disabled:bg-[#27272A] disabled:text-[#71717A] text-[#09090B] flex items-center justify-center transition-colors shrink-0"
+                className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 via-sky-500 to-cyan-400 hover:brightness-110 disabled:bg-none disabled:bg-[#343E5E] disabled:text-[#71717A] text-white flex items-center justify-center transition-all shrink-0 shadow-[0_0_16px_rgba(99,102,241,0.35)] disabled:shadow-none"
               >
                 <ArrowUp className="w-4 h-4" />
               </button>

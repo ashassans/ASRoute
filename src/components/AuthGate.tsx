@@ -1,6 +1,18 @@
 import React, { useEffect, useState } from "react";
-import { motion } from "motion/react";
-import { ArrowLeft, ArrowRight, MailCheck } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
+  Mail,
+  MailCheck,
+  User,
+} from "lucide-react";
 import { authClient } from "../lib/auth-client.ts";
 
 interface AuthGateProps {
@@ -58,6 +70,27 @@ function clearPendingVerifyEmail() {
   }
 }
 
+const GATEWAY_HIGHLIGHTS = [
+  {
+    index: "01",
+    title: "Automatic Provider Failover",
+    description:
+      "Routes requests across fallback tiers cleanly whenever upstream providers return rate limits or errors.",
+  },
+  {
+    index: "02",
+    title: "Multi-Key Quota Balancing",
+    description:
+      "Distribute traffic across multiple upstream API keys with zero code changes to your client SDKs.",
+  },
+  {
+    index: "03",
+    title: "Scoped Gateway Access",
+    description:
+      "Issue isolated workspace keys with per-request latency tracking, search grounding, and model filters.",
+  },
+];
+
 export function AuthGate({
   initialMode = "signin",
   onBackHome,
@@ -67,11 +100,16 @@ export function AuthGate({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
-  const [emailVerificationEnabled, setEmailVerificationEnabled] = useState(false);
-  const [forgotStep, setForgotStep] = useState<null | "request" | "verify">(null);
+  const [emailVerificationEnabled, setEmailVerificationEnabled] =
+    useState(false);
+  const [forgotStep, setForgotStep] = useState<null | "request" | "verify">(
+    null
+  );
   const [resetEmail, setResetEmail] = useState("");
   const [resetOtp, setResetOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -163,13 +201,14 @@ export function AuthGate({
           setError(res.error.message || "Unable to create account.");
           return;
         }
-        // When email verification is enabled, token is null until OTP is verified
         if (!res.data?.token) {
           savePendingVerifyEmail(normalizedEmail);
           setPendingVerifyEmail(normalizedEmail);
           setOtpCode("");
           setResendCooldown(30);
-          setInfo(`A 6-digit verification code was sent to ${normalizedEmail}.`);
+          setInfo(
+            `A 6-digit verification code was sent to ${normalizedEmail}.`
+          );
           return;
         }
       } else {
@@ -349,24 +388,126 @@ export function AuthGate({
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#09090B] text-[#FAFAFA] flex flex-col relative overflow-hidden">
-      {/* Subtle amber spotlight backdrop */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at 50% 20%, rgba(253,223,138,0.05), transparent 55%)",
-        }}
-      />
+  const feedbackBanners = (
+    <>
+      {info && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-300"
+        >
+          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+          <span>{info}</span>
+        </motion.div>
+      )}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300"
+        >
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+          <span>{error}</span>
+        </motion.div>
+      )}
+    </>
+  );
 
-      {/* Minimal Dedicated Auth Top Header */}
-      <header className="relative z-10 h-16 border-b border-[#222227] bg-[#09090B]/90 backdrop-blur-md">
-        <div className="max-w-[1280px] mx-auto h-full px-5 sm:px-8 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 font-display text-base font-bold tracking-tight text-[#FAFAFA]">
-            <span className="w-6 h-6 rounded-md bg-amber-400 text-[#09090B] font-mono text-xs font-bold flex items-center justify-center">
-              AS
-            </span>
+  const googleButtonBlock = googleEnabled ? (
+    <div className="mb-5">
+      <button
+        type="button"
+        disabled={submitting || googleLoading}
+        onClick={handleGoogleSignIn}
+        className="w-full min-h-[44px] inline-flex items-center justify-center gap-2.5 bg-[#1F263D] hover:bg-[#28304A] disabled:opacity-60 text-[#FAFAFA] font-medium text-sm py-2.5 px-4 rounded-xl border border-[#343E5E] hover:border-indigo-400/50 transition-all whitespace-nowrap cursor-pointer"
+      >
+        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            fill="#4285F4"
+            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+          />
+          <path
+            fill="#34A853"
+            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+          />
+          <path
+            fill="#EA4335"
+            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+          />
+        </svg>
+        <span>
+          {googleLoading ? "Connecting to Google..." : "Continue with Google"}
+        </span>
+      </button>
+
+      <div className="relative mt-5">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-[#2B334E]" />
+        </div>
+        <div className="relative flex justify-center text-xs">
+          <span className="bg-[#171C2E] px-3 text-[#71717A]">
+            or continue with email
+          </span>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <div className="min-h-screen bg-[#101422] text-[#FAFAFA] flex flex-col relative overflow-x-hidden">
+      {/* Subtle Architectural Grid & Drifting Aurora Ambient Backdrop */}
+      <div
+        className="pointer-events-none fixed inset-0 overflow-hidden"
+        aria-hidden="true"
+      >
+        <div
+          className="absolute inset-0 opacity-[0.18]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, rgba(52, 62, 94, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(52, 62, 94, 0.25) 1px, transparent 1px)",
+            backgroundSize: "56px 56px",
+            maskImage:
+              "radial-gradient(ellipse 75% 65% at 50% 40%, #000 35%, transparent 100%)",
+          }}
+        />
+        <div
+          className="animate-aurora-float absolute -top-28 left-[15%] w-[460px] h-[460px] rounded-full blur-3xl opacity-25"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(100,103,242,0.5), transparent 70%)",
+          }}
+        />
+        <div
+          className="animate-aurora-float absolute top-[22%] right-[12%] w-[380px] h-[380px] rounded-full blur-3xl opacity-20"
+          style={{
+            animationDelay: "-4s",
+            background:
+              "radial-gradient(circle, rgba(56,189,248,0.42), transparent 70%)",
+          }}
+        />
+        <div
+          className="animate-aurora-float absolute -bottom-24 left-[36%] w-[380px] h-[380px] rounded-full blur-3xl opacity-18"
+          style={{
+            animationDelay: "-8s",
+            background:
+              "radial-gradient(circle, rgba(244,114,182,0.38), transparent 70%)",
+          }}
+        />
+      </div>
+
+      {/* Minimal Top Bar */}
+      <header className="relative z-10 h-16 border-b border-[#2B334E]/80 bg-[#101422]/85 backdrop-blur-md">
+        <div className="max-w-[1200px] mx-auto h-full px-5 sm:px-8 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 font-display text-base font-bold tracking-tight text-[#FAFAFA] whitespace-nowrap shrink-0">
+            <img
+              src="/assets/as-logo.png"
+              alt="AS ROUTER"
+              className="h-7 w-auto object-contain shrink-0 drop-shadow-[0_0_12px_rgba(56,189,248,0.3)]"
+            />
             <span>AS ROUTER</span>
           </div>
 
@@ -374,440 +515,568 @@ export function AuthGate({
             <button
               type="button"
               onClick={onBackHome}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#111114] hover:bg-[#18181B] border border-[#27272A] rounded-lg transition-colors whitespace-nowrap"
+              className="min-h-[40px] inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
+              <ArrowLeft className="w-3.5 h-3.5 text-sky-400" />
               <span>Back to Home</span>
             </button>
           )}
         </div>
       </header>
 
-      {/* Centered Auth Card */}
-      <main className="relative z-10 flex-1 flex items-center justify-center px-5 py-12">
-        <motion.div
-          initial={{ opacity: 0, y: 16, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-md"
-        >
-          <div className="bg-[#111114] border border-[#222227] rounded-2xl p-7 shadow-2xl">
-            {pendingVerifyEmail ? (
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-amber-400/10 border border-amber-400/25 flex items-center justify-center mb-4">
-                  <MailCheck className="w-5 h-5 text-amber-400" />
-                </div>
-                <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA] mb-1">
-                  Verify your email
-                </h1>
-                <p className="text-xs text-[#A1A1AA]">
-                  Enter the 6-digit code sent to{" "}
-                  <span className="text-white font-medium">
-                    {pendingVerifyEmail}
+      {/* Main Split-Layout Container */}
+      <main className="relative z-10 flex-1 flex items-center justify-center px-5 sm:px-8 py-10 lg:py-14">
+        <div className="w-full max-w-[1060px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+          {/* Left Editorial Showcase Panel (Desktop) */}
+          <motion.section
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="hidden lg:flex lg:col-span-6 flex-col justify-center space-y-8 pr-4"
+          >
+            <div className="space-y-4">
+              <img
+                src="/assets/as-logo.png"
+                alt="AS ROUTER"
+                className="h-11 w-auto object-contain drop-shadow-[0_0_24px_rgba(99,102,241,0.35)]"
+              />
+              <h2
+                className="font-display font-bold tracking-tight text-[#FAFAFA] leading-[1.12]"
+                style={{
+                  fontSize: "clamp(2rem, 3.1vw, 2.75rem)",
+                  textWrap: "balance",
+                }}
+              >
+                One unified gateway for every AI model.
+              </h2>
+              <p className="text-sm leading-relaxed text-[#A1A1AA] max-w-md">
+                Sign in to configure upstream providers, build smart failover
+                combos, test web-grounded prompts, and manage workspace API keys.
+              </p>
+            </div>
+
+            <div className="divide-y divide-[#2B334E] border-t border-b border-[#2B334E]">
+              {GATEWAY_HIGHLIGHTS.map((item) => (
+                <div key={item.index} className="py-4 flex items-start gap-4">
+                  <span className="font-mono text-xs font-semibold text-indigo-400 tabular-nums pt-0.5 shrink-0">
+                    {item.index}.
                   </span>
-                </p>
-
-                {info && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-300"
-                  >
-                    {info}
-                  </motion.div>
-                )}
-
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300"
-                  >
-                    {error}
-                  </motion.div>
-                )}
-
-                <form onSubmit={handleVerifyOtp} className="mt-5 space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                      6-Digit Verification Code
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      required
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={(e) =>
-                        setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                      }
-                      className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-3 text-center font-mono text-xl tracking-[0.4em] text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
-                    />
+                  <div className="space-y-1">
+                    <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
+                      {item.title}
+                    </h3>
+                    <p className="text-xs leading-relaxed text-[#A1A1AA]">
+                      {item.description}
+                    </p>
                   </div>
-
-                  <button
-                    type="submit"
-                    disabled={verifyingOtp || otpCode.length < 6}
-                    className="w-full inline-flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-[#09090B] font-semibold text-sm py-2.5 px-4 rounded-lg transition-colors whitespace-nowrap"
-                  >
-                    <span>
-                      {verifyingOtp ? "Verifying..." : "Verify & Continue"}
-                    </span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </form>
-
-                <div className="mt-4 flex items-center justify-between text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      clearPendingVerifyEmail();
-                      setPendingVerifyEmail(null);
-                      setOtpCode("");
-                      setInfo(null);
-                      setError(null);
-                    }}
-                    className="text-[#A1A1AA] hover:text-white transition-colors"
-                  >
-                    Change email
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={resendingOtp || resendCooldown > 0}
-                    onClick={handleResendOtp}
-                    className="text-amber-400 hover:text-amber-300 disabled:opacity-50 font-medium transition-colors"
-                  >
-                    {resendingOtp
-                      ? "Sending..."
-                      : resendCooldown > 0
-                        ? `Resend in ${resendCooldown}s`
-                        : "Resend code"}
-                  </button>
                 </div>
-              </div>
-            ) : forgotStep ? (
-              <div>
-                <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA] mb-1">
-                  Reset password
-                </h1>
-                <p className="text-xs text-[#A1A1AA]">
-                  {forgotStep === "request"
-                    ? "Enter your account email to receive a 6-digit reset code."
-                    : `Enter the 6-digit code sent to ${resetEmail} and choose a new password.`}
-                </p>
+              ))}
+            </div>
 
-                {info && (
+            <div className="flex items-center justify-between text-xs text-[#A1A1AA] font-mono">
+              <span>OpenAI-Compatible Endpoint</span>
+              <span className="text-sky-300">POST /v1/chat/completions</span>
+            </div>
+          </motion.section>
+
+          {/* Right Auth Form Column */}
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="lg:col-span-6 w-full max-w-[440px] mx-auto"
+          >
+            <div className="relative overflow-hidden bg-[#171C2E]/95 backdrop-blur-xl border border-[#2B334E] rounded-2xl p-6 sm:p-8 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.65)]">
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
+                style={{
+                  background:
+                    "linear-gradient(90deg, #6467F2 0%, #38BDF8 35%, #34D399 68%, #F472B6 100%)",
+                }}
+              />
+
+              <AnimatePresence mode="wait">
+                {pendingVerifyEmail ? (
                   <motion.div
-                    initial={{ opacity: 0, y: -4 }}
+                    key="verify-otp"
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-300"
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    {info}
-                  </motion.div>
-                )}
-
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300"
-                  >
-                    {error}
-                  </motion.div>
-                )}
-
-                {forgotStep === "request" ? (
-                  <form onSubmit={handleSendResetOtp} className="mt-5 space-y-4">
-                    <div>
-                      <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={resetEmail}
-                        onChange={(e) => setResetEmail(e.target.value)}
-                        className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
-                      />
+                    <div className="w-11 h-11 rounded-xl bg-indigo-500/12 border border-indigo-500/25 flex items-center justify-center mb-4">
+                      <MailCheck className="w-5 h-5 text-indigo-400" />
                     </div>
-                    {!emailVerificationEnabled && (
-                      <p className="text-[11px] text-[#A1A1AA]">
-                        Note: Server email OTP delivery is currently disabled until GMAIL_USER and GMAIL_APP_PASSWORD are set.
-                      </p>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={resetSubmitting || !emailVerificationEnabled}
-                      className="w-full inline-flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-[#09090B] font-semibold text-sm py-2.5 px-4 rounded-lg transition-colors whitespace-nowrap"
-                    >
-                      <span>{resetSubmitting ? "Sending..." : "Send Reset Code"}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleConfirmResetPassword} className="mt-5 space-y-4">
-                    <div>
-                      <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                        6-Digit Reset Code
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        required
-                        maxLength={6}
-                        value={resetOtp}
-                        onChange={(e) =>
-                          setResetOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
-                        }
-                        className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-center font-mono text-lg tracking-[0.35em] text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                        New Password
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        minLength={6}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={resetSubmitting}
-                      className="w-full inline-flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-[#09090B] font-semibold text-sm py-2.5 px-4 rounded-lg transition-colors whitespace-nowrap"
-                    >
-                      <span>
-                        {resetSubmitting ? "Updating..." : "Reset Password"}
+                    <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA] mb-1.5">
+                      Verify your email
+                    </h1>
+                    <p className="text-xs leading-relaxed text-[#A1A1AA]">
+                      Enter the 6-digit code sent to{" "}
+                      <span className="text-white font-medium">
+                        {pendingVerifyEmail}
                       </span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </form>
-                )}
+                    </p>
 
-                <div className="mt-4 flex items-center justify-between text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForgotStep(null);
-                      setError(null);
-                      setInfo(null);
-                    }}
-                    className="text-[#A1A1AA] hover:text-white transition-colors"
-                  >
-                    Back to Sign In
-                  </button>
-                  {forgotStep === "verify" && (
-                    <button
-                      type="button"
-                      disabled={resetSubmitting || resendCooldown > 0}
-                      onClick={(e) => handleSendResetOtp(e as unknown as React.FormEvent)}
-                      className="text-amber-400 hover:text-amber-300 disabled:opacity-50 font-medium transition-colors"
-                    >
-                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Animated Segmented Sign-In / Sign-Up Switch */}
-                <div className="grid grid-cols-2 gap-1 p-1 bg-[#09090B] border border-[#222227] rounded-lg mb-6">
-                  {(
-                    [
-                      ["signin", "Sign In"],
-                      ["signup", "Create Account"],
-                    ] as const
-                  ).map(([tabId, label]) => (
-                    <button
-                      key={tabId}
-                      type="button"
-                      onClick={() => {
-                        setMode(tabId);
-                        setError(null);
-                        setInfo(null);
-                      }}
-                      className={`relative py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-                        mode === tabId
-                          ? "text-[#FAFAFA]"
-                          : "text-[#A1A1AA] hover:text-white"
-                      }`}
-                    >
-                      {mode === tabId && (
-                        <motion.span
-                          layoutId="auth-mode-pill"
-                          transition={{
-                            type: "spring",
-                            stiffness: 420,
-                            damping: 32,
-                          }}
-                          className="absolute inset-0 bg-[#18181B] border border-[#27272A] rounded-md"
+                    {feedbackBanners}
+
+                    <form onSubmit={handleVerifyOtp} className="mt-5 space-y-4">
+                      <div>
+                        <label
+                          htmlFor="auth-verify-otp"
+                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                        >
+                          6-Digit Verification Code
+                        </label>
+                        <input
+                          id="auth-verify-otp"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          required
+                          maxLength={6}
+                          placeholder="000000"
+                          value={otpCode}
+                          onChange={(e) =>
+                            setOtpCode(
+                              e.target.value.replace(/\D/g, "").slice(0, 6)
+                            )
+                          }
+                          className="w-full min-h-[48px] bg-[#101422] border border-[#2B334E] rounded-xl px-4 py-3 text-center font-mono text-xl tracking-[0.42em] tabular-nums text-[#FAFAFA] placeholder:text-[#4B5563] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                         />
-                      )}
-                      <span className="relative z-10">{label}</span>
-                    </button>
-                  ))}
-                </div>
+                      </div>
 
-                <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA] mb-1">
-                  {mode === "signin" ? "Sign in to AS ROUTER" : "Create workspace"}
-                </h1>
+                      <motion.button
+                        type="submit"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        disabled={verifyingOtp || otpCode.length < 6}
+                        className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 via-violet-500 to-sky-500 hover:brightness-110 disabled:opacity-60 text-white font-semibold text-sm py-2.5 px-5 rounded-xl transition-all shadow-[0_8px_24px_rgba(99,102,241,0.28)] whitespace-nowrap cursor-pointer"
+                      >
+                        <span>
+                          {verifyingOtp ? "Verifying..." : "Verify & Continue"}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </motion.button>
+                    </form>
 
-                {info && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-300"
-                  >
-                    {info}
+                    <div className="mt-5 pt-4 border-t border-[#2B334E] flex items-center justify-between text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearPendingVerifyEmail();
+                          setPendingVerifyEmail(null);
+                          setOtpCode("");
+                          setInfo(null);
+                          setError(null);
+                        }}
+                        className="text-[#A1A1AA] hover:text-white transition-colors cursor-pointer"
+                      >
+                        Change email
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={resendingOtp || resendCooldown > 0}
+                        onClick={handleResendOtp}
+                        className="text-indigo-400 hover:text-indigo-300 disabled:opacity-50 font-medium tabular-nums transition-colors cursor-pointer"
+                      >
+                        {resendingOtp
+                          ? "Sending..."
+                          : resendCooldown > 0
+                            ? `Resend in ${resendCooldown}s`
+                            : "Resend code"}
+                      </button>
+                    </div>
                   </motion.div>
-                )}
-
-                {error && (
+                ) : forgotStep ? (
                   <motion.div
-                    initial={{ opacity: 0, y: -4 }}
+                    key={`forgot-${forgotStep}`}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300"
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    {error}
-                  </motion.div>
-                )}
+                    <div className="w-11 h-11 rounded-xl bg-sky-500/12 border border-sky-500/25 flex items-center justify-center mb-4">
+                      <KeyRound className="w-5 h-5 text-sky-400" />
+                    </div>
+                    <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA] mb-1.5">
+                      Reset password
+                    </h1>
+                    <p className="text-xs leading-relaxed text-[#A1A1AA]">
+                      {forgotStep === "request"
+                        ? "Enter your account email to receive a 6-digit security code."
+                        : `Enter the 6-digit code sent to ${resetEmail} and set a new password.`}
+                    </p>
 
-                <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-                  {mode === "signup" && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                        Workspace Name
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
-                      />
-                    </motion.div>
-                  )}
+                    {feedbackBanners}
 
-                  <div>
-                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
-                    />
-                  </div>
+                    {forgotStep === "request" ? (
+                      <form
+                        onSubmit={handleSendResetOtp}
+                        className="mt-5 space-y-4"
+                      >
+                        <div>
+                          <label
+                            htmlFor="auth-reset-email"
+                            className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          >
+                            Email Address
+                          </label>
+                          <div className="relative group">
+                            <Mail className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                              id="auth-reset-email"
+                              type="email"
+                              required
+                              placeholder="you@company.com"
+                              value={resetEmail}
+                              onChange={(e) => setResetEmail(e.target.value)}
+                              className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                            />
+                          </div>
+                        </div>
+                        {!emailVerificationEnabled && (
+                          <p className="text-[11px] leading-relaxed text-[#A1A1AA]">
+                            Server email OTP delivery requires Gmail SMTP
+                            credentials configured in the environment.
+                          </p>
+                        )}
+                        <motion.button
+                          type="submit"
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          disabled={resetSubmitting || !emailVerificationEnabled}
+                          className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 via-violet-500 to-sky-500 hover:brightness-110 disabled:opacity-60 text-white font-semibold text-sm py-2.5 px-5 rounded-xl transition-all shadow-[0_8px_24px_rgba(99,102,241,0.28)] whitespace-nowrap cursor-pointer"
+                        >
+                          <span>
+                            {resetSubmitting ? "Sending..." : "Send Reset Code"}
+                          </span>
+                          <ArrowRight className="w-4 h-4" />
+                        </motion.button>
+                      </form>
+                    ) : (
+                      <form
+                        onSubmit={handleConfirmResetPassword}
+                        className="mt-5 space-y-4"
+                      >
+                        <div>
+                          <label
+                            htmlFor="auth-reset-otp"
+                            className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          >
+                            6-Digit Reset Code
+                          </label>
+                          <input
+                            id="auth-reset-otp"
+                            type="text"
+                            inputMode="numeric"
+                            required
+                            maxLength={6}
+                            placeholder="000000"
+                            value={resetOtp}
+                            onChange={(e) =>
+                              setResetOtp(
+                                e.target.value.replace(/\D/g, "").slice(0, 6)
+                              )
+                            }
+                            className="w-full min-h-[48px] bg-[#101422] border border-[#2B334E] rounded-xl px-4 py-2.5 text-center font-mono text-lg tracking-[0.38em] tabular-nums text-[#FAFAFA] placeholder:text-[#4B5563] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="auth-reset-new-password"
+                            className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          >
+                            New Password
+                          </label>
+                          <div className="relative group">
+                            <Lock className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                              id="auth-reset-new-password"
+                              type={showNewPassword ? "text" : "password"}
+                              required
+                              minLength={6}
+                              placeholder="Minimum 6 characters"
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-11 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowNewPassword((v) => !v)}
+                              aria-label={
+                                showNewPassword
+                                  ? "Hide new password"
+                                  : "Show new password"
+                              }
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#71717A] hover:text-[#D4D4D8] transition-colors cursor-pointer"
+                            >
+                              {showNewPassword ? (
+                                <EyeOff className="w-4 h-4" />
+                              ) : (
+                                <Eye className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        <motion.button
+                          type="submit"
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          disabled={resetSubmitting}
+                          className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 via-violet-500 to-sky-500 hover:brightness-110 disabled:opacity-60 text-white font-semibold text-sm py-2.5 px-5 rounded-xl transition-all shadow-[0_8px_24px_rgba(99,102,241,0.28)] whitespace-nowrap cursor-pointer"
+                        >
+                          <span>
+                            {resetSubmitting ? "Updating..." : "Reset Password"}
+                          </span>
+                          <ArrowRight className="w-4 h-4" />
+                        </motion.button>
+                      </form>
+                    )}
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-medium text-[#D4D4D8]">
-                        Password
-                      </label>
-                      {mode === "signin" && (
+                    <div className="mt-5 pt-4 border-t border-[#2B334E] flex items-center justify-between text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForgotStep(null);
+                          setError(null);
+                          setInfo(null);
+                        }}
+                        className="text-[#A1A1AA] hover:text-white transition-colors cursor-pointer"
+                      >
+                        Back to Sign In
+                      </button>
+                      {forgotStep === "verify" && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setResetEmail(email.trim());
-                            setForgotStep("request");
-                            setError(null);
-                            setInfo(null);
-                          }}
-                          className="text-[11px] text-amber-400 hover:text-amber-300 transition-colors"
+                          disabled={resetSubmitting || resendCooldown > 0}
+                          onClick={(e) =>
+                            handleSendResetOtp(e as unknown as React.FormEvent)
+                          }
+                          className="text-indigo-400 hover:text-indigo-300 disabled:opacity-50 font-medium tabular-nums transition-colors cursor-pointer"
                         >
-                          Forgot password?
+                          {resendCooldown > 0
+                            ? `Resend in ${resendCooldown}s`
+                            : "Resend code"}
                         </button>
                       )}
                     </div>
-                    <input
-                      type="password"
-                      required
-                      minLength={6}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3.5 py-2.5 text-sm text-[#FAFAFA] focus:outline-none focus:border-amber-400 transition-colors"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={submitting || googleLoading}
-                    className="w-full mt-2 inline-flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-[#09090B] font-semibold text-sm py-2.5 px-4 rounded-lg transition-colors whitespace-nowrap"
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="auth-main"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
                   >
-                    <span>
-                      {submitting
-                        ? mode === "signin"
-                          ? "Signing in..."
-                          : "Creating workspace..."
-                        : mode === "signin"
-                          ? "Sign In to Dashboard"
-                          : "Create Workspace"}
-                    </span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </form>
-
-                {googleEnabled && (
-                  <>
-                    <div className="relative my-5">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-[#222227]" />
-                      </div>
-                      <div className="relative flex justify-center text-[11px] uppercase tracking-wider">
-                        <span className="bg-[#111114] px-2.5 text-[#71717A]">
-                          Or continue with
-                        </span>
-                      </div>
+                    {/* Header */}
+                    <div className="mb-6">
+                      <img
+                        src="/assets/as-logo.png"
+                        alt="AS ROUTER"
+                        className="h-9 w-auto object-contain mb-3 lg:hidden drop-shadow-[0_0_16px_rgba(99,102,241,0.35)]"
+                      />
+                      <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA]">
+                        {mode === "signin"
+                          ? "Welcome back"
+                          : "Create your workspace"}
+                      </h1>
+                      <p className="mt-1 text-xs text-[#A1A1AA]">
+                        {mode === "signin"
+                          ? "Sign in to manage providers, routing combos, and API keys."
+                          : "Set up a private AI gateway workspace in seconds."}
+                      </p>
                     </div>
 
-                    <button
-                      type="button"
-                      disabled={submitting || googleLoading}
-                      onClick={handleGoogleSignIn}
-                      className="w-full inline-flex items-center justify-center gap-2.5 bg-[#18181B] hover:bg-[#222227] disabled:opacity-60 text-[#FAFAFA] font-medium text-xs py-2.5 px-4 rounded-lg border border-[#27272A] transition-colors"
-                    >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24">
-                        <path
-                          fill="#4285F4"
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        />
-                        <path
-                          fill="#34A853"
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                        />
-                        <path
-                          fill="#EA4335"
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                        />
-                      </svg>
-                      <span>
-                        {googleLoading
-                          ? "Connecting to Google..."
-                          : "Continue with Google"}
-                      </span>
-                    </button>
-                  </>
+                    {/* Segmented Mode Switch */}
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-[#101422] border border-[#2B334E] rounded-xl mb-6">
+                      {(
+                        [
+                          ["signin", "Sign In"],
+                          ["signup", "Create Account"],
+                        ] as const
+                      ).map(([tabId, label]) => (
+                        <button
+                          key={tabId}
+                          type="button"
+                          onClick={() => {
+                            setMode(tabId);
+                            setError(null);
+                            setInfo(null);
+                          }}
+                          className={`relative min-h-[38px] py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
+                            mode === tabId
+                              ? "text-[#FAFAFA]"
+                              : "text-[#A1A1AA] hover:text-white"
+                          }`}
+                        >
+                          {mode === tabId && (
+                            <motion.span
+                              layoutId="auth-mode-pill"
+                              transition={{
+                                type: "spring",
+                                stiffness: 420,
+                                damping: 32,
+                              }}
+                              className="absolute inset-0 bg-[#1F263D] border border-[#343E5E] rounded-lg shadow-sm"
+                            />
+                          )}
+                          <span className="relative z-10">{label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {googleButtonBlock}
+
+                    {feedbackBanners}
+
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      {mode === "signup" && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <label
+                            htmlFor="auth-name"
+                            className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          >
+                            Workspace Name
+                          </label>
+                          <div className="relative group">
+                            <User className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                              id="auth-name"
+                              type="text"
+                              required
+                              autoComplete="organization"
+                              placeholder="Acme AI Engineering"
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                              className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+
+                      <div>
+                        <label
+                          htmlFor="auth-email"
+                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                        >
+                          Email Address
+                        </label>
+                        <div className="relative group">
+                          <Mail className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            id="auth-email"
+                            type="email"
+                            required
+                            autoComplete="email"
+                            placeholder="you@company.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label
+                            htmlFor="auth-password"
+                            className="block text-xs font-medium text-[#D4D4D8]"
+                          >
+                            Password
+                          </label>
+                          {mode === "signin" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResetEmail(email.trim());
+                                setForgotStep("request");
+                                setError(null);
+                                setInfo(null);
+                              }}
+                              className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                            >
+                              Forgot password?
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative group">
+                          <Lock className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            id="auth-password"
+                            type={showPassword ? "text" : "password"}
+                            required
+                            minLength={6}
+                            autoComplete={
+                              mode === "signin"
+                                ? "current-password"
+                                : "new-password"
+                            }
+                            placeholder={
+                              mode === "signin"
+                                ? "Enter your password"
+                                : "Minimum 6 characters"
+                            }
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-11 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            aria-label={
+                              showPassword ? "Hide password" : "Show password"
+                            }
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#71717A] hover:text-[#D4D4D8] transition-colors cursor-pointer"
+                          >
+                            {showPassword ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                        {mode === "signup" && password.length > 0 && (
+                          <p className="mt-1.5 text-[11px] text-[#A1A1AA]">
+                            {password.length < 6
+                              ? `${6 - password.length} more character${6 - password.length === 1 ? "" : "s"} required`
+                              : password.length >= 10
+                                ? "Strong password length"
+                                : "Meets minimum length"}
+                          </p>
+                        )}
+                      </div>
+
+                      <motion.button
+                        type="submit"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        disabled={submitting || googleLoading}
+                        className="w-full min-h-[44px] mt-2 inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 via-violet-500 to-sky-500 hover:brightness-110 disabled:opacity-60 text-white font-semibold text-sm py-2.5 px-5 rounded-xl transition-all shadow-[0_10px_28px_-4px_rgba(99,102,241,0.42)] whitespace-nowrap cursor-pointer"
+                      >
+                        <span>
+                          {submitting
+                            ? mode === "signin"
+                              ? "Signing in..."
+                              : "Creating workspace..."
+                            : mode === "signin"
+                              ? "Sign In to Dashboard"
+                              : "Create Workspace"}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </motion.button>
+                    </form>
+                  </motion.div>
                 )}
-              </>
-            )}
-          </div>
-        </motion.div>
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        </div>
       </main>
     </div>
   );

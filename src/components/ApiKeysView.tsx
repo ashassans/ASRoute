@@ -4,6 +4,14 @@ import { Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import type { BootstrapPayload, Combo, GatewayApiKey } from "../types/gateway.ts";
 
+const KEY_DOT_COLORS = [
+  "#38BDF8",
+  "#2DD4BF",
+  "#F472B6",
+  "#A855F7",
+  "#FB923C",
+];
+
 interface ApiKeysViewProps {
   keys: GatewayApiKey[];
   combos: Combo[];
@@ -200,7 +208,7 @@ export function ApiKeysView({
         <button
           type="button"
           onClick={openCreateModal}
-          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Create Key</span>
@@ -215,7 +223,7 @@ export function ApiKeysView({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-            className="bg-[#111114] border border-emerald-500/40 rounded-lg p-5"
+            className="bg-[#171C2E] border border-emerald-500/40 rounded-lg p-5"
           >
             <div className="flex items-center justify-between gap-4">
               <h3 className="text-sm font-semibold text-emerald-400">
@@ -231,13 +239,13 @@ export function ApiKeysView({
             </div>
 
             <div className="mt-3 flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 bg-[#09090B] border border-[#222227] rounded-md font-mono text-xs text-white overflow-x-auto">
+              <code className="flex-1 px-3 py-2 bg-[#101422] border border-[#2B334E] rounded-md font-mono text-xs text-white overflow-x-auto">
                 {revealedKey}
               </code>
               <button
                 type="button"
                 onClick={copyRawKey}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-md whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-md whitespace-nowrap shrink-0"
               >
                 {copiedKey ? (
                   <>
@@ -257,7 +265,7 @@ export function ApiKeysView({
       </AnimatePresence>
 
       {keys.length === 0 ? (
-        <div className="bg-[#111114] border border-[#222227] rounded-lg p-10 text-center">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-10 text-center">
           <p className="text-sm font-medium text-white">No API keys yet</p>
           <p className="mt-1 text-xs text-[#8B8B95]">
             Create a gateway key to call OpenAI- or Anthropic-compatible endpoints.
@@ -265,7 +273,7 @@ export function ApiKeysView({
           <button
             type="button"
             onClick={openCreateModal}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
             <span>Create Key</span>
@@ -274,14 +282,27 @@ export function ApiKeysView({
       ) : (
         <>
           <div className="md:hidden space-y-3">
-            {keys.map((k) => (
-              <div
+            {keys.map((k, idx) => {
+              const dotColor = KEY_DOT_COLORS[idx % KEY_DOT_COLORS.length];
+              return (
+              <motion.div
                 key={k.id}
-                className="bg-[#111114] border border-[#222227] rounded-lg p-4 space-y-3"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.2) }}
+                className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-4 space-y-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-medium text-white truncate">{k.name}</div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: dotColor }}
+                      />
+                      <span className="font-medium text-white truncate">
+                        {k.name}
+                      </span>
+                    </div>
                     <div className="mt-0.5 font-mono text-xs text-[#A1A1AA] truncate">
                       {k.keyPrefix}
                     </div>
@@ -323,11 +344,11 @@ export function ApiKeysView({
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-[#1D1D22] flex items-center justify-between gap-2">
+                <div className="pt-2 border-t border-[#28304A] flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => openEditModal(k)}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#D4D4D8] hover:text-amber-400"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#D4D4D8] hover:text-indigo-400"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                     <span>Edit</span>
@@ -360,15 +381,16 @@ export function ApiKeysView({
                     </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              </motion.div>
+              );
+            })}
           </div>
 
-          <div className="hidden md:block bg-[#111114] border border-[#222227] rounded-lg overflow-hidden">
+          <div className="hidden md:block bg-[#171C2E] border border-[#2B334E] rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#222227] text-xs text-[#A1A1AA]">
+                <tr className="border-b border-[#2B334E] text-xs text-[#A1A1AA]">
                   <th className="py-3 px-5 font-medium">Name & Prefix</th>
                   <th className="py-3 px-4 font-medium">Scope & Caps</th>
                   <th className="py-3 px-4 font-medium">State</th>
@@ -378,14 +400,22 @@ export function ApiKeysView({
                   <th className="py-3 px-5 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#222227] text-sm">
-                {keys.map((k) => (
+              <tbody className="divide-y divide-[#2B334E] text-sm">
+                {keys.map((k, idx) => {
+                  const dotColor = KEY_DOT_COLORS[idx % KEY_DOT_COLORS.length];
+                  return (
                   <tr
                     key={k.id}
-                    className="hover:bg-[#18181B]/50 transition-colors"
+                    className="hover:bg-[#1F263D]/50 transition-colors"
                   >
                     <td className="py-3 px-5">
-                      <div className="font-medium text-white">{k.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: dotColor }}
+                        />
+                        <span className="font-medium text-white">{k.name}</span>
+                      </div>
                       <div className="mt-0.5 font-mono text-xs text-[#A1A1AA]">
                         {k.keyPrefix}
                       </div>
@@ -435,7 +465,7 @@ export function ApiKeysView({
                           type="button"
                           onClick={() => openEditModal(k)}
                           title="Edit key"
-                          className="p-1 text-[#A1A1AA] hover:text-amber-400 transition-colors"
+                          className="p-1 text-[#A1A1AA] hover:text-indigo-400 transition-colors"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -472,7 +502,8 @@ export function ApiKeysView({
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -496,9 +527,9 @@ export function ApiKeysView({
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-[#111114] border border-[#222227] rounded-xl p-6"
+              className="w-full max-w-md bg-[#171C2E] border border-[#2B334E] rounded-xl p-6"
             >
-            <div className="flex items-center justify-between pb-4 border-b border-[#222227]">
+            <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
               <h3 className="font-display text-base font-semibold text-white">
                 {editingId ? "Edit API Key" : "Create API Key"}
               </h3>
@@ -521,7 +552,7 @@ export function ApiKeysView({
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -532,7 +563,7 @@ export function ApiKeysView({
                 <select
                   value={allowedCombo}
                   onChange={(e) => setAllowedCombo(e.target.value)}
-                  className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 >
                   <option value="">All combos and models</option>
                   {combos.map((c) => (
@@ -553,7 +584,7 @@ export function ApiKeysView({
                     min={100}
                     value={dailyTokenLimit}
                     onChange={(e) => setDailyTokenLimit(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
@@ -567,12 +598,12 @@ export function ApiKeysView({
                     min={0.1}
                     value={monthlyUsdLimit}
                     onChange={(e) => setMonthlyUsdLimit(e.target.value)}
-                    className="w-full bg-[#09090B] border border-[#222227] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-400"
+                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="border-t border-[#1D1D22] pt-2">
+              <div className="border-t border-[#28304A] pt-2">
                 <ToggleSwitch
                   checked={freeOnly}
                   onChange={setFreeOnly}
@@ -581,18 +612,18 @@ export function ApiKeysView({
                 />
               </div>
 
-              <div className="pt-3 border-t border-[#222227] flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-[#2B334E] flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#09090B] border border-[#222227] rounded-lg whitespace-nowrap"
+                  className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg whitespace-nowrap"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg whitespace-nowrap"
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg whitespace-nowrap"
                 >
                   {submitting
                     ? "Saving..."

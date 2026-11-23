@@ -44,7 +44,7 @@ const ORBIT_PROVIDERS = [
     id: "anthropic",
     name: "Anthropic",
     short: "A",
-    color: "#FDDF8A",
+    color: "#6467F2",
     angle: 205,
     ring: 1,
     models: [
@@ -76,7 +76,7 @@ const ORBIT_PROVIDERS = [
     id: "mistral",
     name: "Mistral AI",
     short: "M",
-    color: "#FCD34D",
+    color: "#818CF8",
     angle: 342,
     ring: 3,
     models: ["mistral-large-latest", "mistral-small-latest", "ministral-8b-latest"],
@@ -468,18 +468,20 @@ const msg = await client.messages.create({
   };
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-[#FAFAFA] selection:bg-amber-400 selection:text-[#09090B] overflow-x-hidden">
+    <div className="min-h-screen bg-[#101422] text-[#FAFAFA] selection:bg-indigo-500 selection:text-white overflow-x-hidden">
       {/* Strict 3-Zone Top Bar Contract + Responsive Mobile Drawer */}
-      <header className="sticky top-0 z-40 h-16 border-b border-[#222227] bg-[#09090B]/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 h-16 border-b border-[#2B334E] bg-[#101422]/95 backdrop-blur-md">
         <div className="max-w-[1280px] mx-auto h-full px-5 sm:px-8 flex items-center justify-between gap-4 sm:gap-8">
           <a
             href="#top"
             onClick={(e) => scrollToSection(e, "#top")}
             className="font-display text-base font-bold tracking-tight text-[#FAFAFA] whitespace-nowrap shrink-0 flex items-center gap-2.5"
           >
-            <span className="w-6 h-6 rounded-md bg-amber-400 text-[#09090B] font-mono text-xs font-bold flex items-center justify-center">
-              AS
-            </span>
+            <img
+              src="/assets/as-logo.png"
+              alt="AS ROUTER"
+              className="h-7 w-auto object-contain shrink-0 drop-shadow-[0_0_12px_rgba(56,189,248,0.3)]"
+            />
             <span>AS ROUTER</span>
           </a>
 
@@ -497,7 +499,7 @@ const msg = await client.messages.create({
                   onClick={(e) => scrollToSection(e, link.href)}
                   className={`relative py-1 transition-colors whitespace-nowrap shrink-0 ${
                     isActive
-                      ? "text-amber-400"
+                      ? "text-indigo-400"
                       : "text-[#D4D4D8] hover:text-[#FAFAFA]"
                   }`}
                 >
@@ -510,7 +512,7 @@ const msg = await client.messages.create({
                         stiffness: 380,
                         damping: 32,
                       }}
-                      className="absolute left-0 right-0 -bottom-0.5 h-0.5 bg-amber-400 rounded-full"
+                      className="absolute left-0 right-0 -bottom-0.5 h-0.5 bg-indigo-500 rounded-full"
                     />
                   )}
                 </a>
@@ -523,7 +525,7 @@ const msg = await client.messages.create({
               <button
                 type="button"
                 onClick={onOpenDashboard}
-                className="px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                className="px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors whitespace-nowrap shrink-0"
               >
                 Open Dashboard
               </button>
@@ -532,14 +534,14 @@ const msg = await client.messages.create({
                 <button
                   type="button"
                   onClick={() => onOpenAuth("signin")}
-                  className="hidden sm:inline-flex px-3.5 py-2 text-xs font-medium text-[#FAFAFA] bg-[#111114] hover:bg-[#18181B] border border-[#27272A] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  className="hidden sm:inline-flex px-3.5 py-2 text-xs font-medium text-[#FAFAFA] bg-[#171C2E] hover:bg-[#1F263D] border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap shrink-0"
                 >
                   Sign in
                 </button>
                 <button
                   type="button"
                   onClick={() => onOpenAuth("signup")}
-                  className="px-4 py-2 text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors whitespace-nowrap shrink-0"
                 >
                   Create workspace
                 </button>
@@ -551,7 +553,7 @@ const msg = await client.messages.create({
               onClick={() => setMobileMenuOpen((v) => !v)}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileMenuOpen}
-              className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg bg-[#111114] border border-[#27272A] text-[#FAFAFA] hover:bg-[#18181B] transition-colors"
+              className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg bg-[#171C2E] border border-[#343E5E] text-[#FAFAFA] hover:bg-[#1F263D] transition-colors"
             >
               <motion.span
                 key={mobileMenuOpen ? "close" : "open"}
@@ -577,7 +579,7 @@ const msg = await client.messages.create({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="md:hidden absolute top-16 inset-x-0 z-40 border-b border-[#222227] bg-[#09090B]/95 backdrop-blur-md px-5 py-4 space-y-2 shadow-2xl"
+              className="md:hidden absolute top-16 inset-x-0 z-40 border-b border-[#2B334E] bg-[#101422]/95 backdrop-blur-md px-5 py-4 space-y-2 shadow-2xl"
             >
               <nav
                 aria-label="Mobile navigation"
@@ -599,8 +601,8 @@ const msg = await client.messages.create({
                       onClick={(e) => scrollToSection(e, link.href)}
                       className={`min-h-[44px] px-3 flex items-center justify-between text-sm font-medium rounded-lg transition-colors ${
                         isActive
-                          ? "text-amber-400 bg-[#111114]"
-                          : "text-[#D4D4D8] hover:text-amber-400 hover:bg-[#111114]"
+                          ? "text-indigo-400 bg-[#171C2E]"
+                          : "text-[#D4D4D8] hover:text-indigo-400 hover:bg-[#171C2E]"
                       }`}
                     >
                       <span>{link.label}</span>
@@ -610,14 +612,14 @@ const msg = await client.messages.create({
                 })}
               </nav>
               {!isAuthenticated && (
-                <div className="pt-2 border-t border-[#1C1C21] grid grid-cols-2 gap-2">
+                <div className="pt-2 border-t border-[#28304A] grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setMobileMenuOpen(false);
                       onOpenAuth("signin");
                     }}
-                    className="min-h-[44px] px-3 text-xs font-medium text-[#FAFAFA] bg-[#111114] border border-[#27272A] rounded-lg"
+                    className="min-h-[44px] px-3 text-xs font-medium text-[#FAFAFA] bg-[#171C2E] border border-[#343E5E] rounded-lg"
                   >
                     Sign in
                   </button>
@@ -627,7 +629,7 @@ const msg = await client.messages.create({
                       setMobileMenuOpen(false);
                       onOpenAuth("signup");
                     }}
-                    className="min-h-[44px] px-3 text-xs font-semibold bg-amber-400 text-[#09090B] rounded-lg"
+                    className="min-h-[44px] px-3 text-xs font-semibold bg-indigo-500 text-white rounded-lg"
                   >
                     Create workspace
                   </button>
@@ -642,25 +644,40 @@ const msg = await client.messages.create({
         {/* HERO SECTION */}
         <section
           id="top"
-          className="relative overflow-hidden border-b border-[#1C1C21]"
+          className="relative overflow-hidden border-b border-[#28304A]"
         >
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(circle at 68% 45%, rgba(253,223,138,0.06), transparent 55%)",
-            }}
-          />
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+            <div
+              className="animate-aurora-float absolute -top-24 left-[18%] w-[420px] h-[280px] rounded-full blur-[110px]"
+              style={{ background: "rgba(100, 103, 242, 0.12)" }}
+            />
+            <div
+              className="animate-aurora-float absolute top-[20%] right-[8%] w-[360px] h-[300px] rounded-full blur-[120px]"
+              style={{ background: "rgba(56, 189, 248, 0.09)", animationDelay: "-3s" }}
+            />
+            <div
+              className="animate-aurora-float absolute bottom-[-12%] left-[55%] w-[320px] h-[240px] rounded-full blur-[110px]"
+              style={{ background: "rgba(236, 72, 153, 0.07)", animationDelay: "-6s" }}
+            />
+          </div>
 
           <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-14 sm:py-16 lg:py-24 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center relative">
             {/* Hero Copy Left */}
-            <div className="lg:col-span-5 space-y-6">
-              <p className="font-mono text-xs font-medium uppercase tracking-wider text-amber-400">
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              className="lg:col-span-5 space-y-6"
+            >
+              <p className="font-mono text-xs font-medium uppercase tracking-wider bg-gradient-to-r from-indigo-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">
                 Unified AI Gateway
               </p>
 
               <h1 className="font-display text-4xl sm:text-5xl lg:text-[3.5rem] font-bold tracking-tight text-[#FAFAFA] leading-[1.06] text-balance">
-                The future is multi-model.
+                The future is{" "}
+                <span className="bg-gradient-to-r from-indigo-400 via-sky-300 to-emerald-300 bg-clip-text text-transparent animate-spectrum-text">
+                  multi-model.
+                </span>
               </h1>
 
               <p className="text-base sm:text-lg text-[#D4D4D8] leading-relaxed max-w-xl">
@@ -671,31 +688,35 @@ const msg = await client.messages.create({
               </p>
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
-                <button
+                <motion.button
                   type="button"
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={primaryAction}
-                  className="min-h-[44px] px-5 py-2.5 text-sm font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-2"
+                  className="min-h-[44px] px-5 py-2.5 text-sm font-semibold bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 hover:brightness-110 text-white rounded-lg transition-all whitespace-nowrap shrink-0 inline-flex items-center gap-2 shadow-[0_6px_24px_-6px_rgba(100,103,242,0.6)]"
                 >
                   <span>
                     {isAuthenticated ? "Open Dashboard" : "Get API key"}
                   </span>
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </motion.button>
 
-                <a
+                <motion.a
                   href="#quickstart"
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={(e) => scrollToSection(e, "#quickstart")}
-                  className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#FAFAFA] bg-[#111114] hover:bg-[#18181B] border border-[#27272A] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#FAFAFA] bg-[#171C2E] hover:bg-[#1F263D] border border-[#343E5E] hover:border-sky-400/40 rounded-lg transition-colors whitespace-nowrap shrink-0"
                 >
-                  <Terminal className="w-4 h-4 text-amber-400" />
+                  <Terminal className="w-4 h-4 text-sky-400" />
                   <span>SDK Quickstart</span>
-                </a>
+                </motion.a>
               </div>
 
               {/* Grounded architectural highlights */}
-              <div className="pt-4 border-t border-[#1C1C21] grid grid-cols-3 gap-4">
+              <div className="pt-4 border-t border-[#28304A] grid grid-cols-3 gap-4">
                 <div>
-                  <div className="font-mono text-sm font-semibold text-[#FAFAFA] tabular-nums">
+                  <div className="font-mono text-sm font-semibold text-sky-300 tabular-nums">
                     12+ Providers
                   </div>
                   <div className="text-xs text-[#A1A1AA] mt-0.5">
@@ -703,7 +724,7 @@ const msg = await client.messages.create({
                   </div>
                 </div>
                 <div>
-                  <div className="font-mono text-sm font-semibold text-[#FAFAFA] tabular-nums">
+                  <div className="font-mono text-sm font-semibold text-emerald-300 tabular-nums">
                     AES-256
                   </div>
                   <div className="text-xs text-[#A1A1AA] mt-0.5">
@@ -711,7 +732,7 @@ const msg = await client.messages.create({
                   </div>
                 </div>
                 <div>
-                  <div className="font-mono text-sm font-semibold text-[#FAFAFA] tabular-nums">
+                  <div className="font-mono text-sm font-semibold text-violet-300 tabular-nums">
                     &lt; 25ms
                   </div>
                   <div className="text-xs text-[#A1A1AA] mt-0.5">
@@ -719,10 +740,15 @@ const msg = await client.messages.create({
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Hero Animated Orbital Constellation Right */}
-            <div className="lg:col-span-7 flex flex-col items-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.55, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+              className="lg:col-span-7 flex flex-col items-center"
+            >
               <div className="relative w-full max-w-[620px] h-[300px] sm:h-[400px] lg:h-[430px] flex items-center justify-center">
                 {/* Elliptical Orbital Rings + Animated Pulses */}
                 <svg
@@ -732,12 +758,13 @@ const msg = await client.messages.create({
                 >
                   <defs>
                     <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
-                      <stop offset="0%" stopColor="rgba(253,223,138,0.2)" />
-                      <stop offset="100%" stopColor="rgba(253,223,138,0)" />
+                      <stop offset="0%" stopColor="rgba(100,103,242,0.28)" />
+                      <stop offset="55%" stopColor="rgba(56,189,248,0.12)" />
+                      <stop offset="100%" stopColor="rgba(100,103,242,0)" />
                     </radialGradient>
                   </defs>
 
-                  <circle cx="300" cy="210" r="95" fill="url(#coreGlow)" />
+                  <circle cx="300" cy="210" r="105" fill="url(#coreGlow)" />
 
                   <ellipse
                     cx="300"
@@ -745,7 +772,7 @@ const msg = await client.messages.create({
                     rx="130"
                     ry="82"
                     fill="none"
-                    stroke="#27272A"
+                    stroke="#343E5E"
                     strokeWidth="1"
                     strokeDasharray="4 6"
                   >
@@ -763,7 +790,7 @@ const msg = await client.messages.create({
                     rx="205"
                     ry="132"
                     fill="none"
-                    stroke="#1C1C21"
+                    stroke="#28304A"
                     strokeWidth="1"
                     strokeDasharray="2 8"
                   >
@@ -781,7 +808,7 @@ const msg = await client.messages.create({
                     rx="275"
                     ry="178"
                     fill="none"
-                    stroke="#18181B"
+                    stroke="#1F263D"
                     strokeWidth="1"
                   />
 
@@ -802,8 +829,9 @@ const msg = await client.messages.create({
                             (210 + ny) / 2 - (idx % 2 === 0 ? 18 : -18)
                           }, ${nx.toFixed(1)} ${ny.toFixed(1)}`}
                           fill="none"
-                          stroke={isFocused ? "rgba(253,223,138,0.45)" : "#1F1F24"}
-                          strokeWidth={isFocused ? "1.5" : "1"}
+                          stroke={isFocused ? p.color : "#2B334E"}
+                          strokeOpacity={isFocused ? 0.65 : 0.85}
+                          strokeWidth={isFocused ? "1.6" : "1"}
                         />
 
                         {[
@@ -818,14 +846,14 @@ const msg = await client.messages.create({
                             cx={nx + dx}
                             cy={ny + dy}
                             r={dIdx === 0 ? 2 : 1.3}
-                            fill={isFocused ? "#FDDF8A" : "#3F3F46"}
-                            opacity={isFocused ? 0.95 : 0.65}
+                            fill={p.color}
+                            opacity={isFocused ? 0.95 : 0.45}
                           />
                         ))}
 
-                        <circle r={isFocused ? 3.2 : 2.2} fill="#FDDF8A">
+                        <circle r={isFocused ? 3.5 : 2.4} fill={p.color}>
                           <animateMotion
-                            dur={`${2.8 + (idx % 3) * 0.7}s`}
+                            dur={`${2.6 + (idx % 3) * 0.65}s`}
                             repeatCount="indefinite"
                             begin={`${idx * 0.35}s`}
                           >
@@ -839,18 +867,20 @@ const msg = await client.messages.create({
 
                 {/* Central Metallic AS ROUTER Emblem */}
                 <motion.div
-                  animate={{ scale: [1, 1.04, 1] }}
+                  animate={{ scale: [1, 1.05, 1] }}
                   transition={{
                     duration: 4.5,
                     repeat: Infinity,
                     ease: "easeInOut",
                   }}
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-[#27272A] via-[#111114] to-[#09090B] border border-[#3F3F46] flex flex-col items-center justify-center shadow-2xl"
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none"
                 >
-                  <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-[#FAFAFA]">
-                    AS
-                  </span>
-                  <span className="font-mono text-[9px] text-amber-400 tracking-wider">
+                  <img
+                    src="/assets/as-logo.png"
+                    alt="AS ROUTER"
+                    className="h-14 sm:h-16 w-auto object-contain drop-shadow-[0_0_26px_rgba(100,103,242,0.45)]"
+                  />
+                  <span className="mt-1 font-mono text-[9px] font-semibold text-sky-300/90 tracking-[0.22em]">
                     ROUTER
                   </span>
                 </motion.div>
@@ -880,16 +910,19 @@ const msg = await client.messages.create({
                         onClick={() => setHoveredProvider(p)}
                         animate={{ y: [0, -4, 0] }}
                         transition={{
-                          duration: 3.2 + (idx % 3) * 0.65,
+                          duration: 3.0 + (idx % 3) * 0.6,
                           repeat: Infinity,
                           ease: "easeInOut",
                           delay: idx * 0.22,
                         }}
-                        whileHover={{ scale: 1.12 }}
+                        whileHover={{ scale: 1.15 }}
+                        style={{
+                          borderColor: isFocused ? p.color : "#343E5E",
+                          color: isFocused ? p.color : "#D4D4D8",
+                          boxShadow: isFocused ? `0 0 20px ${p.color}40` : "none",
+                        }}
                         className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg border flex items-center justify-center font-mono text-xs font-bold transition-colors ${
-                          isFocused
-                            ? "bg-[#18181B] border-amber-400 text-amber-400 shadow-[0_0_18px_rgba(253,223,138,0.2)]"
-                            : "bg-[#111114] border-[#27272A] text-[#D4D4D8] hover:border-[#52525B]"
+                          isFocused ? "bg-[#1F263D]" : "bg-[#171C2E]"
                         }`}
                         title={p.name}
                       >
@@ -901,21 +934,34 @@ const msg = await client.messages.create({
               </div>
 
               {/* Active Constellation Inspector Line */}
-              <div className="mt-3 px-4 py-2 bg-[#111114] border border-[#222227] rounded-lg flex flex-wrap items-center justify-center gap-2.5 text-xs">
-                <span className="font-medium text-amber-400">
-                  {hoveredProvider.name}
-                </span>
-                <span className="text-[#71717A]">·</span>
-                <span className="font-mono text-[#D4D4D8]">
-                  {hoveredProvider.models.join("  ·  ")}
-                </span>
-              </div>
-            </div>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={hoveredProvider.id}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18 }}
+                  className="mt-3 px-4 py-2 bg-[#171C2E] border border-[#2B334E] rounded-lg flex flex-wrap items-center justify-center gap-2.5 text-xs"
+                  style={{ borderColor: `${hoveredProvider.color}40` }}
+                >
+                  <span
+                    className="font-medium"
+                    style={{ color: hoveredProvider.color }}
+                  >
+                    {hoveredProvider.name}
+                  </span>
+                  <span className="text-[#71717A]">·</span>
+                  <span className="font-mono text-[#D4D4D8]">
+                    {hoveredProvider.models.join("  ·  ")}
+                  </span>
+                </motion.div>
+              </AnimatePresence>
+            </motion.div>
           </div>
 
           {/* Supported Provider Strip */}
           <div className="max-w-[1280px] mx-auto px-5 sm:px-8 pb-10">
-            <div className="pt-6 border-t border-[#1C1C21] flex flex-wrap items-center justify-center sm:justify-between gap-x-4 gap-y-2 text-xs font-display font-semibold tracking-wide">
+            <div className="pt-6 border-t border-[#28304A] flex flex-wrap items-center justify-center sm:justify-between gap-x-4 gap-y-2 text-xs font-display font-semibold tracking-wide">
               {ALL_DISPLAY_PROVIDERS.map((p) => {
                 const isSelected = hoveredProvider.id === p.id;
                 return (
@@ -923,9 +969,10 @@ const msg = await client.messages.create({
                     key={p.id}
                     type="button"
                     onClick={() => setHoveredProvider(p)}
+                    style={isSelected ? { color: p.color } : undefined}
                     className={`min-h-[36px] px-2 transition-colors whitespace-nowrap ${
                       isSelected
-                        ? "text-amber-400"
+                        ? "font-bold"
                         : "text-[#A1A1AA] hover:text-[#FAFAFA]"
                     }`}
                   >
@@ -944,33 +991,33 @@ const msg = await client.messages.create({
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
             <div className="lg:col-span-5 space-y-5">
-              <p className="font-mono text-xs uppercase tracking-wider text-amber-400">
+              <p className="font-mono text-xs uppercase tracking-wider text-indigo-400">
                 01. Smart Intent Routing
               </p>
               <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#FAFAFA] leading-[1.12] text-balance">
                 Better, faster, cheaper. Get all three.
               </h2>
               <p className="text-sm sm:text-base text-[#D4D4D8] leading-relaxed">
-                Send every prompt to <code className="font-mono text-amber-400">smart-auto</code>.
+                Send every prompt to <code className="font-mono text-indigo-400">smart-auto</code>.
                 AS ROUTER classifies intent—coding, vision, tool calls, or fast
                 chat—and routes to the best connected model automatically.
               </p>
               <button
                 type="button"
                 onClick={primaryAction}
-                className="inline-flex items-center gap-2 text-sm font-medium text-[#FAFAFA] hover:text-amber-400 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 text-sm font-medium text-[#FAFAFA] hover:text-indigo-400 transition-colors whitespace-nowrap"
               >
                 <span>Build a smart combo</span>
-                <ArrowRight className="w-4 h-4 text-amber-400" />
+                <ArrowRight className="w-4 h-4 text-indigo-400" />
               </button>
             </div>
 
-            <div className="lg:col-span-7 bg-[#111114] border border-[#222227] rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-[#222227] flex flex-wrap items-center justify-between gap-2">
+            <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-[#2B334E] flex flex-wrap items-center justify-between gap-2">
                 <code className="font-mono text-xs text-[#D4D4D8]">
                   model: &quot;smart-auto&quot;
                 </code>
-                <div className="inline-flex items-center gap-1 bg-[#09090B] border border-[#27272A] rounded-md p-0.5">
+                <div className="inline-flex items-center gap-1 bg-[#101422] border border-[#343E5E] rounded-md p-0.5">
                   {(
                     [
                       ["fast", "Fast"],
@@ -985,7 +1032,7 @@ const msg = await client.messages.create({
                       onClick={() => setActiveIntent(key)}
                       className={`relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
                         activeIntent === key
-                          ? "text-amber-400"
+                          ? "text-indigo-400"
                           : "text-[#A1A1AA] hover:text-[#FAFAFA]"
                       }`}
                     >
@@ -997,7 +1044,7 @@ const msg = await client.messages.create({
                             stiffness: 380,
                             damping: 30,
                           }}
-                          className="absolute inset-0 bg-[#18181B] rounded"
+                          className="absolute inset-0 bg-[#1F263D] rounded"
                         />
                       )}
                       <span className="relative z-10">{label}</span>
@@ -1017,10 +1064,10 @@ const msg = await client.messages.create({
                       id="landing-in"
                       d="M 0 105 L 62 105"
                       fill="none"
-                      stroke="#27272A"
+                      stroke="#343E5E"
                       strokeWidth="1.5"
                     />
-                    <circle r="3" fill="#FDDF8A">
+                    <circle r="3" fill="#6467F2">
                       <animateMotion dur="1.4s" repeatCount="indefinite">
                         <mpath href="#landing-in" />
                       </animateMotion>
@@ -1029,23 +1076,24 @@ const msg = await client.messages.create({
                     {[28, 79, 131, 182].map((ty, idx) => {
                       const pid = `landing-branch-${idx}`;
                       const isPrimary = idx === 0;
+                      const branchColors = ["#818CF8", "#38BDF8", "#34D399", "#FB923C"];
+                      const branchColor = branchColors[idx % branchColors.length];
                       return (
                         <g key={pid}>
                           <path
                             id={pid}
                             d={`M 82 105 C 145 105, 175 ${ty}, 256 ${ty}`}
                             fill="none"
-                            stroke={
-                              isPrimary ? "rgba(253,223,138,0.55)" : "#27272A"
-                            }
-                            strokeWidth={isPrimary ? "1.6" : "1.15"}
+                            stroke={branchColor}
+                            strokeOpacity={isPrimary ? 0.65 : 0.3}
+                            strokeWidth={isPrimary ? "1.75" : "1.2"}
                           />
                           <circle
-                            r={isPrimary ? 3.2 : 2.3}
-                            fill={isPrimary ? "#FDDF8A" : "#A1A1AA"}
+                            r={isPrimary ? 3.4 : 2.5}
+                            fill={branchColor}
                           >
                             <animateMotion
-                              dur={`${1.6 + idx * 0.35}s`}
+                              dur={`${1.5 + idx * 0.32}s`}
                               repeatCount="indefinite"
                               begin={`${idx * 0.25}s`}
                             >
@@ -1057,49 +1105,62 @@ const msg = await client.messages.create({
                     })}
                   </svg>
 
-                  <div className="absolute top-1/2 -translate-y-1/2 left-[48px] w-10 h-10 rounded-lg bg-[#09090B] border border-amber-400/50 flex items-center justify-center">
-                    <span className="font-display text-xs font-bold text-amber-400">
+                  <div className="absolute top-1/2 -translate-y-1/2 left-[48px] w-10 h-10 rounded-lg bg-gradient-to-br from-[#1F263D] to-[#101422] border border-indigo-500/50 flex items-center justify-center shadow-[0_0_16px_rgba(100,103,242,0.28)]">
+                    <span className="font-display text-xs font-bold bg-gradient-to-r from-indigo-300 to-sky-300 bg-clip-text text-transparent">
                       AS
                     </span>
                   </div>
                 </div>
 
                 <div className="col-span-8 sm:col-span-6 h-[210px] flex flex-col justify-between py-1">
-                  {currentPreset.branches.map((b, idx) => (
-                    <div
-                      key={`${activeIntent}-${b.model}`}
-                      className="flex items-center justify-between gap-2.5"
-                    >
-                      <div
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg min-w-0 flex-1 border ${
-                          idx === 0
-                            ? "bg-[#18181B] border-amber-400/40"
-                            : "bg-[#18181B] border-[#27272A]"
-                        }`}
+                  {currentPreset.branches.map((b, idx) => {
+                    const branchColors = ["#818CF8", "#38BDF8", "#34D399", "#FB923C"];
+                    const bColor = branchColors[idx % branchColors.length];
+                    return (
+                      <motion.div
+                        key={`${activeIntent}-${b.model}`}
+                        initial={{ opacity: 0, x: 8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.22, delay: idx * 0.045 }}
+                        className="flex items-center justify-between gap-2.5"
                       >
-                        <span className="w-4 h-4 rounded bg-[#09090B] text-amber-400 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
-                          {b.tag}
+                        <div
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg min-w-0 flex-1 border bg-[#1F263D]"
+                          style={{
+                            borderColor:
+                              idx === 0 ? `${bColor}75` : "#343E5E",
+                          }}
+                        >
+                          <span
+                            className="w-4 h-4 rounded bg-[#101422] font-mono text-[10px] font-bold flex items-center justify-center shrink-0"
+                            style={{ color: bColor }}
+                          >
+                            {b.tag}
+                          </span>
+                          <span className="font-mono text-xs text-[#FAFAFA] truncate">
+                            {b.model}
+                          </span>
+                        </div>
+                        <span
+                          className="font-mono text-xs tabular-nums w-9 text-right shrink-0"
+                          style={{ color: idx === 0 ? bColor : "#D4D4D8" }}
+                        >
+                          {b.pct}%
                         </span>
-                        <span className="font-mono text-xs text-[#FAFAFA] truncate">
-                          {b.model}
-                        </span>
-                      </div>
-                      <span className="font-mono text-xs text-[#D4D4D8] tabular-nums w-9 text-right shrink-0">
-                        {b.pct}%
-                      </span>
-                    </div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="px-5 py-3 border-t border-[#222227] flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="px-5 py-3 border-t border-[#2B334E] flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-[#D4D4D8]">
                   {currentPreset.label} →{" "}
                   <span className="text-[#FAFAFA] font-medium">
                     {currentPreset.winner}
                   </span>
                 </span>
-                <span className="font-mono font-semibold text-amber-400">
+                <span className="font-mono font-semibold text-emerald-400">
                   {currentPreset.savings}
                 </span>
               </div>
@@ -1110,25 +1171,35 @@ const msg = await client.messages.create({
         {/* SECTION 2: Automatic Failover */}
         <section
           id="failover"
-          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#1C1C21]"
+          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#28304A]"
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            <div className="lg:col-span-7 bg-[#111114] border border-[#222227] rounded-xl overflow-hidden order-2 lg:order-1">
-              <div className="px-5 py-3 border-b border-[#222227] flex items-center justify-between">
+            <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden order-2 lg:order-1">
+              <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between">
                 <span className="text-xs font-medium text-[#D4D4D8]">
                   Provider health matrix
                 </span>
-                <span className="font-mono text-[11px] text-[#A1A1AA] tabular-nums">
+                <span className="font-mono text-[11px] text-emerald-400 tabular-nums">
                   Live 429 failover stream
                 </span>
               </div>
 
               <div className="p-5 space-y-4">
-                {failoverMatrix.rows.map((row) => (
+                {failoverMatrix.rows.map((row) => {
+                  const tagColor =
+                    row.tag === "A"
+                      ? "#A78BFA"
+                      : row.tag === "G"
+                        ? "#60A5FA"
+                        : "#34D399";
+                  return (
                   <div key={row.name} className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded bg-[#18181B] border border-[#27272A] font-mono text-[10px] font-bold text-amber-400 flex items-center justify-center">
+                        <span
+                          className="w-5 h-5 rounded bg-[#1F263D] border border-[#343E5E] font-mono text-[10px] font-bold flex items-center justify-center"
+                          style={{ color: tagColor, borderColor: `${tagColor}44` }}
+                        >
                           {row.tag}
                         </span>
                         <span className="font-medium text-[#FAFAFA]">
@@ -1157,9 +1228,10 @@ const msg = await client.messages.create({
                       ))}
                     </div>
                   </div>
-                ))}
+                );
+                })}
 
-                <div className="pt-3.5 border-t border-[#222227] space-y-2">
+                <div className="pt-3.5 border-t border-[#2B334E] space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium text-[#FAFAFA]">
                       Through AS ROUTER
@@ -1181,7 +1253,7 @@ const msg = await client.messages.create({
             </div>
 
             <div className="lg:col-span-5 space-y-5 order-1 lg:order-2">
-              <p className="font-mono text-xs uppercase tracking-wider text-amber-400">
+              <p className="font-mono text-xs uppercase tracking-wider text-indigo-400">
                 02. Circuit Breakers & Retry
               </p>
               <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#FAFAFA] leading-[1.12] text-balance">
@@ -1196,10 +1268,10 @@ const msg = await client.messages.create({
               <button
                 type="button"
                 onClick={primaryAction}
-                className="inline-flex items-center gap-2 text-sm font-medium text-[#FAFAFA] hover:text-amber-400 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 text-sm font-medium text-[#FAFAFA] hover:text-indigo-400 transition-colors whitespace-nowrap"
               >
                 <span>Inspect failover traces</span>
-                <ArrowRight className="w-4 h-4 text-amber-400" />
+                <ArrowRight className="w-4 h-4 text-indigo-400" />
               </button>
             </div>
           </div>
@@ -1208,16 +1280,16 @@ const msg = await client.messages.create({
         {/* SECTION 3: Data & Policies */}
         <section
           id="policies"
-          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#1C1C21]"
+          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#28304A]"
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            <div className="lg:col-span-6 bg-[#111114] border border-[#222227] rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-[#222227] flex items-center justify-between text-xs">
+            <div className="lg:col-span-6 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between text-xs">
                 <span className="font-medium text-[#FAFAFA]">Production</span>
                 <span className="text-[#A1A1AA]">Workspace policy</span>
               </div>
 
-              <div className="divide-y divide-[#1C1C21]">
+              <div className="divide-y divide-[#28304A]">
                 <div className="px-5 py-4 flex items-center justify-between gap-4">
                   <span className="text-sm text-[#FAFAFA]">
                     Prompt compression
@@ -1229,13 +1301,13 @@ const msg = await client.messages.create({
                     aria-label="Toggle prompt compression"
                     onClick={() => setCompressPolicy((v) => !v)}
                     className={`w-11 h-6 rounded-full p-0.5 transition-colors flex items-center ${
-                      compressPolicy ? "bg-amber-400" : "bg-[#27272A]"
+                      compressPolicy ? "bg-indigo-500" : "bg-[#343E5E]"
                     }`}
                   >
                     <motion.span
                       layout
                       transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                      className={`w-5 h-5 rounded-full bg-[#09090B] ${
+                      className={`w-5 h-5 rounded-full bg-white ${
                         compressPolicy ? "ml-auto" : "mr-auto"
                       }`}
                     />
@@ -1253,13 +1325,13 @@ const msg = await client.messages.create({
                     aria-label="Toggle intent-based routing"
                     onClick={() => setIntentPolicy((v) => !v)}
                     className={`w-11 h-6 rounded-full p-0.5 transition-colors flex items-center ${
-                      intentPolicy ? "bg-amber-400" : "bg-[#27272A]"
+                      intentPolicy ? "bg-indigo-500" : "bg-[#343E5E]"
                     }`}
                   >
                     <motion.span
                       layout
                       transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                      className={`w-5 h-5 rounded-full bg-[#09090B] ${
+                      className={`w-5 h-5 rounded-full bg-white ${
                         intentPolicy ? "ml-auto" : "mr-auto"
                       }`}
                     />
@@ -1268,7 +1340,7 @@ const msg = await client.messages.create({
 
                 <div className="px-5 py-4 flex items-center justify-between gap-4">
                   <span className="text-sm text-[#FAFAFA]">Routing mode</span>
-                  <div className="inline-flex items-center p-0.5 bg-[#09090B] border border-[#27272A] rounded-md">
+                  <div className="inline-flex items-center p-0.5 bg-[#101422] border border-[#343E5E] rounded-md">
                     {(
                       [
                         ["priority", "Priority"],
@@ -1282,7 +1354,7 @@ const msg = await client.messages.create({
                         onClick={() => setPolicyMode(id)}
                         className={`relative px-2.5 py-1 text-xs font-medium rounded transition-colors ${
                           policyMode === id
-                            ? "text-amber-400"
+                            ? "text-indigo-400"
                             : "text-[#A1A1AA] hover:text-[#FAFAFA]"
                         }`}
                       >
@@ -1294,7 +1366,7 @@ const msg = await client.messages.create({
                               stiffness: 420,
                               damping: 32,
                             }}
-                            className="absolute inset-0 bg-[#18181B] rounded"
+                            className="absolute inset-0 bg-[#1F263D] rounded"
                           />
                         )}
                         <span className="relative z-10">{label}</span>
@@ -1312,7 +1384,7 @@ const msg = await client.messages.create({
                       <span
                         key={p.id}
                         style={{ color: p.color }}
-                        className="w-6 h-6 rounded bg-[#18181B] border border-[#27272A] font-mono text-[10px] font-bold flex items-center justify-center"
+                        className="w-6 h-6 rounded bg-[#1F263D] border border-[#343E5E] font-mono text-[10px] font-bold flex items-center justify-center"
                         title={p.name}
                       >
                         {p.short}
@@ -1324,7 +1396,7 @@ const msg = await client.messages.create({
             </div>
 
             <div className="lg:col-span-6 space-y-6">
-              <p className="font-mono text-xs uppercase tracking-wider text-amber-400">
+              <p className="font-mono text-xs uppercase tracking-wider text-indigo-400">
                 03. Governance & Encryption
               </p>
               <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#FAFAFA] leading-[1.12] text-balance">
@@ -1338,18 +1410,18 @@ const msg = await client.messages.create({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm text-[#D4D4D8]">
                 {[
-                  "AES-256 encrypted key vault",
-                  "Bring your own provider keys",
-                  "Scoped gateway API keys",
-                  "Daily token & USD budgets",
-                  "Tool & multimodal translation",
-                  "Real-time SSE telemetry logs",
-                  "Automatic health probes",
-                  "Isolated multi-tenant storage",
+                  { label: "AES-256 encrypted key vault", color: "text-emerald-400" },
+                  { label: "Bring your own provider keys", color: "text-sky-400" },
+                  { label: "Scoped gateway API keys", color: "text-amber-400" },
+                  { label: "Daily token & USD budgets", color: "text-violet-400" },
+                  { label: "Tool & multimodal translation", color: "text-cyan-400" },
+                  { label: "Real-time SSE telemetry logs", color: "text-orange-400" },
+                  { label: "Automatic health probes", color: "text-teal-400" },
+                  { label: "Isolated multi-tenant storage", color: "text-indigo-400" },
                 ].map((item) => (
-                  <div key={item} className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>{item}</span>
+                  <div key={item.label} className="flex items-center gap-2">
+                    <Check className={`w-4 h-4 shrink-0 ${item.color}`} />
+                    <span>{item.label}</span>
                   </div>
                 ))}
               </div>
@@ -1357,10 +1429,10 @@ const msg = await client.messages.create({
               <button
                 type="button"
                 onClick={primaryAction}
-                className="inline-flex items-center gap-2 text-sm font-medium text-[#FAFAFA] hover:text-amber-400 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 text-sm font-medium text-[#FAFAFA] hover:text-indigo-400 transition-colors whitespace-nowrap"
               >
                 <span>Manage API keys & guardrails</span>
-                <ArrowRight className="w-4 h-4 text-amber-400" />
+                <ArrowRight className="w-4 h-4 text-indigo-400" />
               </button>
             </div>
           </div>
@@ -1369,11 +1441,11 @@ const msg = await client.messages.create({
         {/* SECTION 4: Drop-In SDK Quickstart */}
         <section
           id="quickstart"
-          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#1C1C21]"
+          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#28304A]"
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
             <div className="lg:col-span-5 space-y-5">
-              <p className="font-mono text-xs uppercase tracking-wider text-amber-400">
+              <p className="font-mono text-xs uppercase tracking-wider text-sky-400">
                 04. Two-Line Integration
               </p>
               <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#FAFAFA] text-balance">
@@ -1381,13 +1453,13 @@ const msg = await client.messages.create({
               </h2>
               <p className="text-sm sm:text-base text-[#D4D4D8] leading-relaxed">
                 Keep your existing client libraries—just point{" "}
-                <code className="font-mono text-amber-400">baseURL</code> to
+                <code className="font-mono text-sky-400">baseURL</code> to
                 your AS ROUTER instance and switch models or combos without
                 redeploying your codebase.
               </p>
               <div className="space-y-3 text-xs sm:text-sm text-[#D4D4D8]">
                 <div className="flex items-center gap-2.5">
-                  <Layers className="w-4 h-4 text-amber-400 shrink-0" />
+                  <Layers className="w-4 h-4 text-violet-400 shrink-0" />
                   <span>/v1/chat/completions &amp; /v1/messages</span>
                 </div>
                 <div className="flex items-center gap-2.5">
@@ -1395,14 +1467,14 @@ const msg = await client.messages.create({
                   <span>Per-key token &amp; monthly USD caps</span>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>Drag-and-drop fallback &amp; dry-run simulator</span>
                 </div>
               </div>
             </div>
 
-            <div className="lg:col-span-7 bg-[#111114] border border-[#222227] rounded-xl overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-[#222227] flex items-center justify-between gap-3">
+            <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-[#2B334E] flex items-center justify-between gap-3">
                 <div className="inline-flex items-center gap-1 flex-wrap">
                   {(
                     [
@@ -1418,7 +1490,7 @@ const msg = await client.messages.create({
                       onClick={() => setSdkTab(tabId)}
                       className={`relative px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                         sdkTab === tabId
-                          ? "text-amber-400"
+                          ? "text-indigo-400"
                           : "text-[#A1A1AA] hover:text-[#FAFAFA]"
                       }`}
                     >
@@ -1430,7 +1502,7 @@ const msg = await client.messages.create({
                             stiffness: 420,
                             damping: 32,
                           }}
-                          className="absolute inset-0 bg-[#18181B] rounded-md"
+                          className="absolute inset-0 bg-[#1F263D] rounded-md"
                         />
                       )}
                       <span className="relative z-10">{label}</span>
@@ -1441,7 +1513,7 @@ const msg = await client.messages.create({
                 <button
                   type="button"
                   onClick={copySdk}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#09090B] border border-[#27272A] rounded-md whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#343E5E] rounded-md whitespace-nowrap"
                 >
                   {copiedSdk ? (
                     <>
@@ -1457,7 +1529,7 @@ const msg = await client.messages.create({
                 </button>
               </div>
 
-              <pre className="p-5 font-mono text-xs text-[#E4E4E7] overflow-x-auto leading-relaxed bg-[#09090B]">
+              <pre className="p-5 font-mono text-xs text-[#E4E4E7] overflow-x-auto leading-relaxed bg-[#101422]">
                 {sdkSnippets[sdkTab]}
               </pre>
             </div>
@@ -1465,10 +1537,26 @@ const msg = await client.messages.create({
         </section>
 
         {/* SECTION 5: Architectural Guarantees + Bottom Conversion CTA */}
-        <section className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#1C1C21]">
-          <div className="bg-[#111114] border border-[#222227] rounded-2xl p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-7 space-y-4">
-              <p className="font-mono text-xs uppercase tracking-wider text-amber-400">
+        <section className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#28304A]">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.4 }}
+            className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] rounded-2xl p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center"
+          >
+            <div
+              className="pointer-events-none absolute -right-24 -top-24 w-72 h-72 rounded-full blur-[90px]"
+              style={{ background: "rgba(100, 103, 242, 0.14)" }}
+              aria-hidden="true"
+            />
+            <div
+              className="pointer-events-none absolute -left-20 -bottom-24 w-64 h-64 rounded-full blur-[90px]"
+              style={{ background: "rgba(56, 189, 248, 0.1)" }}
+              aria-hidden="true"
+            />
+            <div className="lg:col-span-7 space-y-4 relative z-10">
+              <p className="font-mono text-xs uppercase tracking-wider bg-gradient-to-r from-indigo-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">
                 Built for production teams
               </p>
               <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#FAFAFA] text-balance">
@@ -1481,7 +1569,7 @@ const msg = await client.messages.create({
               </p>
               <div className="pt-2 flex flex-wrap items-center gap-6 text-xs text-[#D4D4D8]">
                 <span className="inline-flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
                   Zero vendor lock-in
                 </span>
                 <span className="inline-flex items-center gap-1.5">
@@ -1489,41 +1577,48 @@ const msg = await client.messages.create({
                   Streaming SSE &amp; tool calls
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-amber-400" />
+                  <Activity className="w-3.5 h-3.5 text-sky-400" />
                   Live token &amp; cost logs
                 </span>
               </div>
             </div>
 
-            <div className="lg:col-span-5 flex flex-col sm:flex-row lg:flex-col xl:flex-row items-stretch sm:items-center lg:items-end justify-end gap-3">
+            <div className="lg:col-span-5 flex flex-col sm:flex-row lg:flex-col xl:flex-row items-stretch sm:items-center lg:items-end justify-end gap-3 relative z-10">
               {!isAuthenticated && (
                 <button
                   type="button"
                   onClick={() => onOpenAuth("signin")}
-                  className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-[#FAFAFA] bg-[#09090B] hover:bg-[#18181B] border border-[#27272A] rounded-lg transition-colors whitespace-nowrap"
+                  className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-[#FAFAFA] bg-[#101422] hover:bg-[#1F263D] border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap"
                 >
                   Sign in
                 </button>
               )}
-              <button
+              <motion.button
                 type="button"
+                whileHover={{ scale: 1.02, y: -1 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={primaryAction}
-                className="min-h-[44px] px-6 py-2.5 text-sm font-semibold bg-amber-400 hover:bg-amber-300 text-[#09090B] rounded-lg transition-colors whitespace-nowrap inline-flex items-center justify-center gap-2"
+                className="min-h-[44px] px-6 py-2.5 text-sm font-semibold bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 hover:brightness-110 text-white rounded-lg transition-all whitespace-nowrap inline-flex items-center justify-center gap-2 shadow-[0_6px_24px_-6px_rgba(100,103,242,0.55)]"
               >
                 <span>
                   {isAuthenticated ? "Open Dashboard" : "Create free workspace"}
                 </span>
                 <ArrowRight className="w-4 h-4" />
-              </button>
+              </motion.button>
             </div>
-          </div>
+          </motion.div>
         </section>
       </main>
 
       {/* Quiet Footer */}
-      <footer className="border-t border-[#1C1C21] bg-[#09090B]">
+      <footer className="border-t border-[#28304A] bg-[#101422]">
         <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#A1A1AA]">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/assets/as-logo.png"
+              alt="AS ROUTER"
+              className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.25)]"
+            />
             <span className="font-display font-bold text-[#FAFAFA]">
               AS ROUTER
             </span>
@@ -1537,22 +1632,11 @@ const msg = await client.messages.create({
                 key={link.href}
                 href={link.href}
                 onClick={(e) => scrollToSection(e, link.href)}
-                className="hover:text-[#FAFAFA] transition-colors"
+                className="hover:text-[#FAFAFA] transition-colors whitespace-nowrap"
               >
                 {link.label}
               </a>
             ))}
-            <button
-              type="button"
-              onClick={() =>
-                isAuthenticated && onOpenDashboard
-                  ? onOpenDashboard()
-                  : onOpenAuth("signin")
-              }
-              className="text-amber-400 hover:text-amber-300 font-medium"
-            >
-              {isAuthenticated ? "Open Dashboard" : "Sign in"}
-            </button>
           </div>
         </div>
       </footer>
