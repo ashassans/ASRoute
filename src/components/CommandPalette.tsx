@@ -5,16 +5,19 @@ import {
   Copy,
   Cpu,
   Layers,
+  Moon,
   Plus,
   RefreshCw,
   Search,
   Settings,
+  Sun,
   Terminal,
   Trash2,
   X,
 } from "lucide-react";
 import { getConnectionPrefix, getProviderSpec, isSearchProvider } from "../shared/catalog.ts";
 import { useFocusTrap } from "../lib/useFocusTrap.ts";
+import { useTheme } from "../lib/theme.ts";
 import type { Combo, ProviderConnection } from "../types/gateway.ts";
 
 export interface CommandPaletteItem {
@@ -64,6 +67,7 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const { theme, toggleTheme } = useTheme();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -171,6 +175,19 @@ export function CommandPalette({
         accent: "#818CF8",
         onSelect: () => {
           onOpenSettings();
+          onClose();
+        },
+      },
+      {
+        id: "act:theme",
+        title: theme === "light" ? "Switch to Obsidian Dark Mode" : "Switch to Light Mode",
+        subtitle: "Toggle color theme across AS ROUTER",
+        group: "Actions",
+        keywords: "theme dark light obsidian mode appearance",
+        icon: theme === "light" ? Moon : Sun,
+        accent: "#22D3EE",
+        onSelect: () => {
+          toggleTheme();
           onClose();
         },
       }
@@ -305,9 +322,9 @@ export function CommandPalette({
         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
-        className="w-full max-w-xl bg-[#101422] border border-[#2B334E] rounded-2xl shadow-2xl overflow-hidden outline-none"
+        className="w-full max-w-xl bg-surface border border-hairline-strong rounded-2xl shadow-2xl overflow-hidden outline-none"
       >
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2B334E] bg-[#171C2E]/80">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-hairline bg-surface/80">
           <Search className="w-4 h-4 text-indigo-400 shrink-0" />
           <input
             ref={inputRef}
@@ -316,13 +333,13 @@ export function CommandPalette({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Jump to a tab, run an action, or test a model..."
             aria-label="Search commands"
-            className="flex-1 bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-ink placeholder:text-ink-dim focus:outline-none"
           />
           <button
             type="button"
             onClick={onClose}
             aria-label="Close command palette"
-            className="text-[#71717A] hover:text-white p-1"
+            className="text-ink-dim hover:text-ink p-1"
           >
             <X className="w-4 h-4" />
           </button>
@@ -335,7 +352,7 @@ export function CommandPalette({
           className="max-h-[52vh] overflow-y-auto py-2 px-2 space-y-1"
         >
           {filtered.length === 0 ? (
-            <div className="py-10 text-center text-xs text-[#71717A]">
+            <div className="py-10 text-center text-xs text-ink-dim">
               No matching pages, models, or actions.
             </div>
           ) : (
@@ -347,7 +364,7 @@ export function CommandPalette({
               return (
                 <React.Fragment key={item.id}>
                   {showGroup && (
-                    <div className="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#71717A]">
+                    <div className="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-dim">
                       {item.group}
                     </div>
                   )}
@@ -360,8 +377,8 @@ export function CommandPalette({
                     onClick={item.onSelect}
                     className={`w-full px-3 py-2 rounded-lg flex items-center justify-between gap-3 text-left transition-colors ${
                       isSelected
-                        ? "bg-[#1F263D] text-white border border-[#343E5E]"
-                        : "text-[#D4D4D8] border border-transparent hover:bg-[#171C2E]"
+                        ? "bg-elevated text-ink border border-hairline-strong"
+                        : "text-ink-2 border border-transparent hover:bg-surface"
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -374,7 +391,7 @@ export function CommandPalette({
                           {item.title}
                         </div>
                         {item.subtitle && (
-                          <div className="text-[11px] text-[#71717A] truncate">
+                          <div className="text-[11px] text-ink-dim truncate">
                             {item.subtitle}
                           </div>
                         )}
@@ -396,7 +413,7 @@ export function CommandPalette({
           )}
         </div>
 
-        <div className="px-4 py-2 border-t border-[#2B334E] bg-[#171C2E]/60 flex items-center justify-between text-[10px] text-[#71717A] font-mono">
+        <div className="px-4 py-2 border-t border-hairline bg-surface/60 flex items-center justify-between text-[10px] text-ink-dim font-mono">
           <div className="flex items-center gap-3">
             <span>↑↓ Navigate</span>
             <span>↵ Select</span>

@@ -120,19 +120,19 @@ export function AccountSettingsModal({
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto outline-none"
+        className="w-full max-w-md bg-surface border border-hairline rounded-xl p-6 max-h-[90vh] overflow-y-auto outline-none"
       >
-        <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
+        <div className="flex items-center justify-between pb-4 border-b border-hairline">
           <h3
             id="account-settings-title"
-            className="font-display text-base font-semibold text-white"
+            className="font-display text-base font-semibold text-ink"
           >
             Account Settings
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-[#A1A1AA] hover:text-white"
+            className="text-ink-muted hover:text-ink"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -149,7 +149,7 @@ export function AccountSettingsModal({
           <div>
             <label
               htmlFor="account-email"
-              className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+              className="block text-xs font-medium text-ink-2 mb-1.5"
             >
               Email
             </label>
@@ -158,14 +158,14 @@ export function AccountSettingsModal({
               type="email"
               disabled
               value={userEmail}
-              className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-[#94A3B8]"
+              className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm text-ink-muted"
             />
           </div>
 
           <div>
             <label
               htmlFor="account-name"
-              className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+              className="block text-xs font-medium text-ink-2 mb-1.5"
             >
               Name
             </label>
@@ -177,7 +177,7 @@ export function AccountSettingsModal({
                 placeholder="Your display name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-400"
+                className="flex-1 bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400"
               />
               <button
                 type="submit"
@@ -195,16 +195,16 @@ export function AccountSettingsModal({
         {hasPassword ? (
           <form
             onSubmit={handleChangePassword}
-            className="mt-6 pt-5 border-t border-[#2B334E] space-y-3"
+            className="mt-6 pt-5 border-t border-hairline space-y-3"
           >
-            <div className="text-xs font-semibold text-white">
+            <div className="text-xs font-semibold text-ink">
               Change Password
             </div>
 
             <div>
               <label
                 htmlFor="account-current-pw"
-                className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                className="block text-xs font-medium text-ink-2 mb-1.5"
               >
                 Current Password
               </label>
@@ -216,7 +216,7 @@ export function AccountSettingsModal({
                   placeholder="Enter current password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg pl-3 pr-10 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-400"
+                  className="w-full bg-canvas border border-hairline rounded-lg pl-3 pr-10 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400"
                 />
                 <button
                   type="button"
@@ -226,7 +226,7 @@ export function AccountSettingsModal({
                       ? "Hide current password"
                       : "Show current password"
                   }
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#94A3B8] hover:text-white"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-ink-muted hover:text-ink"
                 >
                   {showCurrentPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -240,7 +240,7 @@ export function AccountSettingsModal({
             <div>
               <label
                 htmlFor="account-new-pw"
-                className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                className="block text-xs font-medium text-ink-2 mb-1.5"
               >
                 New Password
               </label>
@@ -253,7 +253,7 @@ export function AccountSettingsModal({
                   placeholder="At least 6 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg pl-3 pr-10 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-400"
+                  className="w-full bg-canvas border border-hairline rounded-lg pl-3 pr-10 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400"
                 />
                 <button
                   type="button"
@@ -261,7 +261,7 @@ export function AccountSettingsModal({
                   aria-label={
                     showNewPassword ? "Hide new password" : "Show new password"
                   }
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#94A3B8] hover:text-white"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-ink-muted hover:text-ink"
                 >
                   {showNewPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -275,7 +275,7 @@ export function AccountSettingsModal({
             <div>
               <label
                 htmlFor="account-confirm-pw"
-                className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                className="block text-xs font-medium text-ink-2 mb-1.5"
               >
                 Confirm New Password
               </label>
@@ -288,7 +288,7 @@ export function AccountSettingsModal({
                   placeholder="Re-enter new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg pl-3 pr-10 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-400"
+                  className="w-full bg-canvas border border-hairline rounded-lg pl-3 pr-10 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400"
                 />
                 <button
                   type="button"
@@ -298,7 +298,7 @@ export function AccountSettingsModal({
                       ? "Hide confirm password"
                       : "Show confirm password"
                   }
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#94A3B8] hover:text-white"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-ink-muted hover:text-ink"
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -313,7 +313,7 @@ export function AccountSettingsModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg whitespace-nowrap"
+                className="px-4 py-2 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline rounded-lg whitespace-nowrap"
               >
                 Cancel
               </button>
@@ -327,14 +327,14 @@ export function AccountSettingsModal({
             </div>
           </form>
         ) : (
-          <div className="mt-6 pt-5 border-t border-[#2B334E] space-y-4">
-            <div className="rounded-lg border border-[#2B334E] bg-[#101422] px-3.5 py-3">
-              <div className="text-xs font-medium text-white">
+          <div className="mt-6 pt-5 border-t border-hairline space-y-4">
+            <div className="rounded-lg border border-hairline bg-canvas px-3.5 py-3">
+              <div className="text-xs font-medium text-ink">
                 {authProviders.includes("google")
                   ? "Signed in with Google"
                   : "Signed in with External Provider"}
               </div>
-              <p className="mt-1 text-xs text-[#A1A1AA]">
+              <p className="mt-1 text-xs text-ink-muted">
                 Password login is not enabled for this account. Security and
                 password settings are managed through your sign-in provider.
               </p>
@@ -344,7 +344,7 @@ export function AccountSettingsModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg whitespace-nowrap"
+                className="px-4 py-2 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline rounded-lg whitespace-nowrap"
               >
                 Close
               </button>

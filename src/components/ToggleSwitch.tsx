@@ -26,8 +26,8 @@ export function ToggleSwitch({
       }`}
     >
       <div className="min-w-0">
-        <div className="text-xs font-medium text-[#E4E4E7]">{label}</div>
-        {hint && <div className="text-[11px] text-[#71717A] mt-0.5">{hint}</div>}
+        <div className="text-xs font-medium text-ink-2">{label}</div>
+        {hint && <div className="text-[11px] text-ink-dim mt-0.5">{hint}</div>}
       </div>
       <motion.button
         type="button"
@@ -40,7 +40,7 @@ export function ToggleSwitch({
           if (!disabled) onChange(!checked);
         }}
         className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-300 ease-out flex items-center shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 ${
-          checked ? "bg-indigo-500" : "bg-[#343E5E]"
+          checked ? "bg-indigo-500" : "bg-subtle"
         }`}
       >
         <motion.span

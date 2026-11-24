@@ -342,10 +342,10 @@ print("Answer:", data.get("answer"))`,
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-white">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-ink">
             Web Search &amp; Extract
           </h1>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-[#A1A1AA]">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
             <span>Tavily-compatible /v1/search &amp; /v1/extract</span>
             <span aria-hidden="true">·</span>
             <span className="tabular-nums">
@@ -361,7 +361,7 @@ print("Answer:", data.get("answer"))`,
         <button
           type="button"
           onClick={onConnectSearchProvider}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#FAFAFA] bg-[#171C2E] hover:bg-[#1F263D] border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-ink bg-surface hover:bg-elevated border border-hairline-strong rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
         >
           <Plus className="w-3.5 h-3.5 text-indigo-400" />
           <span>Connect Tavily / Brave / Exa</span>
@@ -370,7 +370,7 @@ print("Answer:", data.get("answer"))`,
 
       {/* Mode Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex items-center gap-1 p-1 bg-[#171C2E] border border-[#2B334E] rounded-lg">
+        <div className="inline-flex items-center gap-1 p-1 bg-surface border border-hairline rounded-lg">
           {(
             [
               { id: "search", label: "Web Search", icon: Search, accent: "#22D3EE" },
@@ -389,14 +389,14 @@ print("Answer:", data.get("answer"))`,
                   setErrorMsg(null);
                 }}
                 className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-                  active ? "text-white" : "text-[#A1A1AA] hover:text-white"
+                  active ? "text-ink" : "text-ink-muted hover:text-ink"
                 }`}
               >
                 {active && (
                   <motion.span
                     layoutId="search-mode-pill"
                     transition={{ type: "spring", stiffness: 420, damping: 32 }}
-                    className="absolute inset-0 bg-[#1F263D] border border-[#343E5E] rounded-md"
+                    className="absolute inset-0 bg-elevated border border-hairline-strong rounded-md"
                   />
                 )}
                 <Icon
@@ -410,14 +410,14 @@ print("Answer:", data.get("answer"))`,
         </div>
 
         {activeJsonPayload && mode !== "sdk" && (
-          <div className="inline-flex items-center gap-1 p-1 bg-[#171C2E] border border-[#2B334E] rounded-lg">
+          <div className="inline-flex items-center gap-1 p-1 bg-surface border border-hairline rounded-lg">
             <button
               type="button"
               onClick={() => setViewFormat("formatted")}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                 viewFormat === "formatted"
-                  ? "bg-[#1F263D] text-white"
-                  : "text-[#A1A1AA] hover:text-white"
+                  ? "bg-elevated text-ink"
+                  : "text-ink-muted hover:text-ink"
               }`}
             >
               Formatted
@@ -427,8 +427,8 @@ print("Answer:", data.get("answer"))`,
               onClick={() => setViewFormat("json")}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                 viewFormat === "json"
-                  ? "bg-[#1F263D] text-white"
-                  : "text-[#A1A1AA] hover:text-white"
+                  ? "bg-elevated text-ink"
+                  : "text-ink-muted hover:text-ink"
               }`}
             >
               Raw JSON
@@ -445,17 +445,17 @@ print("Answer:", data.get("answer"))`,
               e.preventDefault();
               void runSearch();
             }}
-            className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5 space-y-4"
+            className="bg-surface border border-hairline rounded-xl p-5 space-y-4"
           >
             <div className="flex flex-col sm:flex-row gap-2.5">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 text-[#71717A] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-4 h-4 text-ink-dim absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Ask anything or search the live web..."
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-[#71717A] focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg pl-10 pr-4 py-2.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -471,7 +471,7 @@ print("Answer:", data.get("answer"))`,
               ) : (
                 <button
                   type="submit"
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold bg-gradient-to-r from-cyan-500 via-indigo-500 to-violet-500 hover:brightness-110 text-white rounded-lg transition-all shadow-[0_6px_18px_rgba(34,211,238,0.2)] whitespace-nowrap shrink-0"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold bg-gradient-to-r from-cyan-500 via-indigo-500 to-violet-500 hover:brightness-110 text-ink rounded-lg transition-all shadow-[0_6px_18px_rgba(34,211,238,0.2)] whitespace-nowrap shrink-0"
                 >
                   <Search className="w-3.5 h-3.5" />
                   <span>Run Search</span>
@@ -481,7 +481,7 @@ print("Answer:", data.get("answer"))`,
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">
                   Routing Engine
                 </label>
                 <select
@@ -489,7 +489,7 @@ print("Answer:", data.get("answer"))`,
                   onChange={(e) =>
                     setEngine(e.target.value as SearchEnginePreference)
                   }
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-2.5 py-2 text-xs text-ink focus:outline-none focus:border-indigo-500"
                 >
                   <option value="auto">Auto Failover</option>
                   <option value="builtin">Built-in Engine</option>
@@ -500,7 +500,7 @@ print("Answer:", data.get("answer"))`,
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">
                   Search Depth
                 </label>
                 <select
@@ -508,7 +508,7 @@ print("Answer:", data.get("answer"))`,
                   onChange={(e) =>
                     setSearchDepth(e.target.value as "basic" | "advanced")
                   }
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-2.5 py-2 text-xs text-ink focus:outline-none focus:border-indigo-500"
                 >
                   <option value="basic">Basic (Fast)</option>
                   <option value="advanced">Advanced (Deep)</option>
@@ -516,7 +516,7 @@ print("Answer:", data.get("answer"))`,
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">
                   Topic
                 </label>
                 <select
@@ -524,7 +524,7 @@ print("Answer:", data.get("answer"))`,
                   onChange={(e) =>
                     setTopic(e.target.value as "general" | "news" | "finance")
                   }
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-2.5 py-2 text-xs text-ink focus:outline-none focus:border-indigo-500"
                 >
                   <option value="general">General</option>
                   <option value="news">News</option>
@@ -533,13 +533,13 @@ print("Answer:", data.get("answer"))`,
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">
                   Max Results
                 </label>
                 <select
                   value={maxResults}
                   onChange={(e) => setMaxResults(Number(e.target.value))}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-white tabular-nums focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-2.5 py-2 text-xs text-ink tabular-nums focus:outline-none focus:border-indigo-500"
                 >
                   <option value={3}>3 results</option>
                   <option value={5}>5 results</option>
@@ -550,7 +550,7 @@ print("Answer:", data.get("answer"))`,
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">
                   Time Range
                 </label>
                 <select
@@ -560,7 +560,7 @@ print("Answer:", data.get("answer"))`,
                       e.target.value as "" | "day" | "week" | "month" | "year"
                     )
                   }
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-2.5 py-2 text-xs text-ink focus:outline-none focus:border-indigo-500"
                 >
                   <option value="">Any time</option>
                   <option value="day">Past 24h</option>
@@ -571,7 +571,7 @@ print("Answer:", data.get("answer"))`,
               </div>
             </div>
 
-            <div className="pt-2 border-t border-[#28304A] flex flex-wrap items-center justify-between gap-4">
+            <div className="pt-2 border-t border-hairline flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-6">
                 <ToggleSwitch
                   checked={includeAnswer}
@@ -588,7 +588,7 @@ print("Answer:", data.get("answer"))`,
               <button
                 type="button"
                 onClick={() => setShowDomainFilters((v) => !v)}
-                className="inline-flex items-center gap-1.5 text-xs text-[#A1A1AA] hover:text-white transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition-colors whitespace-nowrap"
               >
                 <ChevronDown
                   className={`w-3.5 h-3.5 transition-transform ${
@@ -600,9 +600,9 @@ print("Answer:", data.get("answer"))`,
             </div>
 
             {showDomainFilters && (
-              <div className="pt-3 border-t border-[#28304A] grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="pt-3 border-t border-hairline grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                  <label className="block text-[11px] font-medium text-ink-muted mb-1">
                     Include Domains (comma separated)
                   </label>
                   <input
@@ -610,11 +610,11 @@ print("Answer:", data.get("answer"))`,
                     value={includeDomainsText}
                     onChange={(e) => setIncludeDomainsText(e.target.value)}
                     placeholder="github.com, docs.python.org"
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-xs font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                  <label className="block text-[11px] font-medium text-ink-muted mb-1">
                     Exclude Domains (comma separated)
                   </label>
                   <input
@@ -622,7 +622,7 @@ print("Answer:", data.get("answer"))`,
                     value={excludeDomainsText}
                     onChange={(e) => setExcludeDomainsText(e.target.value)}
                     placeholder="pinterest.com, quora.com"
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-xs font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
@@ -638,9 +638,9 @@ print("Answer:", data.get("answer"))`,
 
           {running && (
             <div className="space-y-3">
-              <div className="h-28 bg-[#171C2E] border border-[#2B334E] rounded-xl animate-pulse" />
-              <div className="h-24 bg-[#171C2E] border border-[#2B334E] rounded-xl animate-pulse" />
-              <div className="h-24 bg-[#171C2E] border border-[#2B334E] rounded-xl animate-pulse" />
+              <div className="h-28 bg-surface border border-hairline rounded-xl animate-pulse" />
+              <div className="h-24 bg-surface border border-hairline rounded-xl animate-pulse" />
+              <div className="h-24 bg-surface border border-hairline rounded-xl animate-pulse" />
             </div>
           )}
 
@@ -649,7 +649,7 @@ print("Answer:", data.get("answer"))`,
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.28 }}
-              className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] rounded-xl p-8 text-center space-y-4"
+              className="relative overflow-hidden bg-surface border border-hairline rounded-xl p-8 text-center space-y-4"
             >
               <span
                 className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
@@ -662,10 +662,10 @@ print("Answer:", data.get("answer"))`,
                 <Globe className="w-5 h-5 text-cyan-300" />
               </div>
               <div className="space-y-1">
-                <h2 className="font-display text-base font-semibold text-white">
+                <h2 className="font-display text-base font-semibold text-ink">
                   Search live web pages or synthesize cited answers
                 </h2>
-                <p className="text-xs text-[#A1A1AA] max-w-lg mx-auto">
+                <p className="text-xs text-ink-muted max-w-lg mx-auto">
                   Routes across connected Tavily, Brave Search, and Exa keys
                   with automatic failover, or runs immediately using AS ROUTER’s
                   built-in search &amp; Markdown scraper.
@@ -684,7 +684,7 @@ print("Answer:", data.get("answer"))`,
                       type="button"
                       whileHover={{ y: -1 }}
                       onClick={() => void runSearch(q)}
-                      className={`px-3 py-1.5 text-xs text-[#D4D4D8] hover:text-white bg-[#101422] hover:bg-[#1F263D] border border-[#343E5E] ${hoverBorders[idx % hoverBorders.length]} rounded-lg transition-colors text-left`}
+                      className={`px-3 py-1.5 text-xs text-ink-2 hover:text-ink bg-canvas hover:bg-elevated border border-hairline-strong ${hoverBorders[idx % hoverBorders.length]} rounded-lg transition-colors text-left`}
                     >
                       {q}
                     </motion.button>
@@ -695,9 +695,9 @@ print("Answer:", data.get("answer"))`,
           )}
 
           {!running && searchResult && viewFormat === "json" && (
-            <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-[#2B334E] flex items-center justify-between">
-                <span className="font-mono text-xs text-[#A1A1AA]">
+            <div className="bg-surface border border-hairline rounded-xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-hairline flex items-center justify-between">
+                <span className="font-mono text-xs text-ink-muted">
                   POST /v1/search response
                 </span>
                 <button
@@ -709,7 +709,7 @@ print("Answer:", data.get("answer"))`,
                       "JSON"
                     )
                   }
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#343E5E] rounded-md"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline-strong rounded-md"
                 >
                   {copiedId === "search-json" ? (
                     <>
@@ -724,7 +724,7 @@ print("Answer:", data.get("answer"))`,
                   )}
                 </button>
               </div>
-              <pre className="p-4 text-xs font-mono text-[#E4E4E7] overflow-x-auto max-h-[560px] leading-relaxed">
+              <pre className="p-4 text-xs font-mono text-ink-2 overflow-x-auto max-h-[560px] leading-relaxed">
                 {JSON.stringify(searchResult, null, 2)}
               </pre>
             </div>
@@ -733,7 +733,7 @@ print("Answer:", data.get("answer"))`,
           {!running && searchResult && viewFormat === "formatted" && (
             <div className="space-y-4">
               {/* Telemetry Summary Line */}
-              <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-[#A1A1AA]">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-ink-muted">
                 <div className="flex flex-wrap items-center gap-2 font-mono tabular-nums">
                   <span
                     className="font-semibold"
@@ -772,13 +772,13 @@ print("Answer:", data.get("answer"))`,
               </div>
 
               {showHops && (
-                <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-4 space-y-2">
+                <div className="bg-surface border border-hairline rounded-xl p-4 space-y-2">
                   {searchResult.x_asrouter.fallback_hops.map((hop, idx) => (
                     <div
                       key={`${hop.connectionId}-${idx}`}
-                      className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono py-1.5 border-b border-[#28304A] last:border-b-0"
+                      className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono py-1.5 border-b border-hairline last:border-b-0"
                     >
-                      <span className="text-white">
+                      <span className="text-ink">
                         {hop.connectionName} ({hop.provider})
                       </span>
                       <span
@@ -801,7 +801,7 @@ print("Answer:", data.get("answer"))`,
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.28 }}
-                  className="relative overflow-hidden bg-[#171C2E] border border-indigo-500/35 rounded-xl p-5 space-y-2.5 shadow-[0_0_28px_rgba(99,102,241,0.08)]"
+                  className="relative overflow-hidden bg-surface border border-indigo-500/35 rounded-xl p-5 space-y-2.5 shadow-[0_0_28px_rgba(99,102,241,0.08)]"
                 >
                   <span
                     className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
@@ -820,7 +820,7 @@ print("Answer:", data.get("answer"))`,
                       onClick={() =>
                         copyText("ai-answer", searchResult.answer || "", "Answer")
                       }
-                      className="inline-flex items-center gap-1 text-xs text-[#A1A1AA] hover:text-white"
+                      className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink"
                     >
                       {copiedId === "ai-answer" ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -830,7 +830,7 @@ print("Answer:", data.get("answer"))`,
                       <span>Copy</span>
                     </button>
                   </div>
-                  <div className="text-sm text-[#E4E4E7] leading-relaxed whitespace-pre-wrap">
+                  <div className="text-sm text-ink-2 leading-relaxed whitespace-pre-wrap">
                     {searchResult.answer}
                   </div>
                 </motion.div>
@@ -838,11 +838,11 @@ print("Answer:", data.get("answer"))`,
 
               {/* Ranked Search Results */}
               {searchResult.results.length === 0 ? (
-                <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-8 text-center text-xs text-[#A1A1AA]">
+                <div className="bg-surface border border-hairline rounded-xl p-8 text-center text-xs text-ink-muted">
                   No web results matched your query and domain filters.
                 </div>
               ) : (
-                <div className="divide-y divide-[#2B334E] bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
+                <div className="divide-y divide-hairline bg-surface border border-hairline rounded-xl overflow-hidden">
                   {searchResult.results.map((item, idx) => {
                     const href = safeExternalHref(item.url);
                     const isExpanded = Boolean(expandedRawIdx[idx]);
@@ -852,7 +852,7 @@ print("Answer:", data.get("answer"))`,
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.22, delay: Math.min(idx * 0.04, 0.2) }}
-                        className="p-5 space-y-2 hover:bg-[#1F263D]/40 transition-colors"
+                        className="p-5 space-y-2 hover:bg-elevated/40 transition-colors"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 space-y-1">
@@ -861,18 +861,18 @@ print("Answer:", data.get("answer"))`,
                                 href={href}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-sm font-semibold text-white hover:text-indigo-400 transition-colors"
+                                className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink hover:text-indigo-400 transition-colors"
                               >
                                 <span className="truncate">{item.title}</span>
-                                <ExternalLink className="w-3.5 h-3.5 shrink-0 text-[#71717A]" />
+                                <ExternalLink className="w-3.5 h-3.5 shrink-0 text-ink-dim" />
                               </a>
                             ) : (
-                              <div className="text-sm font-semibold text-white">
+                              <div className="text-sm font-semibold text-ink">
                                 {item.title}
                               </div>
                             )}
 
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-[#8B8B95] font-mono tabular-nums">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted font-mono tabular-nums">
                               <span>{getHostname(item.url)}</span>
                               <span aria-hidden="true">·</span>
                               <span>{Math.round(item.score * 100)}% relevance</span>
@@ -894,7 +894,7 @@ print("Answer:", data.get("answer"))`,
                                   [idx]: !prev[idx],
                                 }))
                               }
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#1F263D] border border-[#343E5E] rounded-md whitespace-nowrap shrink-0"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-ink-2 hover:text-ink bg-elevated border border-hairline-strong rounded-md whitespace-nowrap shrink-0"
                             >
                               <FileText className="w-3.5 h-3.5 text-indigo-400" />
                               <span>
@@ -904,12 +904,12 @@ print("Answer:", data.get("answer"))`,
                           )}
                         </div>
 
-                        <p className="text-sm text-[#D4D4D8] leading-relaxed">
+                        <p className="text-sm text-ink-2 leading-relaxed">
                           {item.content}
                         </p>
 
                         {isExpanded && item.raw_content && (
-                          <pre className="mt-2 p-3.5 bg-[#101422] border border-[#2B334E] rounded-lg text-xs font-mono text-[#D4D4D8] overflow-x-auto max-h-72 whitespace-pre-wrap leading-relaxed">
+                          <pre className="mt-2 p-3.5 bg-canvas border border-hairline rounded-lg text-xs font-mono text-ink-2 overflow-x-auto max-h-72 whitespace-pre-wrap leading-relaxed">
                             {item.raw_content}
                           </pre>
                         )}
@@ -931,11 +931,11 @@ print("Answer:", data.get("answer"))`,
               e.preventDefault();
               void runExtract();
             }}
-            className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5 space-y-4"
+            className="bg-surface border border-hairline rounded-xl p-5 space-y-4"
           >
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-[#D4D4D8]">
+                <label className="block text-xs font-medium text-ink-2">
                   Target URLs (one per line, up to 20)
                 </label>
                 <button
@@ -951,13 +951,13 @@ print("Answer:", data.get("answer"))`,
                 value={extractUrlsText}
                 onChange={(e) => setExtractUrlsText(e.target.value)}
                 placeholder={"https://docs.example.com/guide\nhttps://example.com"}
-                className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3.5 py-2.5 text-xs font-mono text-white placeholder-[#71717A] focus:outline-none focus:border-indigo-500"
+                className="w-full bg-canvas border border-hairline rounded-lg px-3.5 py-2.5 text-xs font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">
                   Routing Engine
                 </label>
                 <select
@@ -967,7 +967,7 @@ print("Answer:", data.get("answer"))`,
                       e.target.value as "auto" | "tavily" | "exa" | "builtin"
                     )
                   }
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-2.5 py-2 text-xs text-ink focus:outline-none focus:border-indigo-500"
                 >
                   <option value="auto">Auto Failover</option>
                   <option value="builtin">Built-in Scraper</option>
@@ -977,7 +977,7 @@ print("Answer:", data.get("answer"))`,
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">
                   Format
                 </label>
                 <select
@@ -985,7 +985,7 @@ print("Answer:", data.get("answer"))`,
                   onChange={(e) =>
                     setExtractFormat(e.target.value as "markdown" | "text")
                   }
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-2.5 py-2 text-xs text-ink focus:outline-none focus:border-indigo-500"
                 >
                   <option value="markdown">Clean Markdown</option>
                   <option value="text">Plain Text</option>
@@ -993,7 +993,7 @@ print("Answer:", data.get("answer"))`,
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">
                   Extract Depth
                 </label>
                 <select
@@ -1001,7 +1001,7 @@ print("Answer:", data.get("answer"))`,
                   onChange={(e) =>
                     setExtractDepth(e.target.value as "basic" | "advanced")
                   }
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-2.5 py-2 text-xs text-ink focus:outline-none focus:border-indigo-500"
                 >
                   <option value="basic">Basic</option>
                   <option value="advanced">Advanced</option>
@@ -1009,7 +1009,7 @@ print("Answer:", data.get("answer"))`,
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">
                   Focus Query (Optional)
                 </label>
                 <input
@@ -1017,7 +1017,7 @@ print("Answer:", data.get("answer"))`,
                   value={extractFocusQuery}
                   onChange={(e) => setExtractFocusQuery(e.target.value)}
                   placeholder="Filter relevant chunks..."
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs text-white placeholder-[#71717A] focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-xs text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
@@ -1053,15 +1053,15 @@ print("Answer:", data.get("answer"))`,
 
           {running && (
             <div className="space-y-3">
-              <div className="h-36 bg-[#171C2E] border border-[#2B334E] rounded-xl animate-pulse" />
-              <div className="h-36 bg-[#171C2E] border border-[#2B334E] rounded-xl animate-pulse" />
+              <div className="h-36 bg-surface border border-hairline rounded-xl animate-pulse" />
+              <div className="h-36 bg-surface border border-hairline rounded-xl animate-pulse" />
             </div>
           )}
 
           {!running && extractResult && viewFormat === "json" && (
-            <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-[#2B334E] flex items-center justify-between">
-                <span className="font-mono text-xs text-[#A1A1AA]">
+            <div className="bg-surface border border-hairline rounded-xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-hairline flex items-center justify-between">
+                <span className="font-mono text-xs text-ink-muted">
                   POST /v1/extract response
                 </span>
                 <button
@@ -1073,7 +1073,7 @@ print("Answer:", data.get("answer"))`,
                       "JSON"
                     )
                   }
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#343E5E] rounded-md"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline-strong rounded-md"
                 >
                   {copiedId === "extract-json" ? (
                     <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -1083,7 +1083,7 @@ print("Answer:", data.get("answer"))`,
                   <span>Copy JSON</span>
                 </button>
               </div>
-              <pre className="p-4 text-xs font-mono text-[#E4E4E7] overflow-x-auto max-h-[560px] leading-relaxed">
+              <pre className="p-4 text-xs font-mono text-ink-2 overflow-x-auto max-h-[560px] leading-relaxed">
                 {JSON.stringify(extractResult, null, 2)}
               </pre>
             </div>
@@ -1091,7 +1091,7 @@ print("Answer:", data.get("answer"))`,
 
           {!running && extractResult && viewFormat === "formatted" && (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-[#A1A1AA] font-mono tabular-nums">
+              <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-ink-muted font-mono tabular-nums">
                 <span
                   className="font-semibold"
                   style={{
@@ -1121,11 +1121,11 @@ print("Answer:", data.get("answer"))`,
                 return (
                   <div
                     key={`${item.url}-${idx}`}
-                    className="bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden"
+                    className="bg-surface border border-hairline rounded-xl overflow-hidden"
                   >
-                    <div className="px-4 py-3 border-b border-[#2B334E] flex items-center justify-between gap-3">
+                    <div className="px-4 py-3 border-b border-hairline flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-white truncate">
+                        <div className="text-sm font-medium text-ink truncate">
                           {item.title || getHostname(item.url)}
                         </div>
                         {href && (
@@ -1133,7 +1133,7 @@ print("Answer:", data.get("answer"))`,
                             href={href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-mono text-[#8B8B95] hover:text-indigo-400 truncate max-w-full"
+                            className="inline-flex items-center gap-1 text-xs font-mono text-ink-muted hover:text-indigo-400 truncate max-w-full"
                           >
                             <span className="truncate">{item.url}</span>
                             <ExternalLink className="w-3 h-3 shrink-0" />
@@ -1149,7 +1149,7 @@ print("Answer:", data.get("answer"))`,
                             "Extracted content"
                           )
                         }
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#1F263D] border border-[#343E5E] rounded-md whitespace-nowrap shrink-0"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-ink-2 hover:text-ink bg-elevated border border-hairline-strong rounded-md whitespace-nowrap shrink-0"
                       >
                         {copiedId === `extract-${idx}` ? (
                           <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -1159,7 +1159,7 @@ print("Answer:", data.get("answer"))`,
                         <span>Copy</span>
                       </button>
                     </div>
-                    <pre className="p-4 text-xs font-mono text-[#E4E4E7] overflow-x-auto max-h-80 whitespace-pre-wrap leading-relaxed bg-[#101422]">
+                    <pre className="p-4 text-xs font-mono text-ink-2 overflow-x-auto max-h-80 whitespace-pre-wrap leading-relaxed bg-canvas">
                       {item.raw_content}
                     </pre>
                   </div>
@@ -1167,7 +1167,7 @@ print("Answer:", data.get("answer"))`,
               })}
 
               {extractResult.failed_results.length > 0 && (
-                <div className="bg-[#171C2E] border border-red-500/30 rounded-xl p-4 space-y-2">
+                <div className="bg-surface border border-red-500/30 rounded-xl p-4 space-y-2">
                   <div className="text-xs font-medium text-red-400">
                     Failed URLs
                   </div>
@@ -1177,7 +1177,7 @@ print("Answer:", data.get("answer"))`,
                       className="text-xs font-mono text-red-300 flex flex-wrap items-center justify-between gap-2"
                     >
                       <span className="truncate">{fail.url}</span>
-                      <span className="text-[#A1A1AA]">{fail.error}</span>
+                      <span className="text-ink-muted">{fail.error}</span>
                     </div>
                   ))}
                 </div>
@@ -1189,8 +1189,8 @@ print("Answer:", data.get("answer"))`,
 
       {/* SDK MODE */}
       {mode === "sdk" && (
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-[#2B334E] flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-surface border border-hairline rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-hairline flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex items-center gap-1">
               {(
                 [
@@ -1205,8 +1205,8 @@ print("Answer:", data.get("answer"))`,
                   onClick={() => setSdkTab(tabId)}
                   className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                     sdkTab === tabId
-                      ? "bg-[#1F263D] text-indigo-400"
-                      : "text-[#A1A1AA] hover:text-white"
+                      ? "bg-elevated text-indigo-400"
+                      : "text-ink-muted hover:text-ink"
                   }`}
                 >
                   {label}
@@ -1219,7 +1219,7 @@ print("Answer:", data.get("answer"))`,
               onClick={() =>
                 copyText("sdk-code", sdkSnippets[sdkTab], "Code snippet")
               }
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#343E5E] rounded-md"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline-strong rounded-md"
             >
               {copiedId === "sdk-code" ? (
                 <>
@@ -1234,7 +1234,7 @@ print("Answer:", data.get("answer"))`,
               )}
             </button>
           </div>
-          <pre className="p-5 font-mono text-xs text-[#E4E4E7] overflow-x-auto leading-relaxed bg-[#101422]">
+          <pre className="p-5 font-mono text-xs text-ink-2 overflow-x-auto leading-relaxed bg-canvas">
             {sdkSnippets[sdkTab]}
           </pre>
         </div>

@@ -73,7 +73,7 @@ function ModelCombobox({
   options,
   placeholder,
   ariaLabel,
-  inputClassName = "w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500",
+  inputClassName = "w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-xs font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500",
 }: {
   id?: string;
   value: string;
@@ -176,7 +176,7 @@ function ModelCombobox({
             return next;
           });
         }}
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-[#71717A] hover:text-white transition-colors"
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-ink-dim hover:text-ink transition-colors"
       >
         <ChevronDown
           className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`}
@@ -186,7 +186,7 @@ function ModelCombobox({
       {open && filtered.length > 0 && (
         <div
           role="listbox"
-          className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-[#101422] border border-[#2B334E] rounded-lg shadow-2xl z-40 py-1 divide-y divide-[#1A2036]"
+          className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-canvas border border-hairline rounded-lg shadow-2xl z-40 py-1 divide-y divide-hairline"
         >
           {filtered.map((opt, idx) => {
             const isSelected = opt.value === value;
@@ -208,20 +208,20 @@ function ModelCombobox({
                   isSelected
                     ? "bg-indigo-500/15 text-indigo-300"
                     : isActive
-                      ? "bg-[#1F263D] text-white"
-                      : "text-[#D4D4D8] hover:bg-[#171C2E]"
+                      ? "bg-elevated text-ink"
+                      : "text-ink-2 hover:bg-surface"
                 }`}
               >
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-xs truncate">{opt.value}</div>
                   {opt.label && opt.label !== opt.value && (
-                    <div className="text-[10px] text-[#71717A] truncate">
+                    <div className="text-[10px] text-ink-dim truncate">
                       {opt.label}
                     </div>
                   )}
                 </div>
                 {opt.group && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#171C2E] border border-[#2B334E] text-[#94A3B8] shrink-0">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface border border-hairline text-ink-muted shrink-0">
                     {opt.group}
                   </span>
                 )}
@@ -802,7 +802,7 @@ export function CombosView({
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h2 className="font-display text-lg font-semibold text-white">
+        <h2 className="font-display text-lg font-semibold text-ink">
           Combos
         </h2>
         <div className="flex items-center gap-2.5 flex-wrap">
@@ -810,7 +810,7 @@ export function CombosView({
             type="button"
             onClick={handleAutoBuildFreeCombo}
             disabled={llmConnections.length === 0 || buildingFreeAuto}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] disabled:opacity-50 text-[#D4D4D8] hover:text-white border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-surface hover:bg-elevated disabled:opacity-50 text-ink-2 hover:text-ink border border-hairline rounded-lg transition-colors whitespace-nowrap shrink-0"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
             <span>
@@ -830,24 +830,24 @@ export function CombosView({
       </div>
 
       {llmConnections.length === 0 && connections.some((c) => isSearchProvider(c.provider)) && (
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg px-4 py-3 text-xs text-[#A1A1AA]">
-          Web Search providers (Tavily, Brave Search, Exa) are kept separate in the <span className="text-white font-medium">Search</span> tab and cannot be combined with AI models. Connect at least one AI model provider to build combos.
+        <div className="bg-surface border border-hairline rounded-lg px-4 py-3 text-xs text-ink-muted">
+          Web Search providers (Tavily, Brave Search, Exa) are kept separate in the <span className="text-ink font-medium">Search</span> tab and cannot be combined with AI models. Connect at least one AI model provider to build combos.
         </div>
       )}
 
       {/* Ready-Made Combo Templates */}
-      <section className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5 space-y-4">
+      <section className="bg-surface border border-hairline rounded-xl p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-display text-sm font-semibold text-white">
+              <h3 className="font-display text-sm font-semibold text-ink">
                 Ready-Made Combos
               </h3>
-              <span className="px-2 py-0.5 text-[11px] font-mono rounded bg-[#1F263D] border border-[#343E5E] text-[#A1A1AA]">
+              <span className="px-2 py-0.5 text-[11px] font-mono rounded bg-elevated border border-hairline-strong text-ink-muted">
                 {READY_MADE_COMBO_PRESETS.length} presets
               </span>
             </div>
-            <p className="mt-0.5 text-xs text-[#8B8B95]">
+            <p className="mt-0.5 text-xs text-ink-muted">
               1-click auto-configured failover combos built from your connected providers.
             </p>
           </div>
@@ -855,7 +855,7 @@ export function CombosView({
             type="button"
             onClick={handleBuildAllPresetCombos}
             disabled={llmConnections.length === 0 || creatingAllPresets}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] disabled:opacity-50 text-[#FAFAFA] border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-elevated hover:bg-subtle disabled:opacity-50 text-ink border border-hairline-strong rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
           >
             <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
             <span>
@@ -881,7 +881,7 @@ export function CombosView({
                 key={preset.id}
                 whileHover={{ y: -2 }}
                 transition={{ duration: 0.2 }}
-                className="relative overflow-hidden bg-[#101422] border border-[#2B334E] hover:border-[#3A4260] rounded-lg p-3.5 flex flex-col justify-between gap-3 transition-colors"
+                className="relative overflow-hidden bg-canvas border border-hairline hover:border-hairline-strong rounded-lg p-3.5 flex flex-col justify-between gap-3 transition-colors"
               >
                 <span
                   className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-80"
@@ -902,7 +902,7 @@ export function CombosView({
                       >
                         {preset.badge}
                       </span>
-                      <span className="font-mono text-xs font-semibold text-white truncate">
+                      <span className="font-mono text-xs font-semibold text-ink truncate">
                         {preset.name}
                       </span>
                     </div>
@@ -912,13 +912,13 @@ export function CombosView({
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-[#8B8B95] leading-relaxed">
+                  <div className="text-xs text-ink-muted leading-relaxed">
                     {preset.description}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#28304A]">
-                  <span className="text-[11px] text-[#71717A] truncate">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-hairline">
+                  <span className="text-[11px] text-ink-dim truncate">
                     {stratSpec?.label.split(" ")[0] || preset.strategy}
                     {preset.freeOnly ? " · Free-only" : ""}
                     {preset.enableCache ? " · Cached" : ""}
@@ -929,7 +929,7 @@ export function CombosView({
                     onClick={() => handleBuildPresetCombo(preset)}
                     className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap shrink-0 disabled:opacity-50 ${
                       existingCombo
-                        ? "bg-[#1F263D] hover:bg-[#2B334E] text-[#E4E4E7] border border-[#343E5E]"
+                        ? "bg-elevated hover:bg-subtle text-ink-2 border border-hairline-strong"
                         : "bg-gradient-to-r from-indigo-500 to-sky-500 hover:brightness-110 text-white"
                     }`}
                   >
@@ -948,9 +948,9 @@ export function CombosView({
 
       {/* Combos List */}
       {combos.length === 0 ? (
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-10 text-center">
-          <p className="text-sm font-medium text-white">No combos yet</p>
-          <p className="mt-1 text-xs text-[#71717A]">
+        <div className="bg-surface border border-hairline rounded-lg p-10 text-center">
+          <p className="text-sm font-medium text-ink">No combos yet</p>
+          <p className="mt-1 text-xs text-ink-dim">
             Pick any Ready-Made Combo above or create a custom failover combo.
           </p>
         </div>
@@ -967,7 +967,7 @@ export function CombosView({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
-                className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] rounded-lg p-5 flex flex-col justify-between"
+                className="relative overflow-hidden bg-surface border border-hairline rounded-lg p-5 flex flex-col justify-between"
               >
                 <span
                   className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-80"
@@ -979,7 +979,7 @@ export function CombosView({
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono text-base font-semibold text-white truncate">
+                        <span className="font-mono text-base font-semibold text-ink truncate">
                           {combo.name}
                         </span>
                         <button
@@ -990,7 +990,7 @@ export function CombosView({
                           className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded border transition-colors shrink-0 ${
                             copiedComboId === combo.id
                               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                              : "border-[#2B334E] bg-[#101422] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
+                              : "border-hairline bg-canvas text-ink-muted hover:text-ink hover:border-hairline-strong"
                           }`}
                         >
                           {copiedComboId === combo.id ? (
@@ -1006,7 +1006,7 @@ export function CombosView({
                           )}
                         </button>
                       </div>
-                      <div className="mt-1 text-xs text-[#A1A1AA] flex flex-wrap items-center gap-x-1.5">
+                      <div className="mt-1 text-xs text-ink-muted flex flex-wrap items-center gap-x-1.5">
                         <span>{stratSpec?.label || combo.strategy}</span>
                         <span>·</span>
                         <span>{combo.tiers.length} tiers</span>
@@ -1037,7 +1037,7 @@ export function CombosView({
                         type="button"
                         onClick={() => openEditBuilder(combo)}
                         title="Edit combo"
-                        className="p-1 text-[#A1A1AA] hover:text-white transition-colors"
+                        className="p-1 text-ink-muted hover:text-ink transition-colors"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -1047,7 +1047,7 @@ export function CombosView({
                         className={`text-xs font-medium transition-colors whitespace-nowrap ${
                           combo.isActive
                             ? "text-emerald-400 hover:text-emerald-300"
-                            : "text-[#A1A1AA] hover:text-white"
+                            : "text-ink-muted hover:text-ink"
                         }`}
                       >
                         {combo.isActive ? "Active" : "Paused"}
@@ -1066,7 +1066,7 @@ export function CombosView({
                         className={`p-1 transition-colors ${
                           confirmDeleteId === combo.id
                             ? "text-xs font-medium text-red-300 underline underline-offset-2"
-                            : "text-[#A1A1AA] hover:text-red-400"
+                            : "text-ink-muted hover:text-red-400"
                         }`}
                       >
                         {confirmDeleteId === combo.id ? (
@@ -1079,12 +1079,12 @@ export function CombosView({
                   </div>
 
                   {combo.description && (
-                    <p className="mt-2 text-xs text-[#A1A1AA]">
+                    <p className="mt-2 text-xs text-ink-muted">
                       {combo.description}
                     </p>
                   )}
 
-                  <div className="mt-4 border-t border-[#2B334E] divide-y divide-[#2B334E]">
+                  <div className="mt-4 border-t border-hairline divide-y divide-hairline">
                     {combo.tiers.map((tier, idx) => {
                       const conn = connMap.get(tier.connectionId);
                       const tierVisual = getProviderVisual(
@@ -1096,7 +1096,7 @@ export function CombosView({
                           className="py-2.5 flex items-center justify-between gap-3 text-xs"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <span className="font-mono text-[#A1A1AA] tabular-nums w-5">
+                            <span className="font-mono text-ink-muted tabular-nums w-5">
                               #{idx + 1}
                             </span>
                             <span
@@ -1110,10 +1110,10 @@ export function CombosView({
                               {tierVisual.short}
                             </span>
                             <div className="min-w-0">
-                              <div className="font-mono text-[#F3F4F6] truncate">
+                              <div className="font-mono text-ink truncate">
                                 {tier.upstreamModel}
                               </div>
-                              <div className="text-[#A1A1AA] truncate">
+                              <div className="text-ink-muted truncate">
                                 {conn?.name || "Unknown"} ·{" "}
                                 <span style={{ color: tierVisual.color }}>
                                   {conn ? getConnectionPrefix(conn) : "custom"}
@@ -1121,7 +1121,7 @@ export function CombosView({
                               </div>
                             </div>
                           </div>
-                          <div className="font-mono text-[#A1A1AA] tabular-nums shrink-0 text-right">
+                          <div className="font-mono text-ink-muted tabular-nums shrink-0 text-right">
                             <span>w:{tier.weight}</span>
                             <span className="mx-1.5">·</span>
                             <span>{tier.requestCount} reqs</span>
@@ -1140,8 +1140,8 @@ export function CombosView({
       {/* Wildcards & Dry-Run Route Simulator */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Wildcard Model Mappings */}
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-5">
-          <h3 className="font-display text-base font-semibold text-white">
+        <div className="bg-surface border border-hairline rounded-lg p-5">
+          <h3 className="font-display text-base font-semibold text-ink">
             Wildcard Routes
           </h3>
 
@@ -1152,13 +1152,13 @@ export function CombosView({
               placeholder="e.g. gpt-4*"
               value={wcPattern}
               onChange={(e) => setWcPattern(e.target.value)}
-              className="w-full sm:w-40 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+              className="w-full sm:w-40 bg-canvas border border-hairline rounded-lg px-3 py-2 text-xs font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
             />
             <select
               value={wcComboId}
               onChange={(e) => setWcComboId(e.target.value)}
               disabled={combos.length === 0}
-              className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+              className="flex-1 bg-canvas border border-hairline rounded-lg px-3 py-2 text-xs text-ink focus:outline-none focus:border-indigo-500 disabled:opacity-50"
             >
               <option value="">
                 {combos.length === 0 ? "Create a combo first..." : "Select target combo..."}
@@ -1172,20 +1172,20 @@ export function CombosView({
             <button
               type="submit"
               disabled={!wcPattern.trim() || !wcComboId || combos.length === 0}
-              className="px-3.5 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#1F2937] disabled:opacity-50 text-white border border-[#2B334E] rounded-lg whitespace-nowrap"
+              className="px-3.5 py-2 text-xs font-medium bg-elevated hover:bg-elevated disabled:opacity-50 text-ink border border-hairline rounded-lg whitespace-nowrap"
             >
               Add Rule
             </button>
           </form>
           {combos.length === 0 && (
-            <p className="mt-2 text-[11px] text-[#94A3B8]">
+            <p className="mt-2 text-[11px] text-ink-muted">
               Wildcard rules redirect matching model aliases to a Combo. Create a combo above first.
             </p>
           )}
 
-          <div className="mt-4 border-t border-[#2B334E] divide-y divide-[#2B334E]">
+          <div className="mt-4 border-t border-hairline divide-y divide-hairline">
             {wildcards.length === 0 ? (
-              <p className="py-5 text-xs text-[#A1A1AA] text-center">
+              <p className="py-5 text-xs text-ink-muted text-center">
                 No wildcard mappings configured.
               </p>
             ) : (
@@ -1199,12 +1199,12 @@ export function CombosView({
                     <div className="font-mono min-w-0 truncate">
                       <span
                         className={
-                          wc.isActive ? "text-white" : "text-[#71717A] line-through"
+                          wc.isActive ? "text-ink" : "text-ink-dim line-through"
                         }
                       >
                         {wc.pattern}
                       </span>
-                      <span className="mx-2 text-[#A1A1AA]">→</span>
+                      <span className="mx-2 text-ink-muted">→</span>
                       <span className="text-indigo-400">
                         {target?.name || "Deleted combo"}
                       </span>
@@ -1216,7 +1216,7 @@ export function CombosView({
                         className={`text-xs font-medium transition-colors ${
                           wc.isActive
                             ? "text-emerald-400 hover:text-emerald-300"
-                            : "text-[#A1A1AA] hover:text-white"
+                            : "text-ink-muted hover:text-ink"
                         }`}
                       >
                         {wc.isActive ? "Active" : "Paused"}
@@ -1224,7 +1224,7 @@ export function CombosView({
                       <button
                         type="button"
                         onClick={() => handleDeleteWildcard(wc.id)}
-                        className="text-[#A1A1AA] hover:text-red-400"
+                        className="text-ink-muted hover:text-red-400"
                         title="Delete wildcard"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1238,8 +1238,8 @@ export function CombosView({
         </div>
 
         {/* Dry-Run Route Simulator */}
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-5 space-y-3">
-          <h3 className="font-display text-base font-semibold text-white">
+        <div className="bg-surface border border-hairline rounded-lg p-5 space-y-3">
+          <h3 className="font-display text-base font-semibold text-ink">
             Dry-Run Simulator
           </h3>
 
@@ -1247,7 +1247,7 @@ export function CombosView({
             <div>
               <label
                 htmlFor="combo-sim-model"
-                className="block text-xs text-[#A1A1AA] mb-1.5"
+                className="block text-xs text-ink-muted mb-1.5"
               >
                 Combo or model alias
               </label>
@@ -1265,7 +1265,7 @@ export function CombosView({
                 <button
                   type="submit"
                   disabled={simRunning}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] border border-[#343E5E] text-white rounded-lg whitespace-nowrap transition-colors shrink-0"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-elevated hover:bg-subtle border border-hairline-strong text-ink rounded-lg whitespace-nowrap transition-colors shrink-0"
                 >
                   <Play className="w-3.5 h-3.5 text-indigo-400" />
                   <span>{simRunning ? "Simulating..." : "Run"}</span>
@@ -1276,7 +1276,7 @@ export function CombosView({
             <div>
               <label
                 htmlFor="combo-sim-prompt"
-                className="block text-xs text-[#A1A1AA] mb-1.5"
+                className="block text-xs text-ink-muted mb-1.5"
               >
                 Sample prompt
               </label>
@@ -1286,7 +1286,7 @@ export function CombosView({
                 placeholder="Enter a test prompt to inspect intent & tier order..."
                 value={simPrompt}
                 onChange={(e) => setSimPrompt(e.target.value)}
-                className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-xs text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
               />
             </div>
 
@@ -1296,8 +1296,8 @@ export function CombosView({
                 onClick={() => setSimHasTools((v) => !v)}
                 className={`px-3 py-1.5 rounded-lg border transition-colors ${
                   simHasTools
-                    ? "bg-[#1F263D] border-indigo-500/50 text-indigo-300"
-                    : "bg-[#101422] border-[#2B334E] text-[#A1A1AA] hover:text-white"
+                    ? "bg-elevated border-indigo-500/50 text-indigo-300"
+                    : "bg-canvas border-hairline text-ink-muted hover:text-ink"
                 }`}
               >
                 Tools
@@ -1307,8 +1307,8 @@ export function CombosView({
                 onClick={() => setSimHasImage((v) => !v)}
                 className={`px-3 py-1.5 rounded-lg border transition-colors ${
                   simHasImage
-                    ? "bg-[#1F263D] border-indigo-500/50 text-indigo-300"
-                    : "bg-[#101422] border-[#2B334E] text-[#A1A1AA] hover:text-white"
+                    ? "bg-elevated border-indigo-500/50 text-indigo-300"
+                    : "bg-canvas border-hairline text-ink-muted hover:text-ink"
                 }`}
               >
                 Image
@@ -1318,8 +1318,8 @@ export function CombosView({
                 onClick={() => setSimFreeOnly((v) => !v)}
                 className={`px-3 py-1.5 rounded-lg border transition-colors ${
                   simFreeOnly
-                    ? "bg-[#1F263D] border-emerald-500/50 text-emerald-300"
-                    : "bg-[#101422] border-[#2B334E] text-[#A1A1AA] hover:text-white"
+                    ? "bg-elevated border-emerald-500/50 text-emerald-300"
+                    : "bg-canvas border-hairline text-ink-muted hover:text-ink"
                 }`}
               >
                 Free only
@@ -1329,7 +1329,7 @@ export function CombosView({
 
           {llmConnections.length > 0 && (
             <div className="pt-1">
-              <div className="text-xs text-[#A1A1AA] mb-1.5">
+              <div className="text-xs text-ink-muted mb-1.5">
                 Simulate 429 faults:
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1349,7 +1349,7 @@ export function CombosView({
                       className={`px-2.5 py-1 text-xs rounded-lg border transition-colors whitespace-nowrap ${
                         active
                           ? "bg-red-500/15 border-red-500/40 text-red-300"
-                          : "bg-[#101422] border-[#2B334E] text-[#A1A1AA] hover:text-white"
+                          : "bg-canvas border-hairline text-ink-muted hover:text-ink"
                       }`}
                     >
                       {c.name}
@@ -1367,12 +1367,12 @@ export function CombosView({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                className="pt-3 border-t border-[#2B334E] space-y-2"
+                className="pt-3 border-t border-hairline space-y-2"
               >
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="text-[#A1A1AA]">
+                <span className="text-ink-muted">
                   Strategy{" "}
-                  <span className="text-white font-mono">
+                  <span className="text-ink font-mono">
                     {simResult.strategy}
                   </span>
                   {simResult.detectedIntent && (
@@ -1394,13 +1394,13 @@ export function CombosView({
                     : "No eligible tier"}
                 </span>
               </div>
-              <div className="divide-y divide-[#2B334E] border border-[#2B334E] rounded-lg bg-[#101422]">
+              <div className="divide-y divide-hairline border border-hairline rounded-lg bg-canvas">
                 {simResult.steps.map((step) => (
                   <div
                     key={`${step.order}-${step.connectionId}-${step.model}`}
                     className="px-3 py-2 flex items-center justify-between gap-2 text-xs"
                   >
-                    <div className="font-mono text-[#D4D4D8] truncate">
+                    <div className="font-mono text-ink-2 truncate">
                       #{step.order} {step.connectionName} → {step.model}
                     </div>
                     <div
@@ -1409,7 +1409,7 @@ export function CombosView({
                           ? "text-emerald-400"
                           : step.decision === "fallback_failed"
                             ? "text-amber-400"
-                            : "text-[#A1A1AA]"
+                            : "text-ink-muted"
                       }`}
                     >
                       {step.reason}
@@ -1445,12 +1445,12 @@ export function CombosView({
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-2xl bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto outline-none"
+              className="w-full max-w-2xl bg-surface border border-hairline rounded-xl p-6 max-h-[90vh] overflow-y-auto outline-none"
             >
-            <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline">
               <h3
                 id="combo-builder-title"
-                className="font-display text-base font-semibold text-white"
+                className="font-display text-base font-semibold text-ink"
               >
                 {editingComboId
                   ? "Edit Routing Combo"
@@ -1460,7 +1460,7 @@ export function CombosView({
                 type="button"
                 aria-label="Close modal"
                 onClick={() => setShowBuilder(false)}
-                className="text-[#A1A1AA] hover:text-white"
+                className="text-ink-muted hover:text-ink"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1471,7 +1471,7 @@ export function CombosView({
                 <div>
                   <label
                     htmlFor="combo-alias-input"
-                    className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                    className="block text-xs font-medium text-ink-2 mb-1.5"
                   >
                     Virtual Model Alias
                   </label>
@@ -1482,14 +1482,14 @@ export function CombosView({
                     placeholder="e.g. production-chat"
                     value={comboName}
                     onChange={(e) => setComboName(e.target.value)}
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
                   <label
                     htmlFor="combo-strategy-select"
-                    className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                    className="block text-xs font-medium text-ink-2 mb-1.5"
                   >
                     Balancing Strategy
                   </label>
@@ -1497,7 +1497,7 @@ export function CombosView({
                     id="combo-strategy-select"
                     value={strategy}
                     onChange={(e) => setStrategy(e.target.value)}
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-indigo-500"
                   >
                     {ROUTING_STRATEGIES.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -1509,7 +1509,7 @@ export function CombosView({
               </div>
 
               {selectedStrategySpec && (
-                <p className="text-xs text-[#A1A1AA]">
+                <p className="text-xs text-ink-muted">
                   {selectedStrategySpec.description}
                 </p>
               )}
@@ -1517,7 +1517,7 @@ export function CombosView({
               <div>
                 <label
                   htmlFor="combo-description-input"
-                  className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                  className="block text-xs font-medium text-ink-2 mb-1.5"
                 >
                   Description (Optional)
                 </label>
@@ -1527,11 +1527,11 @@ export function CombosView({
                   placeholder="e.g. Primary fast model with paid fallback"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="divide-y divide-[#28304A] border-y border-[#28304A] py-1">
+              <div className="divide-y divide-hairline border-y border-hairline py-1">
                 <ToggleSwitch
                   checked={compressPrompt}
                   onChange={setCompressPrompt}
@@ -1554,7 +1554,7 @@ export function CombosView({
 
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-[#D4D4D8]">
+                  <span className="text-xs font-medium text-ink-2">
                     AI Provider Tiers (Drag handles to reorder fallback · Search providers excluded)
                   </span>
                   <button
@@ -1595,15 +1595,15 @@ export function CombosView({
                           setDragIndex(null);
                           setDragOverIndex(null);
                         }}
-                        className={`p-3 bg-[#101422] border rounded-lg grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center transition-colors ${
+                        className={`p-3 bg-canvas border rounded-lg grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center transition-colors ${
                           isDropTarget
                             ? "border-indigo-500"
                             : isDragged
-                              ? "border-[#374151] opacity-60"
-                              : "border-[#2B334E]"
+                              ? "border-hairline-strong opacity-60"
+                              : "border-hairline"
                         }`}
                       >
-                        <div className="sm:col-span-1 flex items-center gap-1.5 text-[#A1A1AA] cursor-grab active:cursor-grabbing">
+                        <div className="sm:col-span-1 flex items-center gap-1.5 text-ink-muted cursor-grab active:cursor-grabbing">
                           <GripVertical className="w-4 h-4 shrink-0" />
                           <span className="font-mono text-xs tabular-nums">
                             {idx + 1}
@@ -1626,7 +1626,7 @@ export function CombosView({
                                   tier.upstreamModel,
                               });
                             }}
-                            className="w-full bg-[#171C2E] border border-[#2B334E] rounded-md px-2.5 py-1.5 text-xs text-white"
+                            className="w-full bg-surface border border-hairline rounded-md px-2.5 py-1.5 text-xs text-ink"
                           >
                             {llmConnections.map((c) => (
                               <option key={c.id} value={c.id}>
@@ -1644,7 +1644,7 @@ export function CombosView({
                             onChange={(val) =>
                               updateTier(idx, { upstreamModel: val })
                             }
-                            inputClassName="w-full bg-[#171C2E] border border-[#2B334E] rounded-md px-2.5 py-1.5 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                            inputClassName="w-full bg-surface border border-hairline rounded-md px-2.5 py-1.5 text-xs font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                             options={Array.from(
                               new Map<string, ComboboxOption>([
                                 ...(conn?.defaultModel
@@ -1694,7 +1694,7 @@ export function CombosView({
                               })
                             }
                             title="Weight"
-                            className="w-1/2 bg-[#171C2E] border border-[#2B334E] rounded-md px-1.5 py-1.5 text-xs font-mono text-white text-center"
+                            className="w-1/2 bg-surface border border-hairline rounded-md px-1.5 py-1.5 text-xs font-mono text-ink text-center"
                           />
                           <select
                             value={tier.maxRetries}
@@ -1705,7 +1705,7 @@ export function CombosView({
                             }
                             title="Retries per request"
                             aria-label="Tier max retries"
-                            className="w-1/2 bg-[#171C2E] border border-[#2B334E] rounded-md px-1 py-1.5 text-xs font-mono text-[#D4D4D8]"
+                            className="w-1/2 bg-surface border border-hairline rounded-md px-1 py-1.5 text-xs font-mono text-ink-2"
                           >
                             <option value={1}>1x</option>
                             <option value={2}>2x</option>
@@ -1719,7 +1719,7 @@ export function CombosView({
                             aria-label={`Move tier ${idx + 1} up`}
                             onClick={() => reorderTiers(idx, idx - 1)}
                             disabled={idx === 0}
-                            className="p-1 text-[#A1A1AA] hover:text-white disabled:opacity-30"
+                            className="p-1 text-ink-muted hover:text-ink disabled:opacity-30"
                           >
                             <ArrowUp className="w-3.5 h-3.5" />
                           </button>
@@ -1728,7 +1728,7 @@ export function CombosView({
                             aria-label={`Move tier ${idx + 1} down`}
                             onClick={() => reorderTiers(idx, idx + 1)}
                             disabled={idx === tiers.length - 1}
-                            className="p-1 text-[#A1A1AA] hover:text-white disabled:opacity-30"
+                            className="p-1 text-ink-muted hover:text-ink disabled:opacity-30"
                           >
                             <ArrowDown className="w-3.5 h-3.5" />
                           </button>
@@ -1741,7 +1741,7 @@ export function CombosView({
                               )
                             }
                             disabled={tiers.length <= 1}
-                            className="p-1 text-[#A1A1AA] hover:text-red-400 disabled:opacity-30"
+                            className="p-1 text-ink-muted hover:text-red-400 disabled:opacity-30"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1752,11 +1752,11 @@ export function CombosView({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-[#2B334E] flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-hairline flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowBuilder(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg whitespace-nowrap"
+                  className="px-4 py-2 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline rounded-lg whitespace-nowrap"
                 >
                   Cancel
                 </button>

@@ -14,6 +14,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle.tsx";
 
 interface LandingPageProps {
   onOpenAuth: (mode: "signin" | "signup") => void;
@@ -26,7 +27,7 @@ const ORBIT_PROVIDERS = [
     id: "gemini",
     name: "Google Gemini",
     short: "G",
-    color: "#60A5FA",
+    color: "#3B82F6",
     angle: 35,
     ring: 1,
     models: ["gemini-4-hydrogen", "gemini-4-neon", "gemini-4-carbon"],
@@ -35,7 +36,7 @@ const ORBIT_PROVIDERS = [
     id: "openai",
     name: "OpenAI",
     short: "O",
-    color: "#FAFAFA",
+    color: "#10B981",
     angle: 115,
     ring: 2,
     models: ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-terra", "gpt-6-luna"],
@@ -44,7 +45,7 @@ const ORBIT_PROVIDERS = [
     id: "anthropic",
     name: "Anthropic",
     short: "A",
-    color: "#6467F2",
+    color: "var(--accent-primary)",
     angle: 205,
     ring: 1,
     models: [
@@ -58,7 +59,7 @@ const ORBIT_PROVIDERS = [
     id: "deepseek",
     name: "DeepSeek",
     short: "D",
-    color: "#38BDF8",
+    color: "#0284C7",
     angle: 295,
     ring: 2,
     models: ["deepseek-flash", "deepseek-v4-pro"],
@@ -67,7 +68,7 @@ const ORBIT_PROVIDERS = [
     id: "groq",
     name: "Groq",
     short: "Q",
-    color: "#F97316",
+    color: "#EA580C",
     angle: 162,
     ring: 3,
     models: ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "llama-4-scout-17b"],
@@ -76,7 +77,7 @@ const ORBIT_PROVIDERS = [
     id: "mistral",
     name: "Mistral AI",
     short: "M",
-    color: "#818CF8",
+    color: "#D97706",
     angle: 342,
     ring: 3,
     models: ["mistral-large-latest", "mistral-small-latest", "ministral-8b-latest"],
@@ -85,7 +86,7 @@ const ORBIT_PROVIDERS = [
     id: "openrouter",
     name: "OpenRouter",
     short: "R",
-    color: "#EC4899",
+    color: "#DB2777",
     angle: 78,
     ring: 3,
     models: [
@@ -101,21 +102,21 @@ const EXTRA_POPULAR_PROVIDERS = [
     id: "xai",
     name: "xAI (Grok)",
     short: "X",
-    color: "#E4E4E7",
+    color: "#6366F1",
     models: ["grok-4.7", "grok-4.6", "grok-4.20", "grok-3-mini"],
   },
   {
     id: "cerebras",
     name: "Cerebras",
     short: "Cb",
-    color: "#22D3EE",
+    color: "#0891B2",
     models: ["qwen-3.8-27b", "gpt-oss-120b", "llama-3.3-70b"],
   },
   {
     id: "together",
     name: "Together AI",
     short: "T",
-    color: "#818CF8",
+    color: "#8B5CF6",
     models: [
       "deepseek-ai/DeepSeek-V4",
       "Qwen/Qwen3.8-27B-Instruct",
@@ -126,14 +127,14 @@ const EXTRA_POPULAR_PROVIDERS = [
     id: "fireworks",
     name: "Fireworks AI",
     short: "Fw",
-    color: "#FB923C",
+    color: "#EA580C",
     models: ["deepseek-v4-pro", "kimi-k3-instruct", "llama4-maverick"],
   },
   {
     id: "perplexity",
     name: "Perplexity",
     short: "Px",
-    color: "#2DD4BF",
+    color: "#0D9488",
     models: ["sonar", "sonar-pro", "sonar-reasoning-pro"],
   },
 ];
@@ -468,14 +469,14 @@ const msg = await client.messages.create({
   };
 
   return (
-    <div className="min-h-screen bg-[#101422] text-[#FAFAFA] selection:bg-indigo-500 selection:text-white overflow-x-hidden">
+    <div className="min-h-screen bg-canvas text-ink selection:bg-indigo-500 selection:text-white overflow-x-hidden">
       {/* Strict 3-Zone Top Bar Contract + Responsive Mobile Drawer */}
-      <header className="sticky top-0 z-40 h-16 border-b border-[#2B334E] bg-[#101422]/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 h-16 border-b border-hairline bg-surface/90 backdrop-blur-md">
         <div className="max-w-[1280px] mx-auto h-full px-5 sm:px-8 flex items-center justify-between gap-4 sm:gap-8">
           <a
             href="#top"
             onClick={(e) => scrollToSection(e, "#top")}
-            className="font-display text-base font-bold tracking-tight text-[#FAFAFA] whitespace-nowrap shrink-0 flex items-center gap-2.5"
+            className="font-display text-base font-bold tracking-tight text-ink whitespace-nowrap shrink-0 flex items-center gap-2.5"
           >
             <img
               src="/assets/as-logo.png"
@@ -487,7 +488,7 @@ const msg = await client.messages.create({
 
           <nav
             aria-label="Primary navigation"
-            className="hidden md:flex items-center gap-7 text-sm font-medium text-[#D4D4D8]"
+            className="hidden md:flex items-center gap-7 text-sm font-medium text-ink-2"
           >
             {NAV_LINKS.map((link) => {
               const id = link.href.slice(1);
@@ -500,7 +501,7 @@ const msg = await client.messages.create({
                   className={`relative py-1 transition-colors whitespace-nowrap shrink-0 ${
                     isActive
                       ? "text-indigo-400"
-                      : "text-[#D4D4D8] hover:text-[#FAFAFA]"
+                      : "text-ink-2 hover:text-ink"
                   }`}
                 >
                   <span>{link.label}</span>
@@ -521,6 +522,7 @@ const msg = await client.messages.create({
           </nav>
 
           <div className="flex items-center gap-2.5 shrink-0">
+            <ThemeToggle />
             {isAuthenticated && onOpenDashboard ? (
               <button
                 type="button"
@@ -534,7 +536,7 @@ const msg = await client.messages.create({
                 <button
                   type="button"
                   onClick={() => onOpenAuth("signin")}
-                  className="hidden sm:inline-flex px-3.5 py-2 text-xs font-medium text-[#FAFAFA] bg-[#171C2E] hover:bg-[#1F263D] border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  className="hidden sm:inline-flex px-3.5 py-2 text-xs font-medium text-ink bg-surface hover:bg-elevated border border-hairline-strong rounded-lg transition-colors whitespace-nowrap shrink-0"
                 >
                   Sign in
                 </button>
@@ -553,7 +555,7 @@ const msg = await client.messages.create({
               onClick={() => setMobileMenuOpen((v) => !v)}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileMenuOpen}
-              className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg bg-[#171C2E] border border-[#343E5E] text-[#FAFAFA] hover:bg-[#1F263D] transition-colors"
+              className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg bg-surface border border-hairline-strong text-ink hover:bg-elevated transition-colors"
             >
               <motion.span
                 key={mobileMenuOpen ? "close" : "open"}
@@ -579,7 +581,7 @@ const msg = await client.messages.create({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="md:hidden absolute top-16 inset-x-0 z-40 border-b border-[#2B334E] bg-[#101422]/95 backdrop-blur-md px-5 py-4 space-y-2 shadow-2xl"
+              className="md:hidden absolute top-16 inset-x-0 z-40 border-b border-hairline bg-canvas/95 backdrop-blur-md px-5 py-4 space-y-2 shadow-2xl"
             >
               <nav
                 aria-label="Mobile navigation"
@@ -601,25 +603,25 @@ const msg = await client.messages.create({
                       onClick={(e) => scrollToSection(e, link.href)}
                       className={`min-h-[44px] px-3 flex items-center justify-between text-sm font-medium rounded-lg transition-colors ${
                         isActive
-                          ? "text-indigo-400 bg-[#171C2E]"
-                          : "text-[#D4D4D8] hover:text-indigo-400 hover:bg-[#171C2E]"
+                          ? "text-indigo-400 bg-surface"
+                          : "text-ink-2 hover:text-indigo-400 hover:bg-surface"
                       }`}
                     >
                       <span>{link.label}</span>
-                      <ArrowRight className="w-3.5 h-3.5 text-[#A1A1AA]" />
+                      <ArrowRight className="w-3.5 h-3.5 text-ink-muted" />
                     </motion.a>
                   );
                 })}
               </nav>
               {!isAuthenticated && (
-                <div className="pt-2 border-t border-[#28304A] grid grid-cols-2 gap-2">
+                <div className="pt-2 border-t border-hairline grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setMobileMenuOpen(false);
                       onOpenAuth("signin");
                     }}
-                    className="min-h-[44px] px-3 text-xs font-medium text-[#FAFAFA] bg-[#171C2E] border border-[#343E5E] rounded-lg"
+                    className="min-h-[44px] px-3 text-xs font-medium text-ink bg-surface border border-hairline-strong rounded-lg"
                   >
                     Sign in
                   </button>
@@ -644,12 +646,12 @@ const msg = await client.messages.create({
         {/* HERO SECTION */}
         <section
           id="top"
-          className="relative overflow-hidden border-b border-[#28304A]"
+          className="relative overflow-hidden border-b border-hairline"
         >
           <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
             <div
               className="animate-aurora-float absolute -top-24 left-[18%] w-[420px] h-[280px] rounded-full blur-[110px]"
-              style={{ background: "rgba(100, 103, 242, 0.12)" }}
+              style={{ background: "rgba(99,102,241, 0.12)" }}
             />
             <div
               className="animate-aurora-float absolute top-[20%] right-[8%] w-[360px] h-[300px] rounded-full blur-[120px]"
@@ -673,14 +675,14 @@ const msg = await client.messages.create({
                 Unified AI Gateway
               </p>
 
-              <h1 className="font-display text-4xl sm:text-5xl lg:text-[3.5rem] font-bold tracking-tight text-[#FAFAFA] leading-[1.06] text-balance">
+              <h1 className="font-display text-4xl sm:text-5xl lg:text-[3.5rem] font-bold tracking-tight text-ink leading-[1.06] text-balance">
                 The future is{" "}
                 <span className="bg-gradient-to-r from-indigo-400 via-sky-300 to-emerald-300 bg-clip-text text-transparent animate-spectrum-text">
                   multi-model.
                 </span>
               </h1>
 
-              <p className="text-base sm:text-lg text-[#D4D4D8] leading-relaxed max-w-xl">
+              <p className="text-base sm:text-lg text-ink-2 leading-relaxed max-w-xl">
                 Connect Gemini, OpenAI, Anthropic, xAI Grok, DeepSeek, Groq,
                 Cerebras, Together, Fireworks, Perplexity, Mistral, OpenRouter,
                 or custom endpoints behind one unified API—with automatic 429
@@ -693,7 +695,7 @@ const msg = await client.messages.create({
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={primaryAction}
-                  className="min-h-[44px] px-5 py-2.5 text-sm font-semibold bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 hover:brightness-110 text-white rounded-lg transition-all whitespace-nowrap shrink-0 inline-flex items-center gap-2 shadow-[0_6px_24px_-6px_rgba(100,103,242,0.6)]"
+                  className="min-h-[44px] px-5 py-2.5 text-sm font-semibold bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 hover:brightness-110 text-white rounded-lg transition-all whitespace-nowrap shrink-0 inline-flex items-center gap-2 shadow-[0_6px_24px_-6px_rgba(99,102,241,0.6)]"
                 >
                   <span>
                     {isAuthenticated ? "Open Dashboard" : "Get API key"}
@@ -706,7 +708,7 @@ const msg = await client.messages.create({
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={(e) => scrollToSection(e, "#quickstart")}
-                  className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#FAFAFA] bg-[#171C2E] hover:bg-[#1F263D] border border-[#343E5E] hover:border-sky-400/40 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-ink bg-surface hover:bg-elevated border border-hairline-strong hover:border-sky-400/40 rounded-lg transition-colors whitespace-nowrap shrink-0"
                 >
                   <Terminal className="w-4 h-4 text-sky-400" />
                   <span>SDK Quickstart</span>
@@ -714,12 +716,12 @@ const msg = await client.messages.create({
               </div>
 
               {/* Grounded architectural highlights */}
-              <div className="pt-4 border-t border-[#28304A] grid grid-cols-3 gap-4">
+              <div className="pt-4 border-t border-hairline grid grid-cols-3 gap-4">
                 <div>
                   <div className="font-mono text-sm font-semibold text-sky-300 tabular-nums">
                     12+ Providers
                   </div>
-                  <div className="text-xs text-[#A1A1AA] mt-0.5">
+                  <div className="text-xs text-ink-muted mt-0.5">
                     Popular &amp; custom APIs
                   </div>
                 </div>
@@ -727,7 +729,7 @@ const msg = await client.messages.create({
                   <div className="font-mono text-sm font-semibold text-emerald-300 tabular-nums">
                     AES-256
                   </div>
-                  <div className="text-xs text-[#A1A1AA] mt-0.5">
+                  <div className="text-xs text-ink-muted mt-0.5">
                     Encrypted BYOK vault
                   </div>
                 </div>
@@ -735,7 +737,7 @@ const msg = await client.messages.create({
                   <div className="font-mono text-sm font-semibold text-violet-300 tabular-nums">
                     &lt; 25ms
                   </div>
-                  <div className="text-xs text-[#A1A1AA] mt-0.5">
+                  <div className="text-xs text-ink-muted mt-0.5">
                     Gateway routing overhead
                   </div>
                 </div>
@@ -758,9 +760,9 @@ const msg = await client.messages.create({
                 >
                   <defs>
                     <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
-                      <stop offset="0%" stopColor="rgba(100,103,242,0.28)" />
+                      <stop offset="0%" stopColor="rgba(99,102,241,0.28)" />
                       <stop offset="55%" stopColor="rgba(56,189,248,0.12)" />
-                      <stop offset="100%" stopColor="rgba(100,103,242,0)" />
+                      <stop offset="100%" stopColor="rgba(99,102,241,0)" />
                     </radialGradient>
                   </defs>
 
@@ -772,8 +774,8 @@ const msg = await client.messages.create({
                     rx="130"
                     ry="82"
                     fill="none"
-                    stroke="#343E5E"
-                    strokeWidth="1"
+                    stroke="var(--border-strong)"
+                    strokeWidth="1.2"
                     strokeDasharray="4 6"
                   >
                     <animate
@@ -790,7 +792,8 @@ const msg = await client.messages.create({
                     rx="205"
                     ry="132"
                     fill="none"
-                    stroke="#28304A"
+                    stroke="var(--border-strong)"
+                    strokeOpacity="0.65"
                     strokeWidth="1"
                     strokeDasharray="2 8"
                   >
@@ -808,7 +811,7 @@ const msg = await client.messages.create({
                     rx="275"
                     ry="178"
                     fill="none"
-                    stroke="#1F263D"
+                    stroke="var(--border-hairline)"
                     strokeWidth="1"
                   />
 
@@ -829,7 +832,7 @@ const msg = await client.messages.create({
                             (210 + ny) / 2 - (idx % 2 === 0 ? 18 : -18)
                           }, ${nx.toFixed(1)} ${ny.toFixed(1)}`}
                           fill="none"
-                          stroke={isFocused ? p.color : "#2B334E"}
+                          stroke={isFocused ? p.color : "var(--border-hairline)"}
                           strokeOpacity={isFocused ? 0.65 : 0.85}
                           strokeWidth={isFocused ? "1.6" : "1"}
                         />
@@ -867,20 +870,20 @@ const msg = await client.messages.create({
 
                 {/* Central Metallic AS ROUTER Emblem */}
                 <motion.div
-                  animate={{ scale: [1, 1.05, 1] }}
+                  animate={{ scale: [1, 1.04, 1] }}
                   transition={{
                     duration: 4.5,
                     repeat: Infinity,
                     ease: "easeInOut",
                   }}
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none"
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none px-4 py-3 rounded-2xl bg-surface/95 border border-hairline-strong shadow-[0_8px_28px_rgba(15,23,42,0.12)] backdrop-blur-sm"
                 >
                   <img
                     src="/assets/as-logo.png"
                     alt="AS ROUTER"
-                    className="h-9 sm:h-11 w-auto object-contain drop-shadow-[0_0_20px_rgba(100,103,242,0.4)]"
+                    className="h-8 sm:h-10 w-auto object-contain"
                   />
-                  <span className="mt-1 font-mono text-[9px] font-semibold text-sky-300/90 tracking-[0.22em]">
+                  <span className="mt-1 font-mono text-[9px] font-semibold text-sky-400 tracking-[0.22em]">
                     ROUTER
                   </span>
                 </motion.div>
@@ -917,12 +920,14 @@ const msg = await client.messages.create({
                         }}
                         whileHover={{ scale: 1.15 }}
                         style={{
-                          borderColor: isFocused ? p.color : "#343E5E",
-                          color: isFocused ? p.color : "#D4D4D8",
-                          boxShadow: isFocused ? `0 0 20px ${p.color}40` : "none",
+                          borderColor: isFocused ? p.color : "var(--border-strong)",
+                          color: isFocused ? p.color : "var(--text-primary)",
+                          boxShadow: isFocused
+                            ? `0 0 20px ${p.color}40`
+                            : "0 2px 10px rgba(15, 23, 42, 0.08)",
                         }}
                         className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg border flex items-center justify-center font-mono text-xs font-bold transition-colors ${
-                          isFocused ? "bg-[#1F263D]" : "bg-[#171C2E]"
+                          isFocused ? "bg-elevated" : "bg-surface"
                         }`}
                         title={p.name}
                       >
@@ -941,7 +946,7 @@ const msg = await client.messages.create({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.18 }}
-                  className="mt-3 px-4 py-2 bg-[#171C2E] border border-[#2B334E] rounded-lg flex flex-wrap items-center justify-center gap-2.5 text-xs"
+                  className="mt-3 px-4 py-2 bg-surface border border-hairline rounded-lg flex flex-wrap items-center justify-center gap-2.5 text-xs"
                   style={{ borderColor: `${hoveredProvider.color}40` }}
                 >
                   <span
@@ -950,8 +955,8 @@ const msg = await client.messages.create({
                   >
                     {hoveredProvider.name}
                   </span>
-                  <span className="text-[#71717A]">·</span>
-                  <span className="font-mono text-[#D4D4D8]">
+                  <span className="text-ink-dim">·</span>
+                  <span className="font-mono text-ink-2">
                     {hoveredProvider.models.join("  ·  ")}
                   </span>
                 </motion.div>
@@ -961,7 +966,7 @@ const msg = await client.messages.create({
 
           {/* Supported Provider Strip */}
           <div className="max-w-[1280px] mx-auto px-5 sm:px-8 pb-10">
-            <div className="pt-6 border-t border-[#28304A] flex flex-wrap items-center justify-center sm:justify-between gap-x-4 gap-y-2 text-xs font-display font-semibold tracking-wide">
+            <div className="pt-6 border-t border-hairline flex flex-wrap items-center justify-center sm:justify-between gap-x-4 gap-y-2 text-xs font-display font-semibold tracking-wide">
               {ALL_DISPLAY_PROVIDERS.map((p) => {
                 const isSelected = hoveredProvider.id === p.id;
                 return (
@@ -973,7 +978,7 @@ const msg = await client.messages.create({
                     className={`min-h-[36px] px-2 transition-colors whitespace-nowrap ${
                       isSelected
                         ? "font-bold"
-                        : "text-[#A1A1AA] hover:text-[#FAFAFA]"
+                        : "text-ink-muted hover:text-ink"
                     }`}
                   >
                     {p.name}
@@ -994,10 +999,10 @@ const msg = await client.messages.create({
               <p className="font-mono text-xs uppercase tracking-wider text-indigo-400">
                 01. Smart Intent Routing
               </p>
-              <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#FAFAFA] leading-[1.12] text-balance">
+              <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-ink leading-[1.12] text-balance">
                 Better, faster, cheaper. Get all three.
               </h2>
-              <p className="text-sm sm:text-base text-[#D4D4D8] leading-relaxed">
+              <p className="text-sm sm:text-base text-ink-2 leading-relaxed">
                 Send every prompt to <code className="font-mono text-indigo-400">smart-auto</code>.
                 AS ROUTER classifies intent—coding, vision, tool calls, or fast
                 chat—and routes to the best connected model automatically.
@@ -1005,19 +1010,19 @@ const msg = await client.messages.create({
               <button
                 type="button"
                 onClick={primaryAction}
-                className="inline-flex items-center gap-2 text-sm font-medium text-[#FAFAFA] hover:text-indigo-400 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 text-sm font-medium text-ink hover:text-indigo-400 transition-colors whitespace-nowrap"
               >
                 <span>Build a smart combo</span>
                 <ArrowRight className="w-4 h-4 text-indigo-400" />
               </button>
             </div>
 
-            <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-[#2B334E] flex flex-wrap items-center justify-between gap-2">
-                <code className="font-mono text-xs text-[#D4D4D8]">
+            <div className="lg:col-span-7 bg-surface border border-hairline rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-hairline flex flex-wrap items-center justify-between gap-2">
+                <code className="font-mono text-xs text-ink-2">
                   model: &quot;smart-auto&quot;
                 </code>
-                <div className="inline-flex items-center gap-1 bg-[#101422] border border-[#343E5E] rounded-md p-0.5">
+                <div className="inline-flex items-center gap-1 bg-canvas border border-hairline-strong rounded-md p-0.5">
                   {(
                     [
                       ["fast", "Fast"],
@@ -1033,7 +1038,7 @@ const msg = await client.messages.create({
                       className={`relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
                         activeIntent === key
                           ? "text-indigo-400"
-                          : "text-[#A1A1AA] hover:text-[#FAFAFA]"
+                          : "text-ink-muted hover:text-ink"
                       }`}
                     >
                       {activeIntent === key && (
@@ -1044,7 +1049,7 @@ const msg = await client.messages.create({
                             stiffness: 380,
                             damping: 30,
                           }}
-                          className="absolute inset-0 bg-[#1F263D] rounded"
+                          className="absolute inset-0 bg-elevated rounded"
                         />
                       )}
                       <span className="relative z-10">{label}</span>
@@ -1064,10 +1069,10 @@ const msg = await client.messages.create({
                       id="landing-in"
                       d="M 0 105 L 62 105"
                       fill="none"
-                      stroke="#343E5E"
+                      stroke="var(--border-strong)"
                       strokeWidth="1.5"
                     />
-                    <circle r="3" fill="#6467F2">
+                    <circle r="3" fill="var(--accent-primary)">
                       <animateMotion dur="1.4s" repeatCount="indefinite">
                         <mpath href="#landing-in" />
                       </animateMotion>
@@ -1076,7 +1081,7 @@ const msg = await client.messages.create({
                     {[28, 79, 131, 182].map((ty, idx) => {
                       const pid = `landing-branch-${idx}`;
                       const isPrimary = idx === 0;
-                      const branchColors = ["#818CF8", "#38BDF8", "#34D399", "#FB923C"];
+                      const branchColors = ["#4F46E5", "#0284C7", "#059669", "#EA580C"];
                       const branchColor = branchColors[idx % branchColors.length];
                       return (
                         <g key={pid}>
@@ -1105,7 +1110,7 @@ const msg = await client.messages.create({
                     })}
                   </svg>
 
-                  <div className="absolute top-1/2 -translate-y-1/2 left-[48px] w-10 h-10 rounded-lg bg-gradient-to-br from-[#1F263D] to-[#101422] border border-indigo-500/50 flex items-center justify-center shadow-[0_0_16px_rgba(100,103,242,0.28)]">
+                  <div className="absolute top-1/2 -translate-y-1/2 left-[48px] w-10 h-10 rounded-lg bg-gradient-to-br from-elevated to-canvas border border-indigo-500/50 flex items-center justify-center shadow-[0_0_16px_rgba(99,102,241,0.28)]">
                     <span className="font-display text-xs font-bold bg-gradient-to-r from-indigo-300 to-sky-300 bg-clip-text text-transparent">
                       AS
                     </span>
@@ -1114,7 +1119,7 @@ const msg = await client.messages.create({
 
                 <div className="col-span-8 sm:col-span-6 h-[210px] flex flex-col justify-between py-1">
                   {currentPreset.branches.map((b, idx) => {
-                    const branchColors = ["#818CF8", "#38BDF8", "#34D399", "#FB923C"];
+                    const branchColors = ["#4F46E5", "#0284C7", "#059669", "#EA580C"];
                     const bColor = branchColors[idx % branchColors.length];
                     return (
                       <motion.div
@@ -1125,25 +1130,25 @@ const msg = await client.messages.create({
                         className="flex items-center justify-between gap-2.5"
                       >
                         <div
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg min-w-0 flex-1 border bg-[#1F263D]"
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg min-w-0 flex-1 border bg-elevated"
                           style={{
                             borderColor:
-                              idx === 0 ? `${bColor}75` : "#343E5E",
+                              idx === 0 ? `${bColor}75` : "var(--border-strong)",
                           }}
                         >
                           <span
-                            className="w-4 h-4 rounded bg-[#101422] font-mono text-[10px] font-bold flex items-center justify-center shrink-0"
+                            className="w-4 h-4 rounded bg-canvas font-mono text-[10px] font-bold flex items-center justify-center shrink-0"
                             style={{ color: bColor }}
                           >
                             {b.tag}
                           </span>
-                          <span className="font-mono text-xs text-[#FAFAFA] truncate">
+                          <span className="font-mono text-xs text-ink truncate">
                             {b.model}
                           </span>
                         </div>
                         <span
                           className="font-mono text-xs tabular-nums w-9 text-right shrink-0"
-                          style={{ color: idx === 0 ? bColor : "#D4D4D8" }}
+                          style={{ color: idx === 0 ? bColor : "var(--text-secondary)" }}
                         >
                           {b.pct}%
                         </span>
@@ -1153,10 +1158,10 @@ const msg = await client.messages.create({
                 </div>
               </div>
 
-              <div className="px-5 py-3 border-t border-[#2B334E] flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="text-[#D4D4D8]">
+              <div className="px-5 py-3 border-t border-hairline flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-ink-2">
                   {currentPreset.label} →{" "}
-                  <span className="text-[#FAFAFA] font-medium">
+                  <span className="text-ink font-medium">
                     {currentPreset.winner}
                   </span>
                 </span>
@@ -1171,12 +1176,12 @@ const msg = await client.messages.create({
         {/* SECTION 2: Automatic Failover */}
         <section
           id="failover"
-          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#28304A]"
+          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-hairline"
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden order-2 lg:order-1">
-              <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between">
-                <span className="text-xs font-medium text-[#D4D4D8]">
+            <div className="lg:col-span-7 bg-surface border border-hairline rounded-xl overflow-hidden order-2 lg:order-1">
+              <div className="px-5 py-3 border-b border-hairline flex items-center justify-between">
+                <span className="text-xs font-medium text-ink-2">
                   Provider health matrix
                 </span>
                 <span className="font-mono text-[11px] text-emerald-400 tabular-nums">
@@ -1188,25 +1193,25 @@ const msg = await client.messages.create({
                 {failoverMatrix.rows.map((row) => {
                   const tagColor =
                     row.tag === "A"
-                      ? "#A78BFA"
+                      ? "#8B5CF6"
                       : row.tag === "G"
-                        ? "#60A5FA"
-                        : "#34D399";
+                        ? "#3B82F6"
+                        : "#10B981";
                   return (
                   <div key={row.name} className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
                         <span
-                          className="w-5 h-5 rounded bg-[#1F263D] border border-[#343E5E] font-mono text-[10px] font-bold flex items-center justify-center"
+                          className="w-5 h-5 rounded bg-elevated border border-hairline-strong font-mono text-[10px] font-bold flex items-center justify-center"
                           style={{ color: tagColor, borderColor: `${tagColor}44` }}
                         >
                           {row.tag}
                         </span>
-                        <span className="font-medium text-[#FAFAFA]">
+                        <span className="font-medium text-ink">
                           {row.name}
                         </span>
                       </div>
-                      <span className="font-mono text-[11px] text-[#A1A1AA]">
+                      <span className="font-mono text-[11px] text-ink-muted">
                         {row.slots.includes("fail")
                           ? "429 spike handled"
                           : "healthy"}
@@ -1231,9 +1236,9 @@ const msg = await client.messages.create({
                 );
                 })}
 
-                <div className="pt-3.5 border-t border-[#2B334E] space-y-2">
+                <div className="pt-3.5 border-t border-hairline space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-[#FAFAFA]">
+                    <span className="font-medium text-ink">
                       Through AS ROUTER
                     </span>
                     <span className="font-mono text-[11px] text-emerald-400 tabular-nums">
@@ -1256,10 +1261,10 @@ const msg = await client.messages.create({
               <p className="font-mono text-xs uppercase tracking-wider text-indigo-400">
                 02. Circuit Breakers & Retry
               </p>
-              <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#FAFAFA] leading-[1.12] text-balance">
+              <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-ink leading-[1.12] text-balance">
                 Stay up through outages and rate limits
               </h2>
-              <p className="text-sm sm:text-base text-[#D4D4D8] leading-relaxed">
+              <p className="text-sm sm:text-base text-ink-2 leading-relaxed">
                 When one upstream returns HTTP 429, 502, or times out, AS ROUTER
                 trips a short circuit cooldown and retries your request against
                 the next healthy model in your combo chain before your app sees
@@ -1268,7 +1273,7 @@ const msg = await client.messages.create({
               <button
                 type="button"
                 onClick={primaryAction}
-                className="inline-flex items-center gap-2 text-sm font-medium text-[#FAFAFA] hover:text-indigo-400 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 text-sm font-medium text-ink hover:text-indigo-400 transition-colors whitespace-nowrap"
               >
                 <span>Inspect failover traces</span>
                 <ArrowRight className="w-4 h-4 text-indigo-400" />
@@ -1280,18 +1285,18 @@ const msg = await client.messages.create({
         {/* SECTION 3: Data & Policies */}
         <section
           id="policies"
-          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#28304A]"
+          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-hairline"
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            <div className="lg:col-span-6 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between text-xs">
-                <span className="font-medium text-[#FAFAFA]">Production</span>
-                <span className="text-[#A1A1AA]">Workspace policy</span>
+            <div className="lg:col-span-6 bg-surface border border-hairline rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-hairline flex items-center justify-between text-xs">
+                <span className="font-medium text-ink">Production</span>
+                <span className="text-ink-muted">Workspace policy</span>
               </div>
 
-              <div className="divide-y divide-[#28304A]">
+              <div className="divide-y divide-hairline">
                 <div className="px-5 py-4 flex items-center justify-between gap-4">
-                  <span className="text-sm text-[#FAFAFA]">
+                  <span className="text-sm text-ink">
                     Prompt compression
                   </span>
                   <button
@@ -1301,7 +1306,7 @@ const msg = await client.messages.create({
                     aria-label="Toggle prompt compression"
                     onClick={() => setCompressPolicy((v) => !v)}
                     className={`w-11 h-6 rounded-full p-0.5 transition-colors flex items-center ${
-                      compressPolicy ? "bg-indigo-500" : "bg-[#343E5E]"
+                      compressPolicy ? "bg-indigo-500" : "bg-subtle"
                     }`}
                   >
                     <motion.span
@@ -1315,7 +1320,7 @@ const msg = await client.messages.create({
                 </div>
 
                 <div className="px-5 py-4 flex items-center justify-between gap-4">
-                  <span className="text-sm text-[#FAFAFA]">
+                  <span className="text-sm text-ink">
                     Intent-based smart auto-routing
                   </span>
                   <button
@@ -1325,7 +1330,7 @@ const msg = await client.messages.create({
                     aria-label="Toggle intent-based routing"
                     onClick={() => setIntentPolicy((v) => !v)}
                     className={`w-11 h-6 rounded-full p-0.5 transition-colors flex items-center ${
-                      intentPolicy ? "bg-indigo-500" : "bg-[#343E5E]"
+                      intentPolicy ? "bg-indigo-500" : "bg-subtle"
                     }`}
                   >
                     <motion.span
@@ -1339,8 +1344,8 @@ const msg = await client.messages.create({
                 </div>
 
                 <div className="px-5 py-4 flex items-center justify-between gap-4">
-                  <span className="text-sm text-[#FAFAFA]">Routing mode</span>
-                  <div className="inline-flex items-center p-0.5 bg-[#101422] border border-[#343E5E] rounded-md">
+                  <span className="text-sm text-ink">Routing mode</span>
+                  <div className="inline-flex items-center p-0.5 bg-canvas border border-hairline-strong rounded-md">
                     {(
                       [
                         ["priority", "Priority"],
@@ -1355,7 +1360,7 @@ const msg = await client.messages.create({
                         className={`relative px-2.5 py-1 text-xs font-medium rounded transition-colors ${
                           policyMode === id
                             ? "text-indigo-400"
-                            : "text-[#A1A1AA] hover:text-[#FAFAFA]"
+                            : "text-ink-muted hover:text-ink"
                         }`}
                       >
                         {policyMode === id && (
@@ -1366,7 +1371,7 @@ const msg = await client.messages.create({
                               stiffness: 420,
                               damping: 32,
                             }}
-                            className="absolute inset-0 bg-[#1F263D] rounded"
+                            className="absolute inset-0 bg-elevated rounded"
                           />
                         )}
                         <span className="relative z-10">{label}</span>
@@ -1376,7 +1381,7 @@ const msg = await client.messages.create({
                 </div>
 
                 <div className="px-5 py-4 flex items-center justify-between gap-4">
-                  <span className="text-sm text-[#FAFAFA] whitespace-nowrap">
+                  <span className="text-sm text-ink whitespace-nowrap">
                     Allowed providers
                   </span>
                   <div className="flex items-center flex-wrap justify-end gap-1.5">
@@ -1384,7 +1389,7 @@ const msg = await client.messages.create({
                       <span
                         key={p.id}
                         style={{ color: p.color }}
-                        className="w-6 h-6 rounded bg-[#1F263D] border border-[#343E5E] font-mono text-[10px] font-bold flex items-center justify-center"
+                        className="w-6 h-6 rounded bg-elevated border border-hairline-strong font-mono text-[10px] font-bold flex items-center justify-center"
                         title={p.name}
                       >
                         {p.short}
@@ -1399,16 +1404,16 @@ const msg = await client.messages.create({
               <p className="font-mono text-xs uppercase tracking-wider text-indigo-400">
                 03. Governance & Encryption
               </p>
-              <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#FAFAFA] leading-[1.12] text-balance">
+              <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-ink leading-[1.12] text-balance">
                 Your keys, your policies
               </h2>
-              <p className="text-sm sm:text-base text-[#D4D4D8] leading-relaxed">
+              <p className="text-sm sm:text-base text-ink-2 leading-relaxed">
                 Every workspace stores upstream provider keys using AES-256-GCM
                 encryption. Issue scoped gateway keys with strict model
                 allowlists, daily token caps, and monthly USD spend limits.
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm text-[#D4D4D8]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm text-ink-2">
                 {[
                   { label: "AES-256 encrypted key vault", color: "text-emerald-400" },
                   { label: "Bring your own provider keys", color: "text-sky-400" },
@@ -1429,7 +1434,7 @@ const msg = await client.messages.create({
               <button
                 type="button"
                 onClick={primaryAction}
-                className="inline-flex items-center gap-2 text-sm font-medium text-[#FAFAFA] hover:text-indigo-400 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 text-sm font-medium text-ink hover:text-indigo-400 transition-colors whitespace-nowrap"
               >
                 <span>Manage API keys & guardrails</span>
                 <ArrowRight className="w-4 h-4 text-indigo-400" />
@@ -1441,23 +1446,23 @@ const msg = await client.messages.create({
         {/* SECTION 4: Drop-In SDK Quickstart */}
         <section
           id="quickstart"
-          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#28304A]"
+          className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-hairline"
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
             <div className="lg:col-span-5 space-y-5">
               <p className="font-mono text-xs uppercase tracking-wider text-sky-400">
                 04. Two-Line Integration
               </p>
-              <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#FAFAFA] text-balance">
+              <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-ink text-balance">
                 Drop-in OpenAI & Anthropic SDKs
               </h2>
-              <p className="text-sm sm:text-base text-[#D4D4D8] leading-relaxed">
+              <p className="text-sm sm:text-base text-ink-2 leading-relaxed">
                 Keep your existing client libraries—just point{" "}
                 <code className="font-mono text-sky-400">baseURL</code> to
                 your AS ROUTER instance and switch models or combos without
                 redeploying your codebase.
               </p>
-              <div className="space-y-3 text-xs sm:text-sm text-[#D4D4D8]">
+              <div className="space-y-3 text-xs sm:text-sm text-ink-2">
                 <div className="flex items-center gap-2.5">
                   <Layers className="w-4 h-4 text-violet-400 shrink-0" />
                   <span>/v1/chat/completions &amp; /v1/messages</span>
@@ -1473,8 +1478,8 @@ const msg = await client.messages.create({
               </div>
             </div>
 
-            <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-[#2B334E] flex items-center justify-between gap-3">
+            <div className="lg:col-span-7 bg-surface border border-hairline rounded-xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-hairline flex items-center justify-between gap-3">
                 <div className="inline-flex items-center gap-1 flex-wrap">
                   {(
                     [
@@ -1491,7 +1496,7 @@ const msg = await client.messages.create({
                       className={`relative px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                         sdkTab === tabId
                           ? "text-indigo-400"
-                          : "text-[#A1A1AA] hover:text-[#FAFAFA]"
+                          : "text-ink-muted hover:text-ink"
                       }`}
                     >
                       {sdkTab === tabId && (
@@ -1502,7 +1507,7 @@ const msg = await client.messages.create({
                             stiffness: 420,
                             damping: 32,
                           }}
-                          className="absolute inset-0 bg-[#1F263D] rounded-md"
+                          className="absolute inset-0 bg-elevated rounded-md"
                         />
                       )}
                       <span className="relative z-10">{label}</span>
@@ -1513,7 +1518,7 @@ const msg = await client.messages.create({
                 <button
                   type="button"
                   onClick={copySdk}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#343E5E] rounded-md whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline-strong rounded-md whitespace-nowrap"
                 >
                   {copiedSdk ? (
                     <>
@@ -1529,7 +1534,7 @@ const msg = await client.messages.create({
                 </button>
               </div>
 
-              <pre className="p-5 font-mono text-xs text-[#E4E4E7] overflow-x-auto leading-relaxed bg-[#101422]">
+              <pre className="p-5 font-mono text-xs text-ink overflow-x-auto leading-relaxed bg-elevated/60">
                 {sdkSnippets[sdkTab]}
               </pre>
             </div>
@@ -1537,17 +1542,17 @@ const msg = await client.messages.create({
         </section>
 
         {/* SECTION 5: Architectural Guarantees + Bottom Conversion CTA */}
-        <section className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-[#28304A]">
+        <section className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-hairline">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-40px" }}
             transition={{ duration: 0.4 }}
-            className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] rounded-2xl p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center"
+            className="relative overflow-hidden bg-surface border border-hairline rounded-2xl p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center"
           >
             <div
               className="pointer-events-none absolute -right-24 -top-24 w-72 h-72 rounded-full blur-[90px]"
-              style={{ background: "rgba(100, 103, 242, 0.14)" }}
+              style={{ background: "rgba(99,102,241, 0.14)" }}
               aria-hidden="true"
             />
             <div
@@ -1559,15 +1564,15 @@ const msg = await client.messages.create({
               <p className="font-mono text-xs uppercase tracking-wider bg-gradient-to-r from-indigo-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">
                 Built for production teams
               </p>
-              <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#FAFAFA] text-balance">
+              <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-ink text-balance">
                 Start routing across multiple providers in under 60 seconds.
               </h2>
-              <p className="text-sm sm:text-base text-[#D4D4D8] leading-relaxed max-w-2xl">
+              <p className="text-sm sm:text-base text-ink-2 leading-relaxed max-w-2xl">
                 Create an isolated workspace, connect your existing provider API
                 keys, and inspect live SSE traces with full cost and latency
                 visibility.
               </p>
-              <div className="pt-2 flex flex-wrap items-center gap-6 text-xs text-[#D4D4D8]">
+              <div className="pt-2 flex flex-wrap items-center gap-6 text-xs text-ink-2">
                 <span className="inline-flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-emerald-400" />
                   Zero vendor lock-in
@@ -1588,7 +1593,7 @@ const msg = await client.messages.create({
                 <button
                   type="button"
                   onClick={() => onOpenAuth("signin")}
-                  className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-[#FAFAFA] bg-[#101422] hover:bg-[#1F263D] border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap"
+                  className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-ink bg-canvas hover:bg-elevated border border-hairline-strong rounded-lg transition-colors whitespace-nowrap"
                 >
                   Sign in
                 </button>
@@ -1598,7 +1603,7 @@ const msg = await client.messages.create({
                 whileHover={{ scale: 1.02, y: -1 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={primaryAction}
-                className="min-h-[44px] px-6 py-2.5 text-sm font-semibold bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 hover:brightness-110 text-white rounded-lg transition-all whitespace-nowrap inline-flex items-center justify-center gap-2 shadow-[0_6px_24px_-6px_rgba(100,103,242,0.55)]"
+                className="min-h-[44px] px-6 py-2.5 text-sm font-semibold bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 hover:brightness-110 text-white rounded-lg transition-all whitespace-nowrap inline-flex items-center justify-center gap-2 shadow-[0_6px_24px_-6px_rgba(99,102,241,0.55)]"
               >
                 <span>
                   {isAuthenticated ? "Open Dashboard" : "Create free workspace"}
@@ -1611,15 +1616,15 @@ const msg = await client.messages.create({
       </main>
 
       {/* Quiet Footer */}
-      <footer className="border-t border-[#28304A] bg-[#101422]">
-        <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#A1A1AA]">
+      <footer className="border-t border-hairline bg-canvas">
+        <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-muted">
           <div className="flex items-center gap-2.5">
             <img
               src="/assets/as-logo.png"
               alt="AS ROUTER"
               className="h-4 w-auto object-contain shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.22)]"
             />
-            <span className="font-display font-bold text-[#FAFAFA]">
+            <span className="font-display font-bold text-ink">
               AS ROUTER
             </span>
             <span>·</span>
@@ -1632,7 +1637,7 @@ const msg = await client.messages.create({
                 key={link.href}
                 href={link.href}
                 onClick={(e) => scrollToSection(e, link.href)}
-                className="hover:text-[#FAFAFA] transition-colors whitespace-nowrap"
+                className="hover:text-ink transition-colors whitespace-nowrap"
               >
                 {link.label}
               </a>

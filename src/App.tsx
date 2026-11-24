@@ -37,6 +37,7 @@ import { OverviewView } from "./components/OverviewView.tsx";
 import { PlaygroundView } from "./components/PlaygroundView.tsx";
 import { ProvidersView } from "./components/ProvidersView.tsx";
 import { SearchView } from "./components/SearchView.tsx";
+import { ThemeToggle } from "./components/ThemeToggle.tsx";
 import { authClient } from "./lib/auth-client.ts";
 import { useFocusTrap } from "./lib/useFocusTrap.ts";
 import type {
@@ -68,16 +69,16 @@ const NAV_ITEMS: Array<{
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   accent: string;
 }> = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard, accent: "#818CF8" },
-  { id: "provider-list", label: "Provider List", icon: Plug, accent: "#38BDF8" },
-  { id: "provider-connected", label: "Provider Connected", icon: Server, accent: "#34D399" },
-  { id: "models", label: "Models", icon: Cpu, accent: "#C084FC" },
-  { id: "combos", label: "Combos", icon: Layers, accent: "#F472B6" },
-  { id: "keys", label: "API Keys", icon: KeyRound, accent: "#FBBF24" },
-  { id: "search", label: "Search", icon: Search, accent: "#22D3EE" },
-  { id: "search-providers", label: "Search Providers", icon: Globe, accent: "#2DD4BF" },
-  { id: "logs", label: "Live Logs", icon: Activity, accent: "#FB923C" },
-  { id: "playground", label: "Playground", icon: Terminal, accent: "#60A5FA" },
+  { id: "overview", label: "Overview", icon: LayoutDashboard, accent: "#6366F1" },
+  { id: "provider-list", label: "Provider List", icon: Plug, accent: "#0284C7" },
+  { id: "provider-connected", label: "Provider Connected", icon: Server, accent: "#059669" },
+  { id: "models", label: "Models", icon: Cpu, accent: "#9333EA" },
+  { id: "combos", label: "Combos", icon: Layers, accent: "#DB2777" },
+  { id: "keys", label: "API Keys", icon: KeyRound, accent: "#D97706" },
+  { id: "search", label: "Search", icon: Search, accent: "#0891B2" },
+  { id: "search-providers", label: "Search Providers", icon: Globe, accent: "#0D9488" },
+  { id: "logs", label: "Live Logs", icon: Activity, accent: "#EA580C" },
+  { id: "playground", label: "Playground", icon: Terminal, accent: "#2563EB" },
 ];
 
 const VALID_TABS = new Set<NavTab>([
@@ -794,7 +795,7 @@ export default function App() {
 
   if (sessionLoading && !initialSessionChecked) {
     return (
-      <div className="min-h-screen bg-[#101422] text-[#A1A1AA] flex flex-col items-center justify-center gap-3 text-sm">
+      <div className="min-h-screen bg-canvas text-ink-muted flex flex-col items-center justify-center gap-3 text-sm">
         <img
           src="/assets/as-logo.png"
           alt="AS ROUTER"
@@ -823,7 +824,7 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-    <div className="min-h-screen bg-[#101422] text-[#F3F4F6] flex relative overflow-x-hidden">
+    <div className="min-h-screen bg-canvas text-ink flex relative overflow-x-hidden">
       {/* Subtle Multi-Color Ambient Glow */}
       <div
         className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
@@ -831,7 +832,7 @@ export default function App() {
       >
         <div
           className="animate-aurora-float absolute -top-24 left-[22%] w-[460px] h-[280px] rounded-full blur-[110px]"
-          style={{ background: "rgba(100, 103, 242, 0.08)" }}
+          style={{ background: "rgba(99, 102, 241, 0.08)" }}
         />
         <div
           className="animate-aurora-float absolute top-[20%] right-[-6%] w-[380px] h-[300px] rounded-full blur-[120px]"
@@ -850,8 +851,8 @@ export default function App() {
       </div>
 
       {/* Sidebar Navigation (Desktop 248px) */}
-      <aside className="hidden md:flex md:w-[248px] md:flex-col md:fixed md:inset-y-0 z-20 bg-[#101422]/95 backdrop-blur-md border-r border-[#2B334E]">
-        <div className="h-16 px-5 flex items-center justify-between border-b border-[#2B334E]">
+      <aside className="hidden md:flex md:w-[248px] md:flex-col md:fixed md:inset-y-0 z-20 bg-surface/95 backdrop-blur-md border-r border-hairline">
+        <div className="h-16 px-5 flex items-center justify-between border-b border-hairline">
           <div className="flex items-center gap-2.5">
             <motion.img
               src="/assets/as-logo.png"
@@ -860,7 +861,7 @@ export default function App() {
               transition={{ type: "spring", stiffness: 420, damping: 24 }}
               className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_10px_rgba(56,189,248,0.26)]"
             />
-            <span className="font-display text-base font-bold tracking-tight text-white whitespace-nowrap">
+            <span className="font-display text-base font-bold tracking-tight text-ink whitespace-nowrap">
               AS ROUTER
             </span>
           </div>
@@ -879,17 +880,17 @@ export default function App() {
                 onClick={() => navigateTab(item.id)}
                 className={`relative w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive
-                    ? "text-white"
-                    : "text-[#A1A1AA] hover:text-white hover:bg-[#171C2E]/60"
+                    ? "text-ink"
+                    : "text-ink-muted hover:text-ink hover:bg-elevated/60"
                 }`}
               >
                 {isActive && (
                   <motion.span
                     layoutId="sidebar-nav-pill"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    className="absolute inset-0 bg-[#171C2E] border border-[#343E5E] rounded-lg"
+                    className="absolute inset-0 bg-elevated border border-hairline-strong rounded-lg"
                     style={{
-                      boxShadow: `inset 2px 0 0 ${item.accent}, 0 4px 16px -6px ${item.accent}44`,
+                      boxShadow: `inset 2px 0 0 ${item.accent}, 0 4px 14px -6px ${item.accent}38`,
                     }}
                   />
                 )}
@@ -901,12 +902,12 @@ export default function App() {
                   <span>{item.label}</span>
                 </span>
                 {item.id === "provider-list" && (
-                  <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                  <span className="relative z-10 font-mono text-xs text-ink-muted tabular-nums">
                     {LLM_PROVIDER_PRESETS.length}
                   </span>
                 )}
                 {item.id === "provider-connected" && workspace && (
-                  <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                  <span className="relative z-10 font-mono text-xs text-ink-muted tabular-nums">
                     {
                       workspace.connections.filter(
                         (c) => !isSearchProvider(c.provider)
@@ -915,7 +916,7 @@ export default function App() {
                   </span>
                 )}
                 {item.id === "search-providers" && (
-                  <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                  <span className="relative z-10 font-mono text-xs text-ink-muted tabular-nums">
                     {(() => {
                       const sc = workspace
                         ? workspace.connections.filter((c) =>
@@ -929,7 +930,7 @@ export default function App() {
                   </span>
                 )}
                 {item.id === "logs" && workspace && (
-                  <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                  <span className="relative z-10 font-mono text-xs text-ink-muted tabular-nums">
                     {workspace.logs.length}
                   </span>
                 )}
@@ -938,12 +939,12 @@ export default function App() {
           })}
         </nav>
 
-        <div className="p-3.5 border-t border-[#2B334E] flex items-center justify-between gap-2">
+        <div className="p-3.5 border-t border-hairline flex items-center justify-between gap-2">
           <div className="text-xs min-w-0">
-            <div className="text-white font-medium truncate">
+            <div className="text-ink font-medium truncate">
               {session.user.name}
             </div>
-            <div className="text-[#A1A1AA] truncate">{session.user.email}</div>
+            <div className="text-ink-muted truncate">{session.user.email}</div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <button
@@ -951,7 +952,7 @@ export default function App() {
               onClick={() => navigateTo("/")}
               title="Home"
               aria-label="Home"
-              className="w-8 h-8 inline-flex items-center justify-center bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] hover:border-indigo-400/50 rounded-lg transition-colors"
+              className="w-8 h-8 inline-flex items-center justify-center bg-surface hover:bg-elevated border border-hairline hover:border-indigo-400/50 rounded-lg transition-colors"
             >
               <Home className="w-3.5 h-3.5 text-indigo-400" />
             </button>
@@ -960,7 +961,7 @@ export default function App() {
               onClick={() => setSettingsOpen(true)}
               title="Account Settings"
               aria-label="Account Settings"
-              className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-indigo-400 bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors"
+              className="w-8 h-8 inline-flex items-center justify-center text-ink-muted hover:text-indigo-400 bg-surface hover:bg-elevated border border-hairline rounded-lg transition-colors"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
@@ -969,7 +970,7 @@ export default function App() {
               onClick={handleSignOut}
               title="Sign out"
               aria-label="Sign out"
-              className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors"
+              className="w-8 h-8 inline-flex items-center justify-center text-ink-muted hover:text-ink bg-surface hover:bg-elevated border border-hairline rounded-lg transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
@@ -999,17 +1000,17 @@ export default function App() {
               exit={{ x: "-100%" }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-64 bg-[#101422] border-r border-[#2B334E] h-full flex flex-col justify-between p-4 outline-none"
+              className="w-64 bg-surface border-r border-hairline h-full flex flex-col justify-between p-4 outline-none"
             >
             <div className="flex-1 min-h-0 flex flex-col">
-              <div className="flex items-center justify-between pb-4 border-b border-[#2B334E] shrink-0">
+              <div className="flex items-center justify-between pb-4 border-b border-hairline shrink-0">
                 <div className="flex items-center gap-2.5">
                   <img
                     src="/assets/as-logo.png"
                     alt="AS ROUTER"
                     className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.25)]"
                   />
-                  <span className="font-display text-base font-bold text-white">
+                  <span className="font-display text-base font-bold text-ink">
                     AS ROUTER
                   </span>
                 </div>
@@ -1017,7 +1018,7 @@ export default function App() {
                   type="button"
                   aria-label="Close navigation"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="text-[#A1A1AA] hover:text-white"
+                  className="text-ink-muted hover:text-ink"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1036,15 +1037,15 @@ export default function App() {
                       }}
                       className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium rounded-lg whitespace-nowrap ${
                         isActive
-                          ? "text-white"
-                          : "text-[#A1A1AA] hover:text-white"
+                          ? "text-ink"
+                          : "text-ink-muted hover:text-ink"
                       }`}
                     >
                       {isActive && (
                         <motion.span
                           layoutId="mobile-nav-pill"
                           transition={{ type: "spring", stiffness: 360, damping: 32 }}
-                          className="absolute inset-0 bg-[#171C2E] border border-[#343E5E] rounded-lg"
+                          className="absolute inset-0 bg-elevated border border-hairline-strong rounded-lg"
                           style={{ boxShadow: `inset 2px 0 0 ${item.accent}` }}
                         />
                       )}
@@ -1056,12 +1057,12 @@ export default function App() {
                         {item.label}
                       </span>
                       {item.id === "provider-list" && (
-                        <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                        <span className="relative z-10 font-mono text-xs text-ink-muted tabular-nums">
                           {LLM_PROVIDER_PRESETS.length}
                         </span>
                       )}
                       {item.id === "provider-connected" && workspace && (
-                        <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                        <span className="relative z-10 font-mono text-xs text-ink-muted tabular-nums">
                           {
                             workspace.connections.filter(
                               (c) => !isSearchProvider(c.provider)
@@ -1070,7 +1071,7 @@ export default function App() {
                         </span>
                       )}
                       {item.id === "search-providers" && (
-                        <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                        <span className="relative z-10 font-mono text-xs text-ink-muted tabular-nums">
                           {(() => {
                             const sc = workspace
                               ? workspace.connections.filter((c) =>
@@ -1084,7 +1085,7 @@ export default function App() {
                         </span>
                       )}
                       {item.id === "logs" && workspace && (
-                        <span className="relative z-10 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                        <span className="relative z-10 font-mono text-xs text-ink-muted tabular-nums">
                           {workspace.logs.length}
                         </span>
                       )}
@@ -1093,12 +1094,12 @@ export default function App() {
                 })}
               </nav>
             </div>
-            <div className="pt-3 border-t border-[#2B334E] flex items-center justify-between gap-2">
+            <div className="pt-3 border-t border-hairline flex items-center justify-between gap-2">
               <div className="text-xs min-w-0">
-                <div className="text-white font-medium truncate">
+                <div className="text-ink font-medium truncate">
                   {session.user.name}
                 </div>
-                <div className="text-[#A1A1AA] truncate">
+                <div className="text-ink-muted truncate">
                   {session.user.email}
                 </div>
               </div>
@@ -1111,7 +1112,7 @@ export default function App() {
                   }}
                   title="Home"
                   aria-label="Home"
-                  className="w-8 h-8 inline-flex items-center justify-center bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg"
+                  className="w-8 h-8 inline-flex items-center justify-center bg-surface hover:bg-elevated border border-hairline rounded-lg"
                 >
                   <Home className="w-3.5 h-3.5 text-indigo-400" />
                 </button>
@@ -1123,7 +1124,7 @@ export default function App() {
                   }}
                   title="Account Settings"
                   aria-label="Account Settings"
-                  className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-indigo-400 bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg"
+                  className="w-8 h-8 inline-flex items-center justify-center text-ink-muted hover:text-indigo-400 bg-surface hover:bg-elevated border border-hairline rounded-lg"
                 >
                   <Settings className="w-3.5 h-3.5" />
                 </button>
@@ -1132,7 +1133,7 @@ export default function App() {
                   onClick={handleSignOut}
                   title="Sign out"
                   aria-label="Sign out"
-                  className="w-8 h-8 inline-flex items-center justify-center text-[#A1A1AA] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg"
+                  className="w-8 h-8 inline-flex items-center justify-center text-ink-muted hover:text-ink bg-surface hover:bg-elevated border border-hairline rounded-lg"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -1146,12 +1147,12 @@ export default function App() {
       {/* Main Content Area */}
       <div className="flex-1 md:pl-[248px] flex flex-col min-w-0 relative z-10">
         {/* Top Bar Contract */}
-        <header className="h-16 px-4 sm:px-8 border-b border-[#2B334E] flex items-center justify-between gap-4 sticky top-0 z-30 bg-[#101422]/90 backdrop-blur-md">
+        <header className="h-16 px-4 sm:px-8 border-b border-hairline flex items-center justify-between gap-4 sticky top-0 z-30 bg-surface/90 backdrop-blur-md">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="md:hidden p-1.5 text-[#A1A1AA] hover:text-white"
+              className="md:hidden p-1.5 text-ink-muted hover:text-ink"
               aria-label="Open navigation"
             >
               <Menu className="w-5 h-5" />
@@ -1162,10 +1163,10 @@ export default function App() {
                 alt="AS ROUTER"
                 className="h-4 w-auto object-contain sm:hidden shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.22)]"
               />
-              <span className="text-[#A1A1AA] hidden sm:inline">
+              <span className="text-ink-muted hidden sm:inline">
                 AS ROUTER
               </span>
-              <span className="text-[#4B5563] hidden sm:inline">/</span>
+              <span className="text-ink-dim hidden sm:inline">/</span>
               <span
                 className="font-medium truncate transition-colors"
                 style={{ color: activeNavAccent }}
@@ -1176,16 +1177,18 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggle />
+
             <button
               type="button"
               onClick={() => setCommandPaletteOpen(true)}
               aria-label="Open command palette"
               title="Command Palette (Cmd+K / Ctrl+K)"
-              className="inline-flex items-center gap-2 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#A1A1AA] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-2 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-ink bg-surface hover:bg-elevated border border-hairline rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               <Search className="w-3.5 h-3.5 text-indigo-400" />
               <span className="hidden lg:inline">Search commands...</span>
-              <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-[#101422] border border-[#2B334E] rounded text-[#94A3B8]">
+              <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-canvas border border-hairline rounded text-ink-muted">
                 ⌘K
               </kbd>
             </button>
@@ -1208,7 +1211,7 @@ export default function App() {
                   notify("Clipboard access denied", "error");
                 }
               }}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-ink-2 hover:text-ink bg-surface hover:bg-elevated border border-hairline rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               {copiedBaseUrl ? (
                 <>
@@ -1217,7 +1220,7 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <Copy className="w-3.5 h-3.5 text-[#A1A1AA]" />
+                  <Copy className="w-3.5 h-3.5 text-ink-muted" />
                   <span className="sm:hidden">Copy URL</span>
                   <span className="hidden sm:inline">Copy Base URL</span>
                 </>
@@ -1231,7 +1234,7 @@ export default function App() {
                   navigateTab("keys");
                   setOpenCreateKeyCounter((c) => c + 1);
                 }}
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-ink-2 hover:text-ink bg-surface hover:bg-elevated border border-hairline rounded-lg transition-colors whitespace-nowrap shrink-0"
               >
                 <Plus className="w-3.5 h-3.5 text-indigo-400" />
                 <span className="sm:hidden">New Key</span>
@@ -1262,11 +1265,11 @@ export default function App() {
                 {[0, 1, 2, 3].map((idx) => (
                   <div
                     key={idx}
-                    className="h-28 bg-[#171C2E] border border-[#2B334E] rounded-lg animate-pulse"
+                    className="h-28 bg-surface border border-hairline rounded-lg animate-pulse"
                   />
                 ))}
               </div>
-              <div className="h-64 bg-[#171C2E] border border-[#2B334E] rounded-lg animate-pulse" />
+              <div className="h-64 bg-surface border border-hairline rounded-lg animate-pulse" />
             </div>
           ) : workspace ? (
             <AnimatePresence mode="wait">
@@ -1407,8 +1410,8 @@ export default function App() {
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className={`fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-50 px-4 py-3 rounded-xl border text-xs flex items-center justify-between gap-3 shadow-2xl backdrop-blur-md ${
               toast.tone === "error"
-                ? "bg-[#1A1016]/95 border-red-500/40 text-red-200"
-                : "bg-[#0F1B1D]/95 border-emerald-500/40 text-emerald-200"
+                ? "bg-surface/95 border-red-500/40 text-red-200"
+                : "bg-surface/95 border-emerald-500/40 text-emerald-200"
             }`}
           >
             <span className="leading-snug">{toast.message}</span>

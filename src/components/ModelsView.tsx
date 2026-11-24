@@ -172,11 +172,11 @@ export function ModelsView({
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-baseline gap-2.5">
-          <h2 className="font-display text-xl font-semibold text-white">
+          <h2 className="font-display text-xl font-semibold text-ink">
             Models
           </h2>
           {rows.length > 0 && (
-            <span className="text-xs font-mono text-[#A1A1AA]">
+            <span className="text-xs font-mono text-ink-muted">
               {filtered.length === rows.length
                 ? rows.length
                 : `${filtered.length} / ${rows.length}`}
@@ -191,7 +191,7 @@ export function ModelsView({
                 value={providerFilter}
                 onChange={(e) => setProviderFilter(e.target.value)}
                 aria-label="Filter by provider"
-                className="bg-[#171C2E] border border-[#2B334E] rounded-lg px-2.5 py-1.5 text-xs text-[#D4D4D8] focus:outline-none focus:border-indigo-400"
+                className="bg-surface border border-hairline rounded-lg px-2.5 py-1.5 text-xs text-ink-2 focus:outline-none focus:border-indigo-400"
               >
                 <option value="all">All Providers</option>
                 {providerOptions.map((name) => (
@@ -203,14 +203,14 @@ export function ModelsView({
             )}
 
             <div className="relative w-full sm:w-64">
-              <Search className="w-3.5 h-3.5 text-[#71717A] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-ink-dim absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search models, combos, or providers..."
                 aria-label="Filter models"
-                className="w-full bg-[#171C2E] border border-[#2B334E] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-400 transition-colors"
+                className="w-full bg-surface border border-hairline rounded-lg pl-8 pr-3 py-1.5 text-xs text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400 transition-colors"
               />
             </div>
           </div>
@@ -218,7 +218,7 @@ export function ModelsView({
       </div>
 
       {rows.length > 0 && (
-        <div className="inline-flex items-center gap-1 p-1 bg-[#171C2E] border border-[#2B334E] rounded-lg overflow-x-auto max-w-full">
+        <div className="inline-flex items-center gap-1 p-1 bg-surface border border-hairline rounded-lg overflow-x-auto max-w-full">
           {FILTER_TABS.map((tab) => {
             const active = categoryFilter === tab.id;
             return (
@@ -227,14 +227,14 @@ export function ModelsView({
                 type="button"
                 onClick={() => setCategoryFilter(tab.id)}
                 className={`relative px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-                  active ? "text-white" : "text-[#A1A1AA] hover:text-white"
+                  active ? "text-ink" : "text-ink-muted hover:text-ink"
                 }`}
               >
                 {active && (
                   <motion.span
                     layoutId="models-filter-pill"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    className="absolute inset-0 bg-[#1F263D] rounded-md"
+                    className="absolute inset-0 bg-elevated rounded-md"
                   />
                 )}
                 <span className="relative z-10">{tab.label}</span>
@@ -245,8 +245,8 @@ export function ModelsView({
       )}
 
       {rows.length === 0 ? (
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg px-6 py-12 text-center space-y-3">
-          <div className="text-sm font-medium text-white">
+        <div className="bg-surface border border-hairline rounded-lg px-6 py-12 text-center space-y-3">
+          <div className="text-sm font-medium text-ink">
             No connected models yet
           </div>
           <button
@@ -258,8 +258,8 @@ export function ModelsView({
           </button>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg px-6 py-10 text-center space-y-2">
-          <div className="text-xs text-[#A1A1AA]">
+        <div className="bg-surface border border-hairline rounded-lg px-6 py-10 text-center space-y-2">
+          <div className="text-xs text-ink-muted">
             No models match your active filters.
           </div>
           <button
@@ -275,7 +275,7 @@ export function ModelsView({
           </button>
         </div>
       ) : (
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg divide-y divide-[#2B334E] overflow-hidden">
+        <div className="bg-surface border border-hairline rounded-lg divide-y divide-hairline overflow-hidden">
           {filtered.map((row, idx) => {
             const isCopied = copiedKey === row.key;
             const visual = row.isCombo
@@ -294,7 +294,7 @@ export function ModelsView({
                   duration: 0.2,
                   delay: Math.min(idx * 0.012, 0.2),
                 }}
-                className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#1F263D]/55 transition-colors"
+                className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-elevated/55 transition-colors"
               >
                 <div className="min-w-0 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 flex-1">
                   <div className="flex items-center gap-2 sm:w-44 shrink-0 min-w-0">
@@ -308,13 +308,13 @@ export function ModelsView({
                     >
                       {shortCode}
                     </span>
-                    <span className="text-xs font-medium text-[#A1A1AA] truncate">
+                    <span className="text-xs font-medium text-ink-muted truncate">
                       {row.providerName}
                     </span>
                   </div>
 
                   <div className="min-w-0 flex flex-wrap items-center gap-2">
-                    <span className="text-xs sm:text-sm font-mono text-white truncate">
+                    <span className="text-xs sm:text-sm font-mono text-ink truncate">
                       {row.copyId}
                     </span>
                     {row.strategyLabel && (
@@ -325,7 +325,7 @@ export function ModelsView({
                     {row.capabilities.slice(0, 4).map((cap) => (
                       <span
                         key={cap}
-                        className="hidden md:inline-block text-[10px] font-mono text-[#94A3B8] bg-[#101422] border border-[#2B334E] px-1.5 py-0.5 rounded"
+                        className="hidden md:inline-block text-[10px] font-mono text-ink-muted bg-canvas border border-hairline px-1.5 py-0.5 rounded"
                       >
                         {cap}
                       </span>
@@ -340,7 +340,7 @@ export function ModelsView({
                     className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
                       isCopied
                         ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                        : "border-[#2B334E] bg-[#101422] text-[#D4D4D8] hover:text-white hover:border-[#3B466B]"
+                        : "border-hairline bg-canvas text-ink-2 hover:text-ink hover:border-hairline-strong"
                     }`}
                   >
                     {isCopied ? (
@@ -350,7 +350,7 @@ export function ModelsView({
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5 text-[#94A3B8]" />
+                        <Copy className="w-3.5 h-3.5 text-ink-muted" />
                         <span>Copy</span>
                       </>
                     )}
@@ -360,7 +360,7 @@ export function ModelsView({
                     <button
                       type="button"
                       onClick={() => onTestInPlayground(row.copyId)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-indigo-500/35 bg-indigo-500/12 text-indigo-300 hover:bg-indigo-500/20 hover:text-white transition-colors whitespace-nowrap"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-indigo-500/35 bg-indigo-500/12 text-indigo-300 hover:bg-indigo-500/20 hover:text-ink transition-colors whitespace-nowrap"
                     >
                       <Terminal className="w-3.5 h-3.5" />
                       <span>Test</span>

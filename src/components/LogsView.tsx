@@ -189,7 +189,7 @@ export function LogsView({
   return (
     <div className="space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <h2 className="font-display text-lg font-semibold text-white">
+        <h2 className="font-display text-lg font-semibold text-ink">
           Live Logs
         </h2>
 
@@ -197,7 +197,7 @@ export function LogsView({
           <button
             type="button"
             onClick={onTogglePause}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#171C2E] border border-[#2B334E] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-surface border border-hairline rounded-lg text-ink-2 hover:text-ink whitespace-nowrap shrink-0"
           >
             {streamPaused ? (
               <>
@@ -217,7 +217,7 @@ export function LogsView({
               <button
                 type="button"
                 onClick={handleExportCsv}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-surface hover:bg-elevated border border-hairline rounded-lg text-ink-2 hover:text-ink whitespace-nowrap shrink-0"
               >
                 <Download className="w-3.5 h-3.5 text-indigo-400" />
                 <span>CSV</span>
@@ -225,9 +225,9 @@ export function LogsView({
               <button
                 type="button"
                 onClick={handleExportJson}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg text-[#D4D4D8] hover:text-white whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-surface hover:bg-elevated border border-hairline rounded-lg text-ink-2 hover:text-ink whitespace-nowrap shrink-0"
               >
-                <Download className="w-3.5 h-3.5 text-[#A1A1AA]" />
+                <Download className="w-3.5 h-3.5 text-ink-muted" />
                 <span>JSON</span>
               </button>
             </>
@@ -248,7 +248,7 @@ export function LogsView({
               className={`inline-flex items-center gap-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                 confirmClear
                   ? "text-red-300 underline underline-offset-2"
-                  : "text-[#A1A1AA] hover:text-red-400"
+                  : "text-ink-muted hover:text-red-400"
               }`}
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -261,7 +261,7 @@ export function LogsView({
       {/* Filters & Search */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-1 p-1 bg-[#171C2E] border border-[#2B334E] rounded-lg self-start overflow-x-auto max-w-full">
+          <div className="inline-flex items-center gap-1 p-1 bg-surface border border-hairline rounded-lg self-start overflow-x-auto max-w-full">
             {(
               [
                 ["all", "All"],
@@ -276,15 +276,15 @@ export function LogsView({
                 onClick={() => setFilter(id)}
                 className={`relative px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                   filter === id
-                    ? "text-white"
-                    : "text-[#A1A1AA] hover:text-white"
+                    ? "text-ink"
+                    : "text-ink-muted hover:text-ink"
                 }`}
               >
                 {filter === id && (
                   <motion.span
                     layoutId="logs-filter-pill"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    className="absolute inset-0 bg-[#1F263D] rounded-md"
+                    className="absolute inset-0 bg-elevated rounded-md"
                   />
                 )}
                 <span className="relative z-10">{label}</span>
@@ -297,7 +297,7 @@ export function LogsView({
               value={providerFilter}
               onChange={(e) => setProviderFilter(e.target.value)}
               aria-label="Filter logs by provider"
-              className="bg-[#171C2E] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-[#D4D4D8] focus:outline-none focus:border-indigo-400"
+              className="bg-surface border border-hairline rounded-lg px-2.5 py-2 text-xs text-ink-2 focus:outline-none focus:border-indigo-400"
             >
               <option value="all">All Providers</option>
               {providerOptions.map((prov) => (
@@ -309,7 +309,7 @@ export function LogsView({
           )}
 
           {logs.length > 0 && (
-            <span className="text-[11px] font-mono text-[#71717A] tabular-nums">
+            <span className="text-[11px] font-mono text-ink-dim tabular-nums">
               {filtered.length === logs.length
                 ? `${logs.length} traces`
                 : `${filtered.length} / ${logs.length}`}
@@ -318,26 +318,26 @@ export function LogsView({
         </div>
 
         <div className="relative lg:w-72">
-          <Search className="w-3.5 h-3.5 text-[#A1A1AA] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter by model, provider, key, error..."
             aria-label="Search logs"
-            className="w-full bg-[#171C2E] border border-[#2B334E] rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-[#8B8B95] focus:outline-none focus:border-indigo-400"
+            className="w-full bg-surface border border-hairline rounded-lg pl-8 pr-3 py-2 text-xs text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400"
           />
         </div>
       </div>
 
       {/* Logs Table / Mobile Cards */}
-      <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg overflow-hidden">
+      <div className="bg-surface border border-hairline rounded-lg overflow-hidden">
         {filtered.length === 0 ? (
           <div className="p-10 text-center">
-            <p className="text-sm font-medium text-white">
+            <p className="text-sm font-medium text-ink">
               {logs.length === 0 ? "No request logs yet" : "No matching logs"}
             </p>
-            <p className="mt-1 text-xs text-[#8B8B95]">
+            <p className="mt-1 text-xs text-ink-muted">
               {logs.length === 0
                 ? "Send a prompt in the Playground or hit your gateway endpoint to see real-time traces."
                 : "Try adjusting your status filter or search query."}
@@ -355,7 +355,7 @@ export function LogsView({
           </div>
         ) : (
           <>
-            <div className="md:hidden divide-y divide-[#2B334E]">
+            <div className="md:hidden divide-y divide-hairline">
               {filtered.map((log) => {
                 const statusColor =
                   log.outcome === "cache_hit"
@@ -384,24 +384,24 @@ export function LogsView({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.18 }}
                     onClick={() => setSelectedLog(log)}
-                    className="w-full text-left p-4 hover:bg-[#1F263D]/70 space-y-1.5"
+                    className="w-full text-left p-4 hover:bg-elevated/70 space-y-1.5"
                   >
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className={`font-mono font-medium ${statusColor}`}>
                         {statusText}
                       </span>
-                      <span className="font-mono text-[#8B8B95] tabular-nums">
+                      <span className="font-mono text-ink-muted tabular-nums">
                         {new Date(log.createdAt).toLocaleTimeString()} · {log.latencyMs}ms
                       </span>
                     </div>
-                    <div className="font-mono text-xs text-white truncate">
+                    <div className="font-mono text-xs text-ink truncate">
                       <span style={{ color: provVisual.color }}>
                         {log.resolvedProvider}
                       </span>
-                      <span className="text-[#71717A]">/</span>
+                      <span className="text-ink-dim">/</span>
                       <span>{log.resolvedModel}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-[#8B8B95] tabular-nums">
+                    <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-ink-muted tabular-nums">
                       <span className="truncate">req: {log.requestedModel}</span>
                       <span>
                         {totalTok.toLocaleString()} tok · ${log.estimatedCostUsd.toFixed(5)}
@@ -414,7 +414,7 @@ export function LogsView({
             <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#2B334E] text-xs text-[#A1A1AA]">
+                <tr className="border-b border-hairline text-xs text-ink-muted">
                   <th className="py-2.5 px-4 font-medium">Time</th>
                   <th className="py-2.5 px-4 font-medium">Status</th>
                   <th className="py-2.5 px-4 font-medium">Requested Model</th>
@@ -427,7 +427,7 @@ export function LogsView({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#2B334E] text-xs">
+              <tbody className="divide-y divide-hairline text-xs">
                 {filtered.map((log) => {
                   const statusColor =
                     log.outcome === "cache_hit"
@@ -453,9 +453,9 @@ export function LogsView({
                     <tr
                       key={log.id}
                       onClick={() => setSelectedLog(log)}
-                      className="h-10 hover:bg-[#1F263D]/70 cursor-pointer transition-colors"
+                      className="h-10 hover:bg-elevated/70 cursor-pointer transition-colors"
                     >
-                      <td className="py-2 px-4 font-mono text-[#A1A1AA] tabular-nums whitespace-nowrap">
+                      <td className="py-2 px-4 font-mono text-ink-muted tabular-nums whitespace-nowrap">
                         {new Date(log.createdAt).toLocaleTimeString()}
                       </td>
                       <td
@@ -463,17 +463,17 @@ export function LogsView({
                       >
                         {statusText}
                       </td>
-                      <td className="py-2 px-4 font-mono text-white truncate max-w-[160px]">
+                      <td className="py-2 px-4 font-mono text-ink truncate max-w-[160px]">
                         {log.requestedModel}
                       </td>
-                      <td className="py-2 px-4 font-mono text-[#D4D4D8] truncate max-w-[220px]">
+                      <td className="py-2 px-4 font-mono text-ink-2 truncate max-w-[220px]">
                         <span
                           className="font-semibold"
                           style={{ color: provVisual.color }}
                         >
                           {log.resolvedProvider}
                         </span>
-                        <span className="mx-1 text-[#A1A1AA]">/</span>
+                        <span className="mx-1 text-ink-muted">/</span>
                         <span>{log.resolvedModel}</span>
                         {hops.length > 1 && (
                           <span className="ml-1.5 text-amber-400">
@@ -481,16 +481,16 @@ export function LogsView({
                           </span>
                         )}
                       </td>
-                      <td className="py-2 px-4 font-mono text-[#A1A1AA] whitespace-nowrap">
+                      <td className="py-2 px-4 font-mono text-ink-muted whitespace-nowrap">
                         {log.detectedIntent || "—"}
                       </td>
-                      <td className="py-2 px-4 text-right font-mono text-[#D4D4D8] tabular-nums">
+                      <td className="py-2 px-4 text-right font-mono text-ink-2 tabular-nums">
                         {totalTok.toLocaleString()}
                       </td>
-                      <td className="py-2 px-4 text-right font-mono text-[#A1A1AA] tabular-nums">
+                      <td className="py-2 px-4 text-right font-mono text-ink-muted tabular-nums">
                         ${log.estimatedCostUsd.toFixed(5)}
                       </td>
-                      <td className="py-2 px-4 text-right font-mono text-[#D4D4D8] tabular-nums whitespace-nowrap">
+                      <td className="py-2 px-4 text-right font-mono text-ink-2 tabular-nums whitespace-nowrap">
                         {log.latencyMs}ms
                       </td>
                     </tr>
@@ -509,7 +509,7 @@ export function LogsView({
             type="button"
             onClick={onLoadMoreLogs}
             disabled={loadingMoreLogs}
-            className="px-4 py-2 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] disabled:opacity-50 text-[#D4D4D8] hover:text-white border border-[#2B334E] rounded-lg transition-colors"
+            className="px-4 py-2 text-xs font-medium bg-surface hover:bg-elevated disabled:opacity-50 text-ink-2 hover:text-ink border border-hairline rounded-lg transition-colors"
           >
             {loadingMoreLogs ? "Loading older logs..." : "Load More Logs"}
           </button>
@@ -538,17 +538,17 @@ export function LogsView({
               exit={{ x: "100%" }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg bg-[#171C2E] border-l border-[#2B334E] h-full overflow-y-auto p-6 outline-none"
+              className="w-full max-w-lg bg-surface border-l border-hairline h-full overflow-y-auto p-6 outline-none"
             >
-            <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline">
               <div>
                 <h3
                   id="trace-inspector-title"
-                  className="font-display text-base font-semibold text-white"
+                  className="font-display text-base font-semibold text-ink"
                 >
                   Request Trace Inspector
                 </h3>
-                <div className="font-mono text-xs text-[#A1A1AA] mt-0.5">
+                <div className="font-mono text-xs text-ink-muted mt-0.5">
                   {selectedLog.id}
                 </div>
               </div>
@@ -556,7 +556,7 @@ export function LogsView({
                 type="button"
                 aria-label="Close trace inspector"
                 onClick={() => setSelectedLog(null)}
-                className="text-[#A1A1AA] hover:text-white p-1"
+                className="text-ink-muted hover:text-ink p-1"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -594,7 +594,7 @@ export function LogsView({
                     // ignore clipboard failure
                   }
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#101422] hover:bg-[#1F263D] border border-[#2B334E] text-[#D4D4D8] hover:text-white rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-canvas hover:bg-elevated border border-hairline text-ink-2 hover:text-ink rounded-lg transition-colors"
               >
                 {copiedTrace ? (
                   <>
@@ -603,7 +603,7 @@ export function LogsView({
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3.5 h-3.5 text-[#94A3B8]" />
+                    <Copy className="w-3.5 h-3.5 text-ink-muted" />
                     <span>Copy Trace JSON</span>
                   </>
                 )}
@@ -611,34 +611,34 @@ export function LogsView({
             </div>
 
             <div className="mt-5 space-y-5 text-xs">
-              <div className="grid grid-cols-2 gap-4 bg-[#101422] border border-[#2B334E] rounded-lg p-4">
+              <div className="grid grid-cols-2 gap-4 bg-canvas border border-hairline rounded-lg p-4">
                 <div>
-                  <div className="text-[#A1A1AA]">Requested Model</div>
-                  <div className="mt-1 font-mono text-white">
+                  <div className="text-ink-muted">Requested Model</div>
+                  <div className="mt-1 font-mono text-ink">
                     {selectedLog.requestedModel}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[#A1A1AA]">Detected Intent</div>
+                  <div className="text-ink-muted">Detected Intent</div>
                   <div className="mt-1 font-mono text-emerald-400">
                     {selectedLog.detectedIntent || "standard"}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[#A1A1AA]">API Key</div>
-                  <div className="mt-1 font-mono text-white">
+                  <div className="text-ink-muted">API Key</div>
+                  <div className="mt-1 font-mono text-ink">
                     {selectedLog.apiKeyPrefix || "Dashboard Playground"}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[#A1A1AA]">Tokens (In / Out)</div>
-                  <div className="mt-1 font-mono text-white tabular-nums">
+                  <div className="text-ink-muted">Tokens (In / Out)</div>
+                  <div className="mt-1 font-mono text-ink tabular-nums">
                     {selectedLog.promptTokens} / {selectedLog.completionTokens}
                   </div>
                 </div>
                 <div className="col-span-2">
-                  <div className="text-[#A1A1AA]">End-to-End Latency & Cost</div>
-                  <div className="mt-1 font-mono text-white tabular-nums">
+                  <div className="text-ink-muted">End-to-End Latency & Cost</div>
+                  <div className="mt-1 font-mono text-ink tabular-nums">
                     {selectedLog.latencyMs}ms · $
                     {selectedLog.estimatedCostUsd.toFixed(6)}
                   </div>
@@ -652,17 +652,17 @@ export function LogsView({
               )}
 
               <div>
-                <h4 className="font-medium text-[#D4D4D8] mb-2">
+                <h4 className="font-medium text-ink-2 mb-2">
                   Routing & Fallback Execution Trace ({selectedHops.length})
                 </h4>
                 {selectedHops.length === 0 ? (
-                  <p className="text-[#A1A1AA]">No hop trace recorded.</p>
+                  <p className="text-ink-muted">No hop trace recorded.</p>
                 ) : (
-                  <div className="border border-[#2B334E] rounded-lg divide-y divide-[#2B334E] bg-[#101422]">
+                  <div className="border border-hairline rounded-lg divide-y divide-hairline bg-canvas">
                     {selectedHops.map((hop, idx) => (
                       <div key={idx} className="p-3 space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="font-mono text-white">
+                          <span className="font-mono text-ink">
                             #{idx + 1} {hop.connectionName} ({hop.provider} /{" "}
                             {hop.model})
                           </span>
@@ -672,14 +672,14 @@ export function LogsView({
                                 ? "text-emerald-400"
                                 : hop.status === "failed"
                                   ? "text-red-400"
-                                  : "text-[#A1A1AA]"
+                                  : "text-ink-muted"
                             }`}
                           >
                             {hop.status}
                             {hop.statusCode ? ` · ${hop.statusCode}` : ""}
                           </span>
                         </div>
-                        <div className="text-[#A1A1AA] font-mono break-words">
+                        <div className="text-ink-muted font-mono break-words">
                           {hop.reason} · {hop.latencyMs}ms
                         </div>
                       </div>

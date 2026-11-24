@@ -229,14 +229,14 @@ export function ApiKeysView({
       <div className="mt-1.5 space-y-1.5 max-w-[240px]">
         {k.dailyTokenLimit !== null && (
           <div className="space-y-0.5">
-            <div className="flex items-center justify-between text-[10px] font-mono text-[#94A3B8] tabular-nums">
+            <div className="flex items-center justify-between text-[10px] font-mono text-ink-muted tabular-nums">
               <span>
                 {(k.usedTokensToday || 0).toLocaleString()} /{" "}
                 {k.dailyTokenLimit.toLocaleString()} tok/d
               </span>
               <span>{tokenPct}%</span>
             </div>
-            <div className="h-1 w-full rounded-full bg-[#101422] overflow-hidden">
+            <div className="h-1 w-full rounded-full bg-canvas overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${barTone(tokenPct)}`}
                 style={{ width: `${tokenPct}%` }}
@@ -246,14 +246,14 @@ export function ApiKeysView({
         )}
         {k.monthlyUsdLimit !== null && (
           <div className="space-y-0.5">
-            <div className="flex items-center justify-between text-[10px] font-mono text-[#94A3B8] tabular-nums">
+            <div className="flex items-center justify-between text-[10px] font-mono text-ink-muted tabular-nums">
               <span>
                 ${(k.usedCostMonth || 0).toFixed(2)} / $
                 {k.monthlyUsdLimit.toFixed(2)}/mo
               </span>
               <span>{costPct}%</span>
             </div>
-            <div className="h-1 w-full rounded-full bg-[#101422] overflow-hidden">
+            <div className="h-1 w-full rounded-full bg-canvas overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${barTone(costPct)}`}
                 style={{ width: `${costPct}%` }}
@@ -269,7 +269,7 @@ export function ApiKeysView({
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-display text-lg font-semibold text-white">
+          <h2 className="font-display text-lg font-semibold text-ink">
             API Keys
           </h2>
         </div>
@@ -291,7 +291,7 @@ export function ApiKeysView({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-            className="bg-[#171C2E] border border-emerald-500/40 rounded-lg p-5"
+            className="bg-surface border border-emerald-500/40 rounded-lg p-5"
           >
             <div className="flex items-center justify-between gap-4">
               <h3 className="text-sm font-semibold text-emerald-400">
@@ -300,14 +300,14 @@ export function ApiKeysView({
               <button
                 type="button"
                 onClick={() => setRevealedKey(null)}
-                className="text-[#A1A1AA] hover:text-white"
+                className="text-ink-muted hover:text-ink"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="mt-3 flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 bg-[#101422] border border-[#2B334E] rounded-md font-mono text-xs text-white overflow-x-auto">
+              <code className="flex-1 px-3 py-2 bg-canvas border border-hairline rounded-md font-mono text-xs text-ink overflow-x-auto">
                 {revealedKey}
               </code>
               <button
@@ -333,9 +333,9 @@ export function ApiKeysView({
       </AnimatePresence>
 
       {keys.length === 0 ? (
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-10 text-center">
-          <p className="text-sm font-medium text-white">No API keys yet</p>
-          <p className="mt-1 text-xs text-[#8B8B95]">
+        <div className="bg-surface border border-hairline rounded-lg p-10 text-center">
+          <p className="text-sm font-medium text-ink">No API keys yet</p>
+          <p className="mt-1 text-xs text-ink-muted">
             Create a gateway key to call OpenAI- or Anthropic-compatible endpoints.
           </p>
           <button
@@ -358,7 +358,7 @@ export function ApiKeysView({
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.2) }}
-                className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-4 space-y-3"
+                className="bg-surface border border-hairline rounded-lg p-4 space-y-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -367,17 +367,17 @@ export function ApiKeysView({
                         className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: dotColor }}
                       />
-                      <span className="font-medium text-white truncate">
+                      <span className="font-medium text-ink truncate">
                         {k.name}
                       </span>
                     </div>
-                    <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-[#A1A1AA] truncate">
+                    <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-ink-muted truncate">
                       <span className="truncate">{k.keyPrefix}</span>
                       <button
                         type="button"
                         onClick={() => copyPrefix(k)}
                         aria-label={`Copy prefix for ${k.name}`}
-                        className="text-[#94A3B8] hover:text-white shrink-0"
+                        className="text-ink-muted hover:text-ink shrink-0"
                       >
                         {copiedPrefixId === k.id ? (
                           <Check className="w-3 h-3 text-emerald-400" />
@@ -389,14 +389,14 @@ export function ApiKeysView({
                   </div>
                   <span
                     className={`text-xs font-medium shrink-0 ${
-                      k.isActive ? "text-emerald-400" : "text-[#A1A1AA]"
+                      k.isActive ? "text-emerald-400" : "text-ink-muted"
                     }`}
                   >
                     {k.isActive ? "Active" : "Disabled"}
                   </span>
                 </div>
 
-                <div className="text-xs font-mono text-[#A1A1AA] space-y-1">
+                <div className="text-xs font-mono text-ink-muted space-y-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span>
                       {k.allowedCombo ? `combo: ${k.allowedCombo}` : "All models"}
@@ -405,7 +405,7 @@ export function ApiKeysView({
                       <span className="text-emerald-400">· Free-only</span>
                     )}
                   </div>
-                  <div className="text-[#94A3B8] tabular-nums">
+                  <div className="text-ink-muted tabular-nums">
                     {k.totalRequests.toLocaleString()} req ·{" "}
                     {k.totalTokens.toLocaleString()} tok · $
                     {k.totalCostUsd.toFixed(4)}
@@ -413,11 +413,11 @@ export function ApiKeysView({
                   {renderQuotaBars(k)}
                 </div>
 
-                <div className="pt-2 border-t border-[#28304A] flex items-center justify-between gap-2">
+                <div className="pt-2 border-t border-hairline flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => openEditModal(k)}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#D4D4D8] hover:text-indigo-400"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-2 hover:text-indigo-400"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                     <span>Edit</span>
@@ -426,7 +426,7 @@ export function ApiKeysView({
                     <button
                       type="button"
                       onClick={() => handleToggle(k)}
-                      className="text-xs font-medium text-[#A1A1AA] hover:text-white"
+                      className="text-xs font-medium text-ink-muted hover:text-ink"
                     >
                       {k.isActive ? "Disable" : "Enable"}
                     </button>
@@ -455,11 +455,11 @@ export function ApiKeysView({
             })}
           </div>
 
-          <div className="hidden md:block bg-[#171C2E] border border-[#2B334E] rounded-lg overflow-hidden">
+          <div className="hidden md:block bg-surface border border-hairline rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#2B334E] text-xs text-[#A1A1AA]">
+                <tr className="border-b border-hairline text-xs text-ink-muted">
                   <th className="py-3 px-5 font-medium">Name & Prefix</th>
                   <th className="py-3 px-4 font-medium">Scope & Caps</th>
                   <th className="py-3 px-4 font-medium">State</th>
@@ -469,13 +469,13 @@ export function ApiKeysView({
                   <th className="py-3 px-5 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#2B334E] text-sm">
+              <tbody className="divide-y divide-hairline text-sm">
                 {keys.map((k, idx) => {
                   const dotColor = KEY_DOT_COLORS[idx % KEY_DOT_COLORS.length];
                   return (
                   <tr
                     key={k.id}
-                    className="hover:bg-[#1F263D]/50 transition-colors"
+                    className="hover:bg-elevated/50 transition-colors"
                   >
                     <td className="py-3 px-5">
                       <div className="flex items-center gap-2">
@@ -483,15 +483,15 @@ export function ApiKeysView({
                           className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: dotColor }}
                         />
-                        <span className="font-medium text-white">{k.name}</span>
+                        <span className="font-medium text-ink">{k.name}</span>
                       </div>
-                      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-[#A1A1AA]">
+                      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-ink-muted">
                         <span>{k.keyPrefix}</span>
                         <button
                           type="button"
                           onClick={() => copyPrefix(k)}
                           aria-label={`Copy prefix for ${k.name}`}
-                          className="text-[#94A3B8] hover:text-white transition-colors"
+                          className="text-ink-muted hover:text-ink transition-colors"
                         >
                           {copiedPrefixId === k.id ? (
                             <Check className="w-3 h-3 text-emerald-400" />
@@ -501,7 +501,7 @@ export function ApiKeysView({
                         </button>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-xs text-[#A1A1AA] font-mono">
+                    <td className="py-3 px-4 text-xs text-ink-muted font-mono">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span>
                           {k.allowedCombo ? `combo: ${k.allowedCombo}` : "All models"}
@@ -515,19 +515,19 @@ export function ApiKeysView({
                     <td className="py-3 px-4 text-xs font-medium">
                       <span
                         className={
-                          k.isActive ? "text-emerald-400" : "text-[#A1A1AA]"
+                          k.isActive ? "text-emerald-400" : "text-ink-muted"
                         }
                       >
                         {k.isActive ? "Active" : "Disabled"}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-xs text-[#D4D4D8] tabular-nums">
+                    <td className="py-3 px-4 text-right font-mono text-xs text-ink-2 tabular-nums">
                       {k.totalRequests.toLocaleString()}
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-xs text-[#D4D4D8] tabular-nums">
+                    <td className="py-3 px-4 text-right font-mono text-xs text-ink-2 tabular-nums">
                       {k.totalTokens.toLocaleString()}
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-xs text-[#D4D4D8] tabular-nums">
+                    <td className="py-3 px-4 text-right font-mono text-xs text-ink-2 tabular-nums">
                       ${k.totalCostUsd.toFixed(4)}
                     </td>
                     <td className="py-3 px-5 text-right">
@@ -536,14 +536,14 @@ export function ApiKeysView({
                           type="button"
                           onClick={() => openEditModal(k)}
                           title="Edit key"
-                          className="p-1 text-[#A1A1AA] hover:text-indigo-400 transition-colors"
+                          className="p-1 text-ink-muted hover:text-indigo-400 transition-colors"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleToggle(k)}
-                          className="text-xs font-medium text-[#A1A1AA] hover:text-white transition-colors whitespace-nowrap"
+                          className="text-xs font-medium text-ink-muted hover:text-ink transition-colors whitespace-nowrap"
                         >
                           {k.isActive ? "Disable" : "Enable"}
                         </button>
@@ -561,7 +561,7 @@ export function ApiKeysView({
                           className={`p-1 transition-colors ${
                             confirmDeleteId === k.id
                               ? "text-xs font-medium text-red-300 underline underline-offset-2"
-                              : "text-[#A1A1AA] hover:text-red-400"
+                              : "text-ink-muted hover:text-red-400"
                           }`}
                         >
                           {confirmDeleteId === k.id ? (
@@ -603,12 +603,12 @@ export function ApiKeysView({
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 outline-none"
+              className="w-full max-w-md bg-surface border border-hairline rounded-xl p-6 outline-none"
             >
-            <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline">
               <h3
                 id="api-key-modal-title"
-                className="font-display text-base font-semibold text-white"
+                className="font-display text-base font-semibold text-ink"
               >
                 {editingId ? "Edit API Key" : "Create API Key"}
               </h3>
@@ -616,7 +616,7 @@ export function ApiKeysView({
                 type="button"
                 aria-label="Close"
                 onClick={() => setShowCreate(false)}
-                className="text-[#A1A1AA] hover:text-white"
+                className="text-ink-muted hover:text-ink"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -626,7 +626,7 @@ export function ApiKeysView({
               <div>
                 <label
                   htmlFor="apikey-label-input"
-                  className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                  className="block text-xs font-medium text-ink-2 mb-1.5"
                 >
                   Key Label
                 </label>
@@ -637,14 +637,14 @@ export function ApiKeysView({
                   placeholder="e.g. Production Backend"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="apikey-combo-select"
-                  className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                  className="block text-xs font-medium text-ink-2 mb-1.5"
                 >
                   Allowed Combo
                 </label>
@@ -652,7 +652,7 @@ export function ApiKeysView({
                   id="apikey-combo-select"
                   value={allowedCombo}
                   onChange={(e) => setAllowedCombo(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-indigo-500"
                 >
                   <option value="">All combos and models</option>
                   {combos.map((c) => (
@@ -667,7 +667,7 @@ export function ApiKeysView({
                 <div>
                   <label
                     htmlFor="apikey-daily-tokens"
-                    className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                    className="block text-xs font-medium text-ink-2 mb-1.5"
                   >
                     Daily Token Limit
                   </label>
@@ -678,14 +678,14 @@ export function ApiKeysView({
                     placeholder="e.g. 250000"
                     value={dailyTokenLimit}
                     onChange={(e) => setDailyTokenLimit(e.target.value)}
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
                   <label
                     htmlFor="apikey-monthly-usd"
-                    className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                    className="block text-xs font-medium text-ink-2 mb-1.5"
                   >
                     Monthly USD Cap
                   </label>
@@ -697,12 +697,12 @@ export function ApiKeysView({
                     placeholder="e.g. 25.00"
                     value={monthlyUsdLimit}
                     onChange={(e) => setMonthlyUsdLimit(e.target.value)}
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="border-t border-[#28304A] pt-2">
+              <div className="border-t border-hairline pt-2">
                 <ToggleSwitch
                   checked={freeOnly}
                   onChange={setFreeOnly}
@@ -711,11 +711,11 @@ export function ApiKeysView({
                 />
               </div>
 
-              <div className="pt-3 border-t border-[#2B334E] flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-hairline flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg whitespace-nowrap"
+                  className="px-4 py-2 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline rounded-lg whitespace-nowrap"
                 >
                   Cancel
                 </button>

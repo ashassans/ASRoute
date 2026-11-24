@@ -130,26 +130,26 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
       parts.push(
         <code
           key={key}
-          className="px-1.5 py-0.5 rounded bg-[#101422] border border-[#2B334E] font-mono text-[12px] text-sky-300"
+          className="px-1.5 py-0.5 rounded bg-canvas border border-hairline font-mono text-[12px] text-sky-300"
         >
           {token.slice(1, -1)}
         </code>
       );
     } else if (token.startsWith("**") && token.endsWith("**")) {
       parts.push(
-        <strong key={key} className="font-semibold text-white">
+        <strong key={key} className="font-semibold text-ink">
           {renderInlineMarkdown(token.slice(2, -2))}
         </strong>
       );
     } else if (token.startsWith("~~") && token.endsWith("~~")) {
       parts.push(
-        <del key={key} className="line-through text-[#94A3B8]">
+        <del key={key} className="line-through text-ink-muted">
           {renderInlineMarkdown(token.slice(2, -2))}
         </del>
       );
     } else if (token.startsWith("*") && token.endsWith("*")) {
       parts.push(
-        <em key={key} className="italic text-[#F4F4F5]">
+        <em key={key} className="italic text-ink">
           {renderInlineMarkdown(token.slice(1, -1))}
         </em>
       );
@@ -201,7 +201,7 @@ function renderMarkdownBlocks(rawText: string, keyPrefix: string): React.ReactNo
 
     // Horizontal rule
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
-      blocks.push(<hr key={`${keyPrefix}-hr-${i}`} className="border-[#2B334E] my-3" />);
+      blocks.push(<hr key={`${keyPrefix}-hr-${i}`} className="border-hairline my-3" />);
       i += 1;
       continue;
     }
@@ -212,11 +212,11 @@ function renderMarkdownBlocks(rawText: string, keyPrefix: string): React.ReactNo
       const level = headingMatch[1].length;
       const headingClasses =
         level === 1
-          ? "text-lg font-bold text-white mt-3 mb-1"
+          ? "text-lg font-bold text-ink mt-3 mb-1"
           : level === 2
-            ? "text-base font-semibold text-white mt-2.5 mb-1"
+            ? "text-base font-semibold text-ink mt-2.5 mb-1"
             : level === 3
-              ? "text-sm font-semibold text-[#FAFAFA] mt-2 mb-0.5"
+              ? "text-sm font-semibold text-ink mt-2 mb-0.5"
               : "text-xs font-semibold uppercase tracking-wide text-indigo-300 mt-2 mb-0.5";
       blocks.push(
         <div key={`${keyPrefix}-h-${i}`} className={`font-display ${headingClasses}`}>
@@ -252,11 +252,11 @@ function renderMarkdownBlocks(rawText: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <div
           key={`${keyPrefix}-tbl-${i}`}
-          className="overflow-x-auto rounded-xl border border-[#2B334E] bg-[#101422]"
+          className="overflow-x-auto rounded-xl border border-hairline bg-canvas"
         >
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-[#2B334E] bg-[#171C2E] text-[#FAFAFA]">
+              <tr className="border-b border-hairline bg-surface text-ink">
                 {headers.map((h, hIdx) => (
                   <th key={hIdx} className="px-3 py-2 font-semibold whitespace-nowrap">
                     {renderInlineMarkdown(h)}
@@ -264,11 +264,11 @@ function renderMarkdownBlocks(rawText: string, keyPrefix: string): React.ReactNo
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#28304A]">
+            <tbody className="divide-y divide-hairline">
               {bodyRows.map((row, rIdx) => (
                 <tr key={rIdx}>
                   {headers.map((_, cIdx) => (
-                    <td key={cIdx} className="px-3 py-2 text-[#D4D4D8]">
+                    <td key={cIdx} className="px-3 py-2 text-ink-2">
                       {renderInlineMarkdown(row[cIdx] ?? "")}
                     </td>
                   ))}
@@ -291,7 +291,7 @@ function renderMarkdownBlocks(rawText: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <blockquote
           key={`${keyPrefix}-bq-${i}`}
-          className="border-l-2 border-indigo-400/70 pl-3.5 py-0.5 text-[#D4D4D8] italic bg-[#171C2E]/50 rounded-r-lg"
+          className="border-l-2 border-indigo-400/70 pl-3.5 py-0.5 text-ink-2 italic bg-surface/50 rounded-r-lg"
         >
           {quoteLines.map((ql, qIdx) => (
             <p key={qIdx}>{renderInlineMarkdown(ql)}</p>
@@ -311,7 +311,7 @@ function renderMarkdownBlocks(rawText: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <ul
           key={`${keyPrefix}-ul-${i}`}
-          className="list-disc pl-5 space-y-1 text-[#E4E4E7]"
+          className="list-disc pl-5 space-y-1 text-ink-2"
         >
           {items.map((item, idx) => (
             <li key={idx}>{renderInlineMarkdown(item)}</li>
@@ -331,7 +331,7 @@ function renderMarkdownBlocks(rawText: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <ol
           key={`${keyPrefix}-ol-${i}`}
-          className="list-decimal pl-5 space-y-1 text-[#E4E4E7]"
+          className="list-decimal pl-5 space-y-1 text-ink-2"
         >
           {items.map((item, idx) => (
             <li key={idx}>{renderInlineMarkdown(item)}</li>
@@ -386,7 +386,7 @@ function AssistantMessageBody({
 
   const segments = content.split(/(```[\s\S]*?```)/g);
   return (
-    <div className="space-y-3 text-sm leading-7 text-[#E4E4E7]">
+    <div className="space-y-3 text-sm leading-7 text-ink-2">
       {segments.map((seg, idx) => {
         if (seg.startsWith("```") && seg.endsWith("```")) {
           const inner = seg.slice(3, -3);
@@ -400,9 +400,9 @@ function AssistantMessageBody({
           return (
             <div
               key={idx}
-              className="rounded-xl border border-[#343E5E] bg-[#101422] overflow-hidden"
+              className="rounded-xl border border-hairline-strong bg-canvas overflow-hidden"
             >
-              <div className="px-3.5 py-1.5 border-b border-[#28304A] flex items-center justify-between text-[11px] font-mono text-[#94A3B8]">
+              <div className="px-3.5 py-1.5 border-b border-hairline flex items-center justify-between text-[11px] font-mono text-ink-muted">
                 <span>{lang || "code"}</span>
                 <button
                   type="button"
@@ -418,7 +418,7 @@ function AssistantMessageBody({
                       onNotify?.("Clipboard access denied", "error");
                     }
                   }}
-                  className="inline-flex items-center gap-1 hover:text-white transition-colors"
+                  className="inline-flex items-center gap-1 hover:text-ink transition-colors"
                 >
                   {copiedIdx === idx ? (
                     <>
@@ -433,7 +433,7 @@ function AssistantMessageBody({
                   )}
                 </button>
               </div>
-              <pre className="p-3.5 text-xs font-mono text-[#F4F4F5] overflow-x-auto leading-relaxed">
+              <pre className="p-3.5 text-xs font-mono text-ink overflow-x-auto leading-relaxed">
                 {code}
               </pre>
             </div>
@@ -1051,7 +1051,7 @@ export function PlaygroundView({
             disabled={!hasActiveLlmOptions}
             onChange={(e) => setSelectedModel(e.target.value)}
             aria-label="Select model or combo"
-            className="flex-1 min-w-0 sm:flex-none sm:max-w-[360px] truncate bg-[#171C2E] hover:bg-[#1F263D] disabled:opacity-75 disabled:cursor-not-allowed border border-[#2B334E] rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-colors"
+            className="flex-1 min-w-0 sm:flex-none sm:max-w-[360px] truncate bg-surface hover:bg-elevated disabled:opacity-75 disabled:cursor-not-allowed border border-hairline rounded-xl px-3 py-1.5 text-xs font-mono text-ink focus:outline-none focus:border-indigo-500 transition-colors"
           >
             {!hasActiveLlmOptions ? (
               <option value="">No active providers configured</option>
@@ -1089,8 +1089,8 @@ export function PlaygroundView({
             onClick={() => setShowSettings((v) => !v)}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-colors whitespace-nowrap ${
               showSettings
-                ? "bg-[#1F263D] border-[#3F3F46] text-white"
-                : "bg-[#171C2E] hover:bg-[#1F263D] border-[#2B334E] text-[#D4D4D8] hover:text-white"
+                ? "bg-elevated border-hairline-strong text-ink"
+                : "bg-surface hover:bg-elevated border-hairline text-ink-2 hover:text-ink"
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -1101,7 +1101,7 @@ export function PlaygroundView({
             <button
               type="button"
               onClick={handleNewChat}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-xl text-[#D4D4D8] hover:text-white transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-surface hover:bg-elevated border border-hairline rounded-xl text-ink-2 hover:text-ink transition-colors whitespace-nowrap"
             >
               <SquarePen className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">New chat</span>
@@ -1132,17 +1132,17 @@ export function PlaygroundView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute right-0 top-11 z-30 w-[min(calc(100vw-2rem),24rem)] max-h-[75dvh] overflow-y-auto bg-[#171C2E] border border-[#343E5E] rounded-2xl shadow-2xl p-4 space-y-4 origin-top-right outline-none"
+                className="absolute right-0 top-11 z-30 w-[min(calc(100vw-2rem),24rem)] max-h-[75dvh] overflow-y-auto bg-surface border border-hairline-strong rounded-2xl shadow-2xl p-4 space-y-4 origin-top-right outline-none"
               >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-white">
+                <span className="text-xs font-semibold text-ink">
                   Chat Options
                 </span>
                 <button
                   type="button"
                   aria-label="Close chat options"
                   onClick={() => setShowSettings(false)}
-                  className="text-[#94A3B8] hover:text-white"
+                  className="text-ink-muted hover:text-ink"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1151,7 +1151,7 @@ export function PlaygroundView({
               <div>
                 <label
                   htmlFor="pg-system-prompt"
-                  className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                  className="block text-xs font-medium text-ink-2 mb-1.5"
                 >
                   System Instruction
                 </label>
@@ -1161,13 +1161,13 @@ export function PlaygroundView({
                   placeholder="Optional system instruction for the assistant..."
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-xl px-3 py-2 text-xs text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-xl px-3 py-2 text-xs text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="flex items-center justify-between text-xs text-[#D4D4D8] mb-1">
+                  <div className="flex items-center justify-between text-xs text-ink-2 mb-1">
                     <span>Temperature</span>
                     <span className="font-mono text-indigo-400">
                       {temperature.toFixed(1)}
@@ -1184,7 +1184,7 @@ export function PlaygroundView({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-[#D4D4D8] mb-1">
+                  <label className="block text-xs text-ink-2 mb-1">
                     Max Tokens
                   </label>
                   <input
@@ -1193,12 +1193,12 @@ export function PlaygroundView({
                     max={32768}
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(e.target.value)}
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-canvas border border-hairline rounded-lg px-2.5 py-1 text-xs font-mono text-ink focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="divide-y divide-[#28304A] border-y border-[#28304A] py-1">
+              <div className="divide-y divide-hairline border-y border-hairline py-1">
                 <ToggleSwitch
                   checked={streamResponse}
                   onChange={setStreamResponse}
@@ -1238,20 +1238,20 @@ export function PlaygroundView({
                       rows={5}
                       value={toolsJson}
                       onChange={(e) => setToolsJson(e.target.value)}
-                      className="w-full bg-[#101422] border border-[#2B334E] rounded-xl px-3 py-2 text-[11px] font-mono text-[#E5E7EB] focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-canvas border border-hairline rounded-xl px-3 py-2 text-[11px] font-mono text-ink-2 focus:outline-none focus:border-indigo-500"
                     />
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              <div className="flex items-center justify-between gap-2 text-xs text-[#A1A1AA]">
+              <div className="flex items-center justify-between gap-2 text-xs text-ink-muted">
                 {activeLlmConnections.length > 0 ? (
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => handleSyncAllModels(true)}
                       disabled={syncingModels}
-                      className="hover:text-white transition-colors"
+                      className="hover:text-ink transition-colors"
                     >
                       Sync free
                     </button>
@@ -1260,7 +1260,7 @@ export function PlaygroundView({
                       type="button"
                       onClick={() => handleSyncAllModels(false)}
                       disabled={syncingModels}
-                      className="inline-flex items-center gap-1 hover:text-white transition-colors"
+                      className="inline-flex items-center gap-1 hover:text-ink transition-colors"
                     >
                       <RefreshCw
                         className={`w-3 h-3 ${syncingModels ? "animate-spin" : ""}`}
@@ -1275,7 +1275,7 @@ export function PlaygroundView({
                   type="button"
                   onClick={handleClearCache}
                   disabled={clearingCache}
-                  className="hover:text-white transition-colors"
+                  className="hover:text-ink transition-colors"
                 >
                   {clearingCache ? "Clearing..." : "Clear cache"}
                 </button>
@@ -1297,7 +1297,7 @@ export function PlaygroundView({
               transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
               className="h-8 w-auto object-contain mb-3 drop-shadow-[0_0_16px_rgba(129,140,248,0.35)]"
             />
-            <h2 className="font-display text-xl sm:text-2xl font-semibold text-white tracking-tight">
+            <h2 className="font-display text-xl sm:text-2xl font-semibold text-ink tracking-tight">
               {!hasActiveLlmOptions
                 ? "Connect a provider to start chatting"
                 : "What would you like to ask?"}
@@ -1312,7 +1312,7 @@ export function PlaygroundView({
               </button>
             )}
             {hasActiveLlmOptions && selectedModel && (
-              <p className="mt-1.5 text-xs text-[#94A3B8] font-mono">
+              <p className="mt-1.5 text-xs text-ink-muted font-mono">
                 {selectedModel}
               </p>
             )}
@@ -1331,7 +1331,7 @@ export function PlaygroundView({
                       type="button"
                       whileHover={{ y: -2 }}
                       onClick={() => sendMessage(starter)}
-                      className={`p-3.5 rounded-xl bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] ${starterAccents[idx % starterAccents.length]} text-xs text-[#D4D4D8] hover:text-white transition-colors leading-relaxed`}
+                      className={`p-3.5 rounded-xl bg-surface hover:bg-elevated border border-hairline ${starterAccents[idx % starterAccents.length]} text-xs text-ink-2 hover:text-ink transition-colors leading-relaxed`}
                     >
                       {starter}
                     </motion.button>
@@ -1351,12 +1351,12 @@ export function PlaygroundView({
                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                   className="flex flex-col items-end group"
                 >
-                  <div className="max-w-[85%] bg-[#1F263D] border border-[#343E5E] rounded-2xl px-4 py-3 text-sm text-[#F4F4F5] space-y-2.5">
+                  <div className="max-w-[85%] bg-elevated border border-hairline-strong rounded-2xl px-4 py-3 text-sm text-ink space-y-2.5">
                     {msg.imageDataUrl && (
                       <img
                         src={msg.imageDataUrl}
                         alt="Uploaded prompt attachment"
-                        className="max-h-48 rounded-lg border border-[#343E5E] object-contain"
+                        className="max-h-48 rounded-lg border border-hairline-strong object-contain"
                       />
                     )}
                     {editingMsgId === msg.id ? (
@@ -1365,7 +1365,7 @@ export function PlaygroundView({
                           rows={3}
                           value={editDraftText}
                           onChange={(e) => setEditDraftText(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#343E5E] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-400"
+                          className="w-full bg-canvas border border-hairline-strong rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-indigo-400"
                         />
                         <div className="flex items-center justify-end gap-2">
                           <button
@@ -1374,7 +1374,7 @@ export function PlaygroundView({
                               setEditingMsgId(null);
                               setEditDraftText("");
                             }}
-                            className="px-2.5 py-1 text-xs text-[#A1A1AA] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg"
+                            className="px-2.5 py-1 text-xs text-ink-muted hover:text-ink bg-canvas border border-hairline rounded-lg"
                           >
                             Cancel
                           </button>
@@ -1403,7 +1403,7 @@ export function PlaygroundView({
                         onClick={() => handleCopyMessage(msg)}
                         aria-label="Copy message"
                         title="Copy"
-                        className="text-[#94A3B8] hover:text-white p-1"
+                        className="text-ink-muted hover:text-ink p-1"
                       >
                         {copiedId === msg.id ? (
                           <Check className="w-3 h-3 text-emerald-400" />
@@ -1420,7 +1420,7 @@ export function PlaygroundView({
                         }}
                         aria-label="Edit and resend"
                         title="Edit & resend"
-                        className="text-[#94A3B8] hover:text-white p-1 disabled:opacity-40"
+                        className="text-ink-muted hover:text-ink p-1 disabled:opacity-40"
                       >
                         <Pencil className="w-3 h-3" />
                       </button>
@@ -1429,11 +1429,11 @@ export function PlaygroundView({
                 </motion.div>
               ) : msg.role === "tool" ? (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[82%] bg-[#101422] border border-emerald-500/30 rounded-xl px-3.5 py-2 text-xs font-mono text-emerald-300 space-y-1">
+                  <div className="max-w-[82%] bg-canvas border border-emerald-500/30 rounded-xl px-3.5 py-2 text-xs font-mono text-emerald-300 space-y-1">
                     <div className="text-[11px] text-emerald-400">
                       tool output ({msg.toolName || msg.toolCallId})
                     </div>
-                    <div className="whitespace-pre-wrap break-all text-[#D4D4D8]">
+                    <div className="whitespace-pre-wrap break-all text-ink-2">
                       {msg.content}
                     </div>
                   </div>
@@ -1468,17 +1468,17 @@ export function PlaygroundView({
                     )}
 
                     {msg.toolCalls && msg.toolCalls.length > 0 && (
-                      <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-3.5 space-y-3">
+                      <div className="bg-surface border border-hairline rounded-xl p-3.5 space-y-3">
                         <div className="text-xs font-medium text-emerald-400">
                           Tool Calls ({msg.toolCalls.length})
                         </div>
-                        <pre className="font-mono text-xs text-[#E5E7EB] overflow-x-auto">
+                        <pre className="font-mono text-xs text-ink-2 overflow-x-auto">
                           {JSON.stringify(msg.toolCalls, null, 2)}
                         </pre>
                         {msg.toolCalls.map((tc) => (
                           <div
                             key={tc.id}
-                            className="pt-2 border-t border-[#2B334E] flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+                            className="pt-2 border-t border-hairline flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
                           >
                             <input
                               type="text"
@@ -1493,7 +1493,7 @@ export function PlaygroundView({
                                 }))
                               }
                               aria-label={`Tool response JSON for ${tc.function.name}`}
-                              className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                              className="flex-1 bg-canvas border border-hairline rounded-lg px-2.5 py-1.5 text-xs font-mono text-ink focus:outline-none focus:border-indigo-500"
                             />
                             <button
                               type="button"
@@ -1512,7 +1512,7 @@ export function PlaygroundView({
 
                     {(msg.meta || (!running && (msg.content || msg.isError))) && (
                       <div className="space-y-1.5 pt-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-[#71717A] tabular-nums">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-ink-dim tabular-nums">
                           <div className="flex flex-wrap items-center gap-x-1.5">
                             {msg.meta ? (
                               <>
@@ -1527,7 +1527,7 @@ export function PlaygroundView({
                                   >
                                     {msg.meta.resolvedProvider}
                                   </span>
-                                  <span className="text-[#A1A1AA]">
+                                  <span className="text-ink-muted">
                                     /{msg.meta.resolvedModel}
                                   </span>
                                 </span>
@@ -1548,7 +1548,7 @@ export function PlaygroundView({
                                 )}
                               </>
                             ) : (
-                              <span className="text-[#71717A]">
+                              <span className="text-ink-dim">
                                 {msg.isError ? "Request failed" : "Streamed response"}
                               </span>
                             )}
@@ -1558,7 +1558,7 @@ export function PlaygroundView({
                               type="button"
                               disabled={running}
                               onClick={() => handleRegenerate(msgIdx)}
-                              className="inline-flex items-center gap-1 text-[#71717A] hover:text-white transition-colors disabled:opacity-40"
+                              className="inline-flex items-center gap-1 text-ink-dim hover:text-ink transition-colors disabled:opacity-40"
                               title="Regenerate response"
                               aria-label="Regenerate response"
                             >
@@ -1571,7 +1571,7 @@ export function PlaygroundView({
                               <button
                                 type="button"
                                 onClick={() => handleCopyMessage(msg)}
-                                className="inline-flex items-center gap-1 text-[#71717A] hover:text-white transition-colors"
+                                className="inline-flex items-center gap-1 text-ink-dim hover:text-ink transition-colors"
                                 title="Copy response"
                                 aria-label="Copy response"
                               >
@@ -1596,7 +1596,7 @@ export function PlaygroundView({
                                     ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
                                     : hop.status === "failed"
                                       ? "bg-red-500/10 border-red-500/30 text-red-300"
-                                      : "bg-[#171C2E] border-[#343E5E] text-[#A1A1AA]"
+                                      : "bg-surface border-hairline-strong text-ink-muted"
                                 }`}
                               >
                                 #{hIdx + 1} {hop.provider}/{hop.model} ({hop.status}
@@ -1621,7 +1621,7 @@ export function PlaygroundView({
                     className="w-5 h-auto object-contain animate-pulse drop-shadow-[0_0_8px_rgba(56,189,248,0.34)]"
                   />
                 </div>
-                <div className="py-1 text-sm text-[#A1A1AA] animate-pulse">
+                <div className="py-1 text-sm text-ink-muted animate-pulse">
                   Thinking...
                 </div>
               </div>
@@ -1639,20 +1639,20 @@ export function PlaygroundView({
             e.preventDefault();
             sendMessage();
           }}
-          className="bg-[#171C2E] border border-[#343E5E] focus-within:border-[#3F3F46] rounded-2xl p-3 transition-colors"
+          className="bg-surface border border-hairline-strong focus-within:border-hairline-strong rounded-2xl p-3 transition-colors"
         >
           {imageDataUrl && (
-            <div className="mb-2.5 inline-flex items-center gap-2.5 p-1.5 pr-2.5 bg-[#101422] border border-[#2B334E] rounded-xl">
+            <div className="mb-2.5 inline-flex items-center gap-2.5 p-1.5 pr-2.5 bg-canvas border border-hairline rounded-xl">
               <img
                 src={imageDataUrl}
                 alt="Attachment preview"
                 className="w-9 h-9 object-cover rounded-lg"
               />
-              <span className="text-xs text-[#D4D4D8]">Image attached</span>
+              <span className="text-xs text-ink-2">Image attached</span>
               <button
                 type="button"
                 onClick={() => setImageDataUrl(null)}
-                className="text-[#71717A] hover:text-red-400"
+                className="text-ink-dim hover:text-red-400"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1676,7 +1676,7 @@ export function PlaygroundView({
                 : "Message AS ROUTER..."
             }
             disabled={!hasActiveLlmOptions}
-            className="w-full bg-transparent resize-none px-1.5 py-1 text-sm text-white placeholder-[#71717A] focus:outline-none max-h-40 leading-relaxed"
+            className="w-full bg-transparent resize-none px-1.5 py-1 text-sm text-ink placeholder:text-ink-dim focus:outline-none max-h-40 leading-relaxed"
           />
 
           <div className="mt-2 flex items-center justify-between gap-2">
@@ -1693,7 +1693,7 @@ export function PlaygroundView({
                 disabled={!hasActiveLlmOptions}
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach image"
-                className="p-2 rounded-lg text-[#A1A1AA] hover:text-white hover:bg-[#1F263D] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-elevated disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ImagePlus className="w-4 h-4" />
               </button>
@@ -1701,7 +1701,7 @@ export function PlaygroundView({
                 type="button"
                 onClick={() => setShowSettings((v) => !v)}
                 title="Options"
-                className="p-2 rounded-lg text-[#A1A1AA] hover:text-white hover:bg-[#1F263D] transition-colors"
+                className="p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-elevated transition-colors"
               >
                 <SlidersHorizontal className="w-4 h-4" />
               </button>
@@ -1725,7 +1725,7 @@ export function PlaygroundView({
                   (!inputText.trim() && !imageDataUrl)
                 }
                 aria-label="Send message"
-                className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 via-sky-500 to-cyan-400 hover:brightness-110 disabled:bg-none disabled:bg-[#343E5E] disabled:text-[#71717A] text-white flex items-center justify-center transition-all shrink-0 shadow-[0_0_16px_rgba(99,102,241,0.35)] disabled:shadow-none"
+                className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 via-sky-500 to-cyan-400 hover:brightness-110 disabled:bg-none disabled:bg-subtle disabled:text-ink-dim text-white flex items-center justify-center transition-all shrink-0 shadow-[0_0_16px_rgba(99,102,241,0.35)] disabled:shadow-none"
               >
                 <ArrowUp className="w-4 h-4" />
               </button>

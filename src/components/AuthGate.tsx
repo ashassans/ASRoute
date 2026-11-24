@@ -14,6 +14,7 @@ import {
   User,
 } from "lucide-react";
 import { authClient } from "../lib/auth-client.ts";
+import { ThemeToggle } from "./ThemeToggle.tsx";
 
 interface AuthGateProps {
   initialMode?: "signin" | "signup";
@@ -419,7 +420,7 @@ export function AuthGate({
         type="button"
         disabled={submitting || googleLoading}
         onClick={handleGoogleSignIn}
-        className="w-full min-h-[44px] inline-flex items-center justify-center gap-2.5 bg-[#1F263D] hover:bg-[#28304A] disabled:opacity-60 text-[#FAFAFA] font-medium text-sm py-2.5 px-4 rounded-xl border border-[#343E5E] hover:border-indigo-400/50 transition-all whitespace-nowrap cursor-pointer"
+        className="w-full min-h-[44px] inline-flex items-center justify-center gap-2.5 bg-elevated hover:bg-subtle disabled:opacity-60 text-ink font-medium text-sm py-2.5 px-4 rounded-xl border border-hairline-strong hover:border-indigo-400/50 transition-all whitespace-nowrap cursor-pointer"
       >
         <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
           <path
@@ -446,10 +447,10 @@ export function AuthGate({
 
       <div className="relative mt-5">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-[#2B334E]" />
+          <div className="w-full border-t border-hairline" />
         </div>
         <div className="relative flex justify-center text-xs">
-          <span className="bg-[#171C2E] px-3 text-[#71717A]">
+          <span className="bg-surface px-3 text-ink-dim">
             or continue with email
           </span>
         </div>
@@ -458,7 +459,7 @@ export function AuthGate({
   ) : null;
 
   return (
-    <div className="min-h-screen bg-[#101422] text-[#FAFAFA] flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen bg-canvas text-ink flex flex-col relative overflow-x-hidden">
       {/* Subtle Architectural Grid & Drifting Aurora Ambient Backdrop */}
       <div
         className="pointer-events-none fixed inset-0 overflow-hidden"
@@ -478,7 +479,7 @@ export function AuthGate({
           className="animate-aurora-float absolute -top-28 left-[15%] w-[460px] h-[460px] rounded-full blur-3xl opacity-25"
           style={{
             background:
-              "radial-gradient(circle, rgba(100,103,242,0.5), transparent 70%)",
+              "radial-gradient(circle, rgba(99,102,241,0.5), transparent 70%)",
           }}
         />
         <div
@@ -500,9 +501,9 @@ export function AuthGate({
       </div>
 
       {/* Minimal Top Bar */}
-      <header className="relative z-10 h-16 border-b border-[#2B334E]/80 bg-[#101422]/85 backdrop-blur-md">
+      <header className="relative z-10 h-16 border-b border-hairline bg-surface/90 backdrop-blur-md">
         <div className="max-w-[1200px] mx-auto h-full px-5 sm:px-8 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5 font-display text-base font-bold tracking-tight text-[#FAFAFA] whitespace-nowrap shrink-0">
+          <div className="flex items-center gap-2.5 font-display text-base font-bold tracking-tight text-ink whitespace-nowrap shrink-0">
             <img
               src="/assets/as-logo.png"
               alt="AS ROUTER"
@@ -511,16 +512,19 @@ export function AuthGate({
             <span>AS ROUTER</span>
           </div>
 
-          {onBackHome && (
-            <button
-              type="button"
-              onClick={onBackHome}
-              className="min-h-[40px] inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-sky-400" />
-              <span>Back to Home</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggle />
+            {onBackHome && (
+              <button
+                type="button"
+                onClick={onBackHome}
+                className="min-h-[40px] inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-ink-2 hover:text-ink bg-surface hover:bg-elevated border border-hairline-strong rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-sky-400" />
+                <span>Back to Home</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -541,7 +545,7 @@ export function AuthGate({
                 className="h-8 w-auto object-contain drop-shadow-[0_0_18px_rgba(99,102,241,0.32)]"
               />
               <h2
-                className="font-display font-bold tracking-tight text-[#FAFAFA] leading-[1.12]"
+                className="font-display font-bold tracking-tight text-ink leading-[1.12]"
                 style={{
                   fontSize: "clamp(2rem, 3.1vw, 2.75rem)",
                   textWrap: "balance",
@@ -549,23 +553,23 @@ export function AuthGate({
               >
                 One unified gateway for every AI model.
               </h2>
-              <p className="text-sm leading-relaxed text-[#A1A1AA] max-w-md">
+              <p className="text-sm leading-relaxed text-ink-muted max-w-md">
                 Sign in to configure upstream providers, build smart failover
                 combos, test web-grounded prompts, and manage workspace API keys.
               </p>
             </div>
 
-            <div className="divide-y divide-[#2B334E] border-t border-b border-[#2B334E]">
+            <div className="divide-y divide-hairline border-t border-b border-hairline">
               {GATEWAY_HIGHLIGHTS.map((item) => (
                 <div key={item.index} className="py-4 flex items-start gap-4">
                   <span className="font-mono text-xs font-semibold text-indigo-400 tabular-nums pt-0.5 shrink-0">
                     {item.index}.
                   </span>
                   <div className="space-y-1">
-                    <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
+                    <h3 className="font-display text-sm font-semibold text-ink">
                       {item.title}
                     </h3>
-                    <p className="text-xs leading-relaxed text-[#A1A1AA]">
+                    <p className="text-xs leading-relaxed text-ink-muted">
                       {item.description}
                     </p>
                   </div>
@@ -573,7 +577,7 @@ export function AuthGate({
               ))}
             </div>
 
-            <div className="flex items-center justify-between text-xs text-[#A1A1AA] font-mono">
+            <div className="flex items-center justify-between text-xs text-ink-muted font-mono">
               <span>OpenAI-Compatible Endpoint</span>
               <span className="text-sky-300">POST /v1/chat/completions</span>
             </div>
@@ -586,12 +590,12 @@ export function AuthGate({
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="lg:col-span-6 w-full max-w-[440px] mx-auto"
           >
-            <div className="relative overflow-hidden bg-[#171C2E]/95 backdrop-blur-xl border border-[#2B334E] rounded-2xl p-6 sm:p-8 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.65)]">
+            <div className="relative overflow-hidden bg-surface/95 backdrop-blur-xl border border-hairline-strong rounded-2xl p-6 sm:p-8 auth-card-shadow">
               <div
                 className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
                 style={{
                   background:
-                    "linear-gradient(90deg, #6467F2 0%, #38BDF8 35%, #34D399 68%, #F472B6 100%)",
+                    "linear-gradient(90deg, var(--accent-primary) 0%, #38BDF8 35%, #34D399 68%, #F472B6 100%)",
                 }}
               />
 
@@ -607,12 +611,12 @@ export function AuthGate({
                     <div className="w-11 h-11 rounded-xl bg-indigo-500/12 border border-indigo-500/25 flex items-center justify-center mb-4">
                       <MailCheck className="w-5 h-5 text-indigo-400" />
                     </div>
-                    <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA] mb-1.5">
+                    <h1 className="font-display text-2xl font-bold tracking-tight text-ink mb-1.5">
                       Verify your email
                     </h1>
-                    <p className="text-xs leading-relaxed text-[#A1A1AA]">
+                    <p className="text-xs leading-relaxed text-ink-muted">
                       Enter the 6-digit code sent to{" "}
-                      <span className="text-white font-medium">
+                      <span className="text-ink font-medium">
                         {pendingVerifyEmail}
                       </span>
                     </p>
@@ -623,7 +627,7 @@ export function AuthGate({
                       <div>
                         <label
                           htmlFor="auth-verify-otp"
-                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          className="block text-xs font-medium text-ink-2 mb-1.5"
                         >
                           6-Digit Verification Code
                         </label>
@@ -641,7 +645,7 @@ export function AuthGate({
                               e.target.value.replace(/\D/g, "").slice(0, 6)
                             )
                           }
-                          className="w-full min-h-[48px] bg-[#101422] border border-[#2B334E] rounded-xl px-4 py-3 text-center font-mono text-xl tracking-[0.42em] tabular-nums text-[#FAFAFA] placeholder:text-[#4B5563] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                          className="w-full min-h-[48px] bg-canvas border border-hairline rounded-xl px-4 py-3 text-center font-mono text-xl tracking-[0.42em] tabular-nums text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                         />
                       </div>
 
@@ -659,7 +663,7 @@ export function AuthGate({
                       </motion.button>
                     </form>
 
-                    <div className="mt-5 pt-4 border-t border-[#2B334E] flex items-center justify-between text-xs">
+                    <div className="mt-5 pt-4 border-t border-hairline flex items-center justify-between text-xs">
                       <button
                         type="button"
                         onClick={() => {
@@ -669,7 +673,7 @@ export function AuthGate({
                           setInfo(null);
                           setError(null);
                         }}
-                        className="text-[#A1A1AA] hover:text-white transition-colors cursor-pointer"
+                        className="text-ink-muted hover:text-ink transition-colors cursor-pointer"
                       >
                         Change email
                       </button>
@@ -699,10 +703,10 @@ export function AuthGate({
                     <div className="w-11 h-11 rounded-xl bg-sky-500/12 border border-sky-500/25 flex items-center justify-center mb-4">
                       <KeyRound className="w-5 h-5 text-sky-400" />
                     </div>
-                    <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA] mb-1.5">
+                    <h1 className="font-display text-2xl font-bold tracking-tight text-ink mb-1.5">
                       Reset password
                     </h1>
-                    <p className="text-xs leading-relaxed text-[#A1A1AA]">
+                    <p className="text-xs leading-relaxed text-ink-muted">
                       {forgotStep === "request"
                         ? "Enter your account email to receive a 6-digit security code."
                         : `Enter the 6-digit code sent to ${resetEmail} and set a new password.`}
@@ -718,12 +722,12 @@ export function AuthGate({
                         <div>
                           <label
                             htmlFor="auth-reset-email"
-                            className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                            className="block text-xs font-medium text-ink-2 mb-1.5"
                           >
                             Email Address
                           </label>
                           <div className="relative group">
-                            <Mail className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <Mail className="w-4 h-4 text-ink-dim group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <input
                               id="auth-reset-email"
                               type="email"
@@ -731,12 +735,12 @@ export function AuthGate({
                               placeholder="you@company.com"
                               value={resetEmail}
                               onChange={(e) => setResetEmail(e.target.value)}
-                              className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                              className="w-full min-h-[44px] bg-canvas border border-hairline rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                             />
                           </div>
                         </div>
                         {!emailVerificationEnabled && (
-                          <p className="text-[11px] leading-relaxed text-[#A1A1AA]">
+                          <p className="text-[11px] leading-relaxed text-ink-muted">
                             Server email OTP delivery requires Gmail SMTP
                             credentials configured in the environment.
                           </p>
@@ -762,7 +766,7 @@ export function AuthGate({
                         <div>
                           <label
                             htmlFor="auth-reset-otp"
-                            className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                            className="block text-xs font-medium text-ink-2 mb-1.5"
                           >
                             6-Digit Reset Code
                           </label>
@@ -779,18 +783,18 @@ export function AuthGate({
                                 e.target.value.replace(/\D/g, "").slice(0, 6)
                               )
                             }
-                            className="w-full min-h-[48px] bg-[#101422] border border-[#2B334E] rounded-xl px-4 py-2.5 text-center font-mono text-lg tracking-[0.38em] tabular-nums text-[#FAFAFA] placeholder:text-[#4B5563] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                            className="w-full min-h-[48px] bg-canvas border border-hairline rounded-xl px-4 py-2.5 text-center font-mono text-lg tracking-[0.38em] tabular-nums text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                           />
                         </div>
                         <div>
                           <label
                             htmlFor="auth-reset-new-password"
-                            className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                            className="block text-xs font-medium text-ink-2 mb-1.5"
                           >
                             New Password
                           </label>
                           <div className="relative group">
-                            <Lock className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <Lock className="w-4 h-4 text-ink-dim group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <input
                               id="auth-reset-new-password"
                               type={showNewPassword ? "text" : "password"}
@@ -799,7 +803,7 @@ export function AuthGate({
                               placeholder="Minimum 6 characters"
                               value={newPassword}
                               onChange={(e) => setNewPassword(e.target.value)}
-                              className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-11 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                              className="w-full min-h-[44px] bg-canvas border border-hairline rounded-xl pl-10 pr-11 py-2.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                             />
                             <button
                               type="button"
@@ -809,7 +813,7 @@ export function AuthGate({
                                   ? "Hide new password"
                                   : "Show new password"
                               }
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#71717A] hover:text-[#D4D4D8] transition-colors cursor-pointer"
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-ink-dim hover:text-ink-2 transition-colors cursor-pointer"
                             >
                               {showNewPassword ? (
                                 <EyeOff className="w-4 h-4" />
@@ -834,7 +838,7 @@ export function AuthGate({
                       </form>
                     )}
 
-                    <div className="mt-5 pt-4 border-t border-[#2B334E] flex items-center justify-between text-xs">
+                    <div className="mt-5 pt-4 border-t border-hairline flex items-center justify-between text-xs">
                       <button
                         type="button"
                         onClick={() => {
@@ -842,7 +846,7 @@ export function AuthGate({
                           setError(null);
                           setInfo(null);
                         }}
-                        className="text-[#A1A1AA] hover:text-white transition-colors cursor-pointer"
+                        className="text-ink-muted hover:text-ink transition-colors cursor-pointer"
                       >
                         Back to Sign In
                       </button>
@@ -877,12 +881,12 @@ export function AuthGate({
                         alt="AS ROUTER"
                         className="h-6 w-auto object-contain mb-3 lg:hidden drop-shadow-[0_0_12px_rgba(99,102,241,0.3)]"
                       />
-                      <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA]">
+                      <h1 className="font-display text-2xl font-bold tracking-tight text-ink">
                         {mode === "signin"
                           ? "Welcome back"
                           : "Create your workspace"}
                       </h1>
-                      <p className="mt-1 text-xs text-[#A1A1AA]">
+                      <p className="mt-1 text-xs text-ink-muted">
                         {mode === "signin"
                           ? "Sign in to manage providers, routing combos, and API keys."
                           : "Set up a private AI gateway workspace in seconds."}
@@ -890,7 +894,7 @@ export function AuthGate({
                     </div>
 
                     {/* Segmented Mode Switch */}
-                    <div className="grid grid-cols-2 gap-1 p-1 bg-[#101422] border border-[#2B334E] rounded-xl mb-6">
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-canvas border border-hairline rounded-xl mb-6">
                       {(
                         [
                           ["signin", "Sign In"],
@@ -907,8 +911,8 @@ export function AuthGate({
                           }}
                           className={`relative min-h-[38px] py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
                             mode === tabId
-                              ? "text-[#FAFAFA]"
-                              : "text-[#A1A1AA] hover:text-white"
+                              ? "text-ink"
+                              : "text-ink-muted hover:text-ink"
                           }`}
                         >
                           {mode === tabId && (
@@ -919,7 +923,7 @@ export function AuthGate({
                                 stiffness: 420,
                                 damping: 32,
                               }}
-                              className="absolute inset-0 bg-[#1F263D] border border-[#343E5E] rounded-lg shadow-sm"
+                              className="absolute inset-0 bg-elevated border border-hairline-strong rounded-lg shadow-sm"
                             />
                           )}
                           <span className="relative z-10">{label}</span>
@@ -940,12 +944,12 @@ export function AuthGate({
                         >
                           <label
                             htmlFor="auth-name"
-                            className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                            className="block text-xs font-medium text-ink-2 mb-1.5"
                           >
                             Workspace Name
                           </label>
                           <div className="relative group">
-                            <User className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <User className="w-4 h-4 text-ink-dim group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <input
                               id="auth-name"
                               type="text"
@@ -954,7 +958,7 @@ export function AuthGate({
                               placeholder="Acme AI Engineering"
                               value={name}
                               onChange={(e) => setName(e.target.value)}
-                              className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                              className="w-full min-h-[44px] bg-canvas border border-hairline rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                             />
                           </div>
                         </motion.div>
@@ -963,12 +967,12 @@ export function AuthGate({
                       <div>
                         <label
                           htmlFor="auth-email"
-                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          className="block text-xs font-medium text-ink-2 mb-1.5"
                         >
                           Email Address
                         </label>
                         <div className="relative group">
-                          <Mail className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <Mail className="w-4 h-4 text-ink-dim group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           <input
                             id="auth-email"
                             type="email"
@@ -977,7 +981,7 @@ export function AuthGate({
                             placeholder="you@company.com"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                            className="w-full min-h-[44px] bg-canvas border border-hairline rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                           />
                         </div>
                       </div>
@@ -986,7 +990,7 @@ export function AuthGate({
                         <div className="flex items-center justify-between mb-1.5">
                           <label
                             htmlFor="auth-password"
-                            className="block text-xs font-medium text-[#D4D4D8]"
+                            className="block text-xs font-medium text-ink-2"
                           >
                             Password
                           </label>
@@ -1006,7 +1010,7 @@ export function AuthGate({
                           )}
                         </div>
                         <div className="relative group">
-                          <Lock className="w-4 h-4 text-[#71717A] group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <Lock className="w-4 h-4 text-ink-dim group-focus-within:text-indigo-400 transition-colors absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           <input
                             id="auth-password"
                             type={showPassword ? "text" : "password"}
@@ -1024,7 +1028,7 @@ export function AuthGate({
                             }
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full min-h-[44px] bg-[#101422] border border-[#2B334E] rounded-xl pl-10 pr-11 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                            className="w-full min-h-[44px] bg-canvas border border-hairline rounded-xl pl-10 pr-11 py-2.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                           />
                           <button
                             type="button"
@@ -1032,7 +1036,7 @@ export function AuthGate({
                             aria-label={
                               showPassword ? "Hide password" : "Show password"
                             }
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-[#71717A] hover:text-[#D4D4D8] transition-colors cursor-pointer"
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-ink-dim hover:text-ink-2 transition-colors cursor-pointer"
                           >
                             {showPassword ? (
                               <EyeOff className="w-4 h-4" />
@@ -1042,7 +1046,7 @@ export function AuthGate({
                           </button>
                         </div>
                         {mode === "signup" && password.length > 0 && (
-                          <p className="mt-1.5 text-[11px] text-[#A1A1AA]">
+                          <p className="mt-1.5 text-[11px] text-ink-muted">
                             {password.length < 6
                               ? `${6 - password.length} more character${6 - password.length === 1 ? "" : "s"} required`
                               : password.length >= 10

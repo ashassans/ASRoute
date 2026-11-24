@@ -709,7 +709,7 @@ export function ProvidersView({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
         whileHover={{ y: -2 }}
-        className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] hover:border-[#3A4260] rounded-xl p-4 flex flex-col justify-between gap-4 transition-colors"
+        className="relative overflow-hidden bg-surface border border-hairline hover:border-hairline-strong rounded-xl p-4 flex flex-col justify-between gap-4 transition-colors"
       >
         <span
           className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-75"
@@ -731,10 +731,10 @@ export function ProvidersView({
                 {preset.badge}
               </div>
               <div className="min-w-0">
-                <div className="font-display text-sm font-semibold text-white truncate">
+                <div className="font-display text-sm font-semibold text-ink truncate">
                   {preset.label}
                 </div>
-                <div className="text-xs text-[#8B8B95] truncate">
+                <div className="text-xs text-ink-muted truncate">
                   {preset.tagline}
                 </div>
               </div>
@@ -752,28 +752,28 @@ export function ProvidersView({
             )}
           </div>
 
-          <div className="bg-[#101422] border border-[#28304A] rounded-lg px-3 py-2 space-y-1 text-[11px] font-mono">
+          <div className="bg-canvas border border-hairline rounded-lg px-3 py-2 space-y-1 text-[11px] font-mono">
             <div
-              className="text-[#A1A1AA] truncate"
+              className="text-ink-muted truncate"
               title={preset.defaultBaseUrl}
             >
               {preset.defaultBaseUrl}
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[#71717A] truncate">
+              <span className="text-ink-dim truncate">
                 {isSearchPreset ? "Engine: " : "Prefix: "}
                 <span style={{ color: visual.color }}>
                   {isSearchPreset ? preset.key : `${preset.key}/`}
                 </span>
               </span>
               <span
-                className="text-[#D4D4D8] truncate max-w-[55%]"
+                className="text-ink-2 truncate max-w-[55%]"
                 title={isSearchPreset ? "Search & URL Extract" : preset.defaultModel}
               >
                 {isSearchPreset ? "Search & Extract" : preset.defaultModel}
               </span>
             </div>
-            <div className="pt-0.5 flex items-center justify-between gap-2 border-t border-[#16161B]">
+            <div className="pt-0.5 flex items-center justify-between gap-2 border-t border-hairline">
               {preset.freeTier === "free-tier" ? (
                 <span className="text-emerald-400 truncate">
                   Free Tier · {preset.freeTierNote}
@@ -783,7 +783,7 @@ export function ProvidersView({
                   Free Tokens · {preset.freeTierNote}
                 </span>
               ) : (
-                <span className="text-[#71717A] truncate">
+                <span className="text-ink-dim truncate">
                   Paid API · Pay-as-you-go
                 </span>
               )}
@@ -796,7 +796,7 @@ export function ProvidersView({
           onClick={() => openQuickConnect(preset)}
           className={`w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
             isConnected
-              ? "bg-[#1F263D] hover:bg-[#2B334E] text-[#FAFAFA] border border-[#343E5E]"
+              ? "bg-elevated hover:bg-subtle text-ink border border-hairline-strong"
               : "bg-gradient-to-r from-indigo-500 to-sky-500 hover:brightness-110 text-white shadow-[0_6px_18px_rgba(99,102,241,0.22)]"
           }`}
         >
@@ -813,14 +813,14 @@ export function ProvidersView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h2 className="font-display text-lg font-semibold text-white">
+            <h2 className="font-display text-lg font-semibold text-ink">
               {section === "list"
                 ? "Provider List"
                 : section === "search"
                   ? "Web Search Providers"
                   : "Provider Connected"}
             </h2>
-            <span className="px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#1F263D] border border-[#343E5E] text-[#D4D4D8] tabular-nums">
+            <span className="px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-elevated border border-hairline-strong text-ink-2 tabular-nums">
               {section === "list"
                 ? LLM_PROVIDER_PRESETS.length
                 : section === "search"
@@ -828,7 +828,7 @@ export function ProvidersView({
                   : llmConnections.length}
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-[#8B8B95]">
+          <p className="mt-0.5 text-xs text-ink-muted">
             {section === "list"
               ? "Ready-made AI model providers — connect instantly using your API key only."
               : section === "search"
@@ -843,7 +843,7 @@ export function ProvidersView({
               type="button"
               onClick={handleProbeAllFree}
               disabled={probingAll}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] text-[#D4D4D8] hover:text-white border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-surface hover:bg-elevated text-ink-2 hover:text-ink border border-hairline rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               <Activity
                 className={`w-3.5 h-3.5 text-emerald-400 ${probingAll ? "animate-pulse" : ""}`}
@@ -855,7 +855,7 @@ export function ProvidersView({
             <button
               type="button"
               onClick={() => onNavigateSection("list")}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#171C2E] hover:bg-[#1F263D] text-[#D4D4D8] hover:text-white border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-surface hover:bg-elevated text-ink-2 hover:text-ink border border-hairline rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
               <span>Provider List</span>
@@ -900,24 +900,24 @@ export function ProvidersView({
         <section className="space-y-3.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h3 className="font-display text-sm font-semibold text-white">
+            <h3 className="font-display text-sm font-semibold text-ink">
               AI Model Providers
             </h3>
-            <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#1F263D] border border-[#343E5E] text-[#D4D4D8] tabular-nums">
+            <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-elevated border border-hairline-strong text-ink-2 tabular-nums">
               {llmConnections.length}
             </span>
           </div>
-          <span className="text-xs text-[#71717A] hidden sm:inline">
+          <span className="text-xs text-ink-dim hidden sm:inline">
             Eligible for Models, Combos &amp; Playground
           </span>
         </div>
 
         {llmConnections.length === 0 ? (
-          <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-10 text-center">
-            <p className="text-sm font-medium text-white">
+          <div className="bg-surface border border-hairline rounded-lg p-10 text-center">
+            <p className="text-sm font-medium text-ink">
               No AI model providers connected yet
             </p>
-            <p className="mt-1 text-xs text-[#8B8B95]">
+            <p className="mt-1 text-xs text-ink-muted">
               Pick any ready-made AI provider from Provider List and paste your API key to connect.
             </p>
             <div className="mt-4 flex items-center justify-center gap-2.5 flex-wrap">
@@ -934,7 +934,7 @@ export function ProvidersView({
               <button
                 type="button"
                 onClick={() => openModal("custom")}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] text-white border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium bg-elevated hover:bg-subtle text-ink border border-hairline-strong rounded-lg transition-colors whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Custom Provider</span>
@@ -988,13 +988,13 @@ export function ProvidersView({
                         ? tab.id === "free"
                           ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300"
                           : "bg-indigo-500/15 border-indigo-500/60 text-indigo-300"
-                        : "bg-[#171C2E] border-[#2B334E] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
+                        : "bg-surface border-hairline text-ink-muted hover:text-ink hover:border-hairline-strong"
                     }`}
                   >
                     <span>{tab.label}</span>
                     <span
                       className={`text-[11px] font-mono tabular-nums ${
-                        active ? "text-white/80" : "text-[#71717A]"
+                        active ? "text-ink/80" : "text-ink-dim"
                       }`}
                     >
                       {count}
@@ -1003,20 +1003,20 @@ export function ProvidersView({
                 );
               })}
             </div>
-            <span className="text-xs text-[#8B8B95] tabular-nums">
+            <span className="text-xs text-ink-muted tabular-nums">
               Showing {filteredConnections.length} of {llmConnections.length}
             </span>
           </div>
 
           {filteredConnections.length === 0 ? (
-            <div className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-8 text-center space-y-2.5">
-              <p className="text-sm font-medium text-white">
+            <div className="bg-surface border border-hairline rounded-lg p-8 text-center space-y-2.5">
+              <p className="text-sm font-medium text-ink">
                 No connected providers match this filter
               </p>
               <button
                 type="button"
                 onClick={() => setConnectedFilter("all")}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] text-white border border-[#343E5E] rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-elevated hover:bg-subtle text-ink border border-hairline-strong rounded-lg transition-colors"
               >
                 Show all connected
               </button>
@@ -1036,7 +1036,7 @@ export function ProvidersView({
                     ? "Half-Open"
                     : "Healthy";
               const circuitColor = !conn.isActive
-                ? "text-[#A1A1AA]"
+                ? "text-ink-muted"
                 : conn.circuitStatus === "open"
                   ? "text-red-400"
                   : conn.circuitStatus === "half_open"
@@ -1050,7 +1050,7 @@ export function ProvidersView({
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.22 }}
-                  className="bg-[#171C2E] border border-[#2B334E] rounded-lg p-4 space-y-3 relative"
+                  className="bg-surface border border-hairline rounded-lg p-4 space-y-3 relative"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -1065,7 +1065,7 @@ export function ProvidersView({
                         >
                           {connVisual.short}
                         </span>
-                        <span className="font-medium text-white truncate">
+                        <span className="font-medium text-ink truncate">
                           {conn.name}
                         </span>
                         {matchedPreset?.freeTier && (
@@ -1082,7 +1082,7 @@ export function ProvidersView({
                           </span>
                         )}
                       </div>
-                      <div className="mt-1 text-xs font-mono text-[#A1A1AA] truncate">
+                      <div className="mt-1 text-xs font-mono text-ink-muted truncate">
                         <span style={{ color: connVisual.color }}>
                           {getConnectionPrefix(conn)}/*
                         </span>
@@ -1094,7 +1094,7 @@ export function ProvidersView({
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-[#8B8B95] tabular-nums">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-ink-muted tabular-nums">
                     <span>{conn.maskedKey}</span>
                     <span>
                       {conn.usedRequestsToday.toLocaleString()} req · $
@@ -1117,13 +1117,13 @@ export function ProvidersView({
                     </div>
                   )}
 
-                  <div className="pt-2 border-t border-[#28304A] flex items-center justify-between gap-2 flex-wrap">
+                  <div className="pt-2 border-t border-hairline flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
                         onClick={() => handleTest(conn.id)}
                         disabled={testingId === conn.id}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-[#D4D4D8] hover:text-white"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-ink-2 hover:text-ink"
                       >
                         <Zap className="w-3.5 h-3.5 text-indigo-400" />
                         <span>{testingId === conn.id ? "Testing..." : "Test"}</span>
@@ -1131,7 +1131,7 @@ export function ProvidersView({
                       <button
                         type="button"
                         onClick={() => openEditModal(conn)}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-[#A1A1AA] hover:text-white"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                         <span>Edit</span>
@@ -1151,7 +1151,7 @@ export function ProvidersView({
                       <button
                         type="button"
                         onClick={() => handleToggle(conn)}
-                        className="text-xs text-[#A1A1AA] hover:text-white"
+                        className="text-xs text-ink-muted hover:text-ink"
                       >
                         {conn.isActive ? "Disable" : "Enable"}
                       </button>
@@ -1180,11 +1180,11 @@ export function ProvidersView({
             })}
           </div>
 
-          <div className="hidden md:block bg-[#171C2E] border border-[#2B334E] rounded-lg">
+          <div className="hidden md:block bg-surface border border-hairline rounded-lg">
             <div className="overflow-visible">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#2B334E] text-xs text-[#A1A1AA]">
+                <tr className="border-b border-hairline text-xs text-ink-muted">
                   <th className="py-3 px-5 font-medium">Connection</th>
                   <th className="py-3 px-4 font-medium">Credential & Pool</th>
                   <th className="py-3 px-4 font-medium">Circuit & RPM</th>
@@ -1197,7 +1197,7 @@ export function ProvidersView({
                   <th className="py-3 px-5 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#2B334E] text-sm">
+              <tbody className="divide-y divide-hairline text-sm">
                 {filteredConnections.map((conn) => {
                   const matchedPreset = matchPresetForConnection(conn);
                   const testInfo = testResults[conn.id];
@@ -1230,7 +1230,7 @@ export function ProvidersView({
                         ? "Half-Open Probe"
                         : "Healthy";
                   const circuitColor = !conn.isActive
-                    ? "text-[#A1A1AA]"
+                    ? "text-ink-muted"
                     : conn.circuitStatus === "open"
                       ? "text-red-400"
                       : conn.circuitStatus === "half_open"
@@ -1241,7 +1241,7 @@ export function ProvidersView({
                   return (
                     <tr
                       key={conn.id}
-                      className="hover:bg-[#1F263D]/50 transition-colors"
+                      className="hover:bg-elevated/50 transition-colors"
                     >
                       <td className="py-3.5 px-5 align-top">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1255,7 +1255,7 @@ export function ProvidersView({
                           >
                             {connVisual.short}
                           </span>
-                          <span className="font-medium text-white">
+                          <span className="font-medium text-ink">
                             {conn.name}
                           </span>
                           {matchedPreset?.freeTier && (
@@ -1273,7 +1273,7 @@ export function ProvidersView({
                             </span>
                           )}
                         </div>
-                        <div className="mt-0.5 text-xs text-[#A1A1AA] font-mono">
+                        <div className="mt-0.5 text-xs text-ink-muted font-mono">
                           <span style={{ color: connVisual.color }}>
                             {getConnectionPrefix(conn)}/*
                           </span>
@@ -1292,7 +1292,7 @@ export function ProvidersView({
                           {conn.baseUrl ? ` · ${conn.baseUrl}` : ""}
                         </div>
                         {healthEntries.length > 0 && (
-                          <div className="mt-1.5 text-xs font-mono text-[#A1A1AA]">
+                          <div className="mt-1.5 text-xs font-mono text-ink-muted">
                             <span>
                               <span
                                 className={
@@ -1314,7 +1314,7 @@ export function ProvidersView({
                                   expandedHealthId === conn.id ? null : conn.id
                                 )
                               }
-                              className="ml-2 text-[#71717A] hover:text-white underline underline-offset-2"
+                              className="ml-2 text-ink-dim hover:text-ink underline underline-offset-2"
                             >
                               {expandedHealthId === conn.id ? "hide" : "details"}
                             </button>
@@ -1325,7 +1325,7 @@ export function ProvidersView({
                                   animate={{ opacity: 1, height: "auto" }}
                                   exit={{ opacity: 0, height: 0 }}
                                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                                  className="mt-1.5 space-y-0.5 text-[11px] text-[#A1A1AA] overflow-hidden"
+                                  className="mt-1.5 space-y-0.5 text-[11px] text-ink-muted overflow-hidden"
                                 >
                                   {healthEntries.slice(0, 8).map(([mId, h]) => (
                                     <div
@@ -1340,7 +1340,7 @@ export function ProvidersView({
                                       >
                                         {h.ok ? "OK" : "ERR"}
                                       </span>
-                                      <span className="truncate max-w-[200px] text-[#D4D4D8]">
+                                      <span className="truncate max-w-[200px] text-ink-2">
                                         {mId}
                                       </span>
                                       <span>
@@ -1369,7 +1369,7 @@ export function ProvidersView({
                             </div>
                             {testInfo.keyResults &&
                               testInfo.keyResults.length > 1 && (
-                                <div className="mt-1 space-y-0.5 font-mono text-[11px] text-[#A1A1AA]">
+                                <div className="mt-1 space-y-0.5 font-mono text-[11px] text-ink-muted">
                                   {testInfo.keyResults.map((kr) => (
                                     <div
                                       key={kr.index}
@@ -1394,7 +1394,7 @@ export function ProvidersView({
                           </div>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 align-top font-mono text-xs text-[#D4D4D8]">
+                      <td className="py-3.5 px-4 align-top font-mono text-xs text-ink-2">
                         <div>{conn.maskedKey}</div>
                         {conn.poolKeyCount > 0 && (
                           <div className="mt-1 text-[11px] text-emerald-400">
@@ -1408,7 +1408,7 @@ export function ProvidersView({
                           {circuitLabel}
                         </div>
                         {conn.lastLatencyMs !== null && (
-                          <div className="mt-0.5 font-mono text-xs text-[#A1A1AA] tabular-nums">
+                          <div className="mt-0.5 font-mono text-xs text-ink-muted tabular-nums">
                             {conn.lastLatencyMs}ms avg
                           </div>
                         )}
@@ -1419,11 +1419,11 @@ export function ProvidersView({
                         )}
                       </td>
                       <td className="py-3.5 px-4 align-top text-right font-mono text-xs tabular-nums">
-                        <div className="text-[#E5E7EB]">
+                        <div className="text-ink-2">
                           {conn.usedRequestsToday.toLocaleString()}
                           {conn.rpdLimit ? ` / ${conn.rpdLimit.toLocaleString()} req` : " req"}
                         </div>
-                        <div className="text-[#A1A1AA] mt-0.5">
+                        <div className="text-ink-muted mt-0.5">
                           {conn.usedTokensToday.toLocaleString()}
                           {conn.dailyTokenQuota
                             ? ` / ${conn.dailyTokenQuota.toLocaleString()} tok`
@@ -1431,7 +1431,7 @@ export function ProvidersView({
                         </div>
                         {(reqPct !== null || tokenPct !== null) && (
                           <>
-                            <div className="mt-1.5 w-24 ml-auto h-1 bg-[#101422] rounded-full overflow-hidden">
+                            <div className="mt-1.5 w-24 ml-auto h-1 bg-canvas rounded-full overflow-hidden">
                               <div
                                 style={{
                                   width: `${Math.max(reqPct ?? 0, tokenPct ?? 0)}%`,
@@ -1443,13 +1443,13 @@ export function ProvidersView({
                                 }`}
                               />
                             </div>
-                            <div className="mt-1 text-[10px] text-[#71717A]">
+                            <div className="mt-1 text-[10px] text-ink-dim">
                               Resets in {resetCountdown}
                             </div>
                           </>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 align-top text-right font-mono text-xs text-[#D4D4D8] tabular-nums">
+                      <td className="py-3.5 px-4 align-top text-right font-mono text-xs text-ink-2 tabular-nums">
                         ${conn.usedCostMonth.toFixed(4)}
                         {conn.monthlyUsdQuota
                           ? ` / $${conn.monthlyUsdQuota.toFixed(2)}`
@@ -1461,7 +1461,7 @@ export function ProvidersView({
                             type="button"
                             onClick={() => handleTest(conn.id)}
                             disabled={testingId === conn.id}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-[#A1A1AA] hover:text-white transition-colors whitespace-nowrap"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink transition-colors whitespace-nowrap"
                           >
                             <Zap className="w-3.5 h-3.5 text-indigo-400" />
                             <span>
@@ -1473,7 +1473,7 @@ export function ProvidersView({
                             type="button"
                             onClick={() => openEditModal(conn)}
                             title="Edit connection"
-                            className="p-1 text-[#A1A1AA] hover:text-white transition-colors"
+                            className="p-1 text-ink-muted hover:text-ink transition-colors"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -1487,7 +1487,7 @@ export function ProvidersView({
                               );
                             }}
                             aria-label="More provider actions"
-                            className="p-1 text-[#A1A1AA] hover:text-white rounded hover:bg-[#1F263D] transition-colors"
+                            className="p-1 text-ink-muted hover:text-ink rounded hover:bg-elevated transition-colors"
                           >
                             <MoreHorizontal className="w-4 h-4" />
                           </button>
@@ -1499,7 +1499,7 @@ export function ProvidersView({
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                                 transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                                className="absolute right-0 top-full mt-1 w-44 z-30 bg-[#1F263D] border border-[#343E5E] rounded-lg shadow-xl py-1 text-left origin-top-right"
+                                className="absolute right-0 top-full mt-1 w-44 z-30 bg-elevated border border-hairline-strong rounded-lg shadow-xl py-1 text-left origin-top-right"
                               >
                                 <button
                                   type="button"
@@ -1508,7 +1508,7 @@ export function ProvidersView({
                                     setOpenMenuId(null);
                                     handleSyncRowModels(conn, false);
                                   }}
-                                  className="w-full px-3 py-1.5 text-xs text-[#E5E7EB] hover:bg-[#2B334E] flex items-center gap-2"
+                                  className="w-full px-3 py-1.5 text-xs text-ink-2 hover:bg-subtle flex items-center gap-2"
                                 >
                                   <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
                                   <span>Sync all models</span>
@@ -1520,7 +1520,7 @@ export function ProvidersView({
                                     setOpenMenuId(null);
                                     handleSyncRowModels(conn, true);
                                   }}
-                                  className="w-full px-3 py-1.5 text-xs text-emerald-300 hover:bg-[#2B334E] flex items-center gap-2"
+                                  className="w-full px-3 py-1.5 text-xs text-emerald-300 hover:bg-subtle flex items-center gap-2"
                                 >
                                   <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
                                   <span>Sync free only</span>
@@ -1532,7 +1532,7 @@ export function ProvidersView({
                                     setOpenMenuId(null);
                                     handleProbeFree(conn);
                                   }}
-                                  className="w-full px-3 py-1.5 text-xs text-[#E5E7EB] hover:bg-[#2B334E] flex items-center gap-2"
+                                  className="w-full px-3 py-1.5 text-xs text-ink-2 hover:bg-subtle flex items-center gap-2"
                                 >
                                   <Activity className="w-3.5 h-3.5 text-emerald-400" />
                                   <span>
@@ -1548,20 +1548,20 @@ export function ProvidersView({
                                       setOpenMenuId(null);
                                       handleResetCircuit(conn.id);
                                     }}
-                                    className="w-full px-3 py-1.5 text-xs text-amber-300 hover:bg-[#2B334E] flex items-center gap-2"
+                                    className="w-full px-3 py-1.5 text-xs text-amber-300 hover:bg-subtle flex items-center gap-2"
                                   >
                                     <RefreshCw className="w-3.5 h-3.5" />
                                     <span>Reset circuit</span>
                                   </button>
                                 )}
-                                <div className="my-1 border-t border-[#343E5E]" />
+                                <div className="my-1 border-t border-hairline-strong" />
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setOpenMenuId(null);
                                     handleToggle(conn);
                                   }}
-                                  className="w-full px-3 py-1.5 text-xs text-[#D4D4D8] hover:bg-[#2B334E] flex items-center justify-between"
+                                  className="w-full px-3 py-1.5 text-xs text-ink-2 hover:bg-subtle flex items-center justify-between"
                                 >
                                   <span>{conn.isActive ? "Disable" : "Enable"}</span>
                                 </button>
@@ -1576,7 +1576,7 @@ export function ProvidersView({
                                       setConfirmDeleteId(conn.id);
                                     }
                                   }}
-                                  className={`w-full px-3 py-1.5 text-xs hover:bg-[#2B334E] flex items-center gap-2 ${
+                                  className={`w-full px-3 py-1.5 text-xs hover:bg-subtle flex items-center gap-2 ${
                                     confirmDeleteId === conn.id
                                       ? "text-red-300 font-semibold"
                                       : "text-red-400"
@@ -1691,7 +1691,7 @@ export function ProvidersView({
                         ? cat.id === "free"
                           ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300"
                           : "bg-indigo-500/15 border-indigo-500/60 text-indigo-300"
-                        : "bg-[#171C2E] border-[#2B334E] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46]"
+                        : "bg-surface border-hairline text-ink-muted hover:text-ink hover:border-hairline-strong"
                     }`}
                   >
                     <span>{cat.label}</span>
@@ -1701,7 +1701,7 @@ export function ProvidersView({
                           ? cat.id === "free"
                             ? "text-emerald-200"
                             : "text-indigo-200"
-                          : "text-[#71717A]"
+                          : "text-ink-dim"
                       }`}
                     >
                       {count}
@@ -1714,27 +1714,27 @@ export function ProvidersView({
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1">
                 <div className="relative w-full sm:max-w-xs">
-                  <Search className="w-3.5 h-3.5 text-[#71717A] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Search className="w-3.5 h-3.5 text-ink-dim absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
                     value={providerSearch}
                     onChange={(e) => setProviderSearch(e.target.value)}
                     placeholder="Search providers, prefix or base URL..."
-                    className="w-full bg-[#171C2E] border border-[#2B334E] rounded-lg pl-8 pr-8 py-2 text-xs text-white placeholder-[#71717A] focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-surface border border-hairline rounded-lg pl-8 pr-8 py-2 text-xs text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                   />
                   {providerSearch && (
                     <button
                       type="button"
                       onClick={() => setProviderSearch("")}
                       aria-label="Clear search"
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-white"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-dim hover:text-ink"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
 
-                <div className="inline-flex flex-wrap items-center gap-1 bg-[#171C2E] border border-[#2B334E] rounded-lg p-1 self-start">
+                <div className="inline-flex flex-wrap items-center gap-1 bg-surface border border-hairline rounded-lg p-1 self-start">
                   {(
                     [
                       { id: "all", label: "All Tiers" },
@@ -1754,9 +1754,9 @@ export function ProvidersView({
                             ? opt.id === "free-credits"
                               ? "bg-sky-500/20 text-sky-300"
                               : opt.id === "all"
-                                ? "bg-[#2B334E] text-white"
+                                ? "bg-subtle text-ink"
                                 : "bg-emerald-500/20 text-emerald-300"
-                            : "text-[#8B8B95] hover:text-white"
+                            : "text-ink-muted hover:text-ink"
                         }`}
                       >
                         <span>{opt.label}</span>
@@ -1769,15 +1769,15 @@ export function ProvidersView({
                 </div>
               </div>
 
-              <span className="text-xs text-[#8B8B95] tabular-nums shrink-0">
+              <span className="text-xs text-ink-muted tabular-nums shrink-0">
                 Showing {filteredPresets.length} of{" "}
                 {LLM_PROVIDER_PRESETS.length} AI providers
               </span>
             </div>
 
             {filteredPresets.length === 0 ? (
-              <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-10 text-center space-y-2.5">
-                <p className="text-sm font-medium text-white">
+              <div className="bg-surface border border-hairline rounded-xl p-10 text-center space-y-2.5">
+                <p className="text-sm font-medium text-ink">
                   No AI providers match this filter
                 </p>
                 <button
@@ -1787,7 +1787,7 @@ export function ProvidersView({
                     setFreeTierFilter("all");
                     setProviderSearch("");
                   }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] text-white border border-[#343E5E] rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-elevated hover:bg-subtle text-ink border border-hairline-strong rounded-lg transition-colors"
                 >
                   Reset filters
                 </button>
@@ -1809,21 +1809,21 @@ export function ProvidersView({
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Globe className="w-4 h-4 text-teal-400" />
-                <h3 className="font-display text-sm font-semibold text-white">
+                <h3 className="font-display text-sm font-semibold text-ink">
                   Connected Search Keys
                 </h3>
-                <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#1F263D] border border-[#343E5E] text-[#D4D4D8] tabular-nums">
+                <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-elevated border border-hairline-strong text-ink-2 tabular-nums">
                   {searchConnections.length}
                 </span>
               </div>
-              <span className="text-xs text-[#71717A] hidden sm:inline">
+              <span className="text-xs text-ink-dim hidden sm:inline">
                 Failover priority · Excluded from AI combos
               </span>
             </div>
 
             {searchConnections.length === 0 ? (
-              <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="text-xs text-[#8B8B95]">
+              <div className="bg-surface border border-hairline rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-ink-muted">
                   No external search keys connected yet. Built-in web search works automatically with 0 keys — add Tavily, Brave Search, or Exa below for higher limits and multi-engine failover.
                 </div>
               </div>
@@ -1840,7 +1840,7 @@ export function ProvidersView({
                         ? "Half-Open"
                         : "Healthy";
                   const circuitColor = !conn.isActive
-                    ? "text-[#A1A1AA]"
+                    ? "text-ink-muted"
                     : conn.circuitStatus === "open"
                       ? "text-red-400"
                       : conn.circuitStatus === "half_open"
@@ -1855,7 +1855,7 @@ export function ProvidersView({
                       animate={{ opacity: 1, y: 0 }}
                       whileHover={{ y: -2 }}
                       transition={{ duration: 0.22 }}
-                      className="relative overflow-hidden bg-[#171C2E] border border-[#2B334E] hover:border-[#3A4260] rounded-xl p-4 space-y-3 transition-colors"
+                      className="relative overflow-hidden bg-surface border border-hairline hover:border-hairline-strong rounded-xl p-4 space-y-3 transition-colors"
                     >
                       <span
                         className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
@@ -1876,7 +1876,7 @@ export function ProvidersView({
                             >
                               {searchVisual.short}
                             </span>
-                            <span className="font-medium text-sm text-white truncate">
+                            <span className="font-medium text-sm text-ink truncate">
                               {conn.name}
                             </span>
                             {matchedPreset?.freeTier && (
@@ -1887,7 +1887,7 @@ export function ProvidersView({
                               </span>
                             )}
                           </div>
-                          <div className="mt-1 text-xs font-mono text-[#A1A1AA] truncate">
+                          <div className="mt-1 text-xs font-mono text-ink-muted truncate">
                             <span style={{ color: searchVisual.color }}>
                               {conn.provider}
                             </span>
@@ -1899,7 +1899,7 @@ export function ProvidersView({
                         </span>
                       </div>
 
-                      <div className="bg-[#101422] border border-[#28304A] rounded-lg px-3 py-2 text-[11px] font-mono text-[#A1A1AA] space-y-1">
+                      <div className="bg-canvas border border-hairline rounded-lg px-3 py-2 text-[11px] font-mono text-ink-muted space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate">{conn.maskedKey}</span>
                           {conn.poolKeyCount > 0 && (
@@ -1908,7 +1908,7 @@ export function ProvidersView({
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center justify-between gap-2 text-[#8B8B95] tabular-nums">
+                        <div className="flex items-center justify-between gap-2 text-ink-muted tabular-nums">
                           <span>{conn.usedRequestsToday.toLocaleString()} req today</span>
                           <span>
                             {conn.lastLatencyMs !== null
@@ -1933,13 +1933,13 @@ export function ProvidersView({
                         </div>
                       )}
 
-                      <div className="pt-2 border-t border-[#28304A] flex items-center justify-between gap-2 flex-wrap">
+                      <div className="pt-2 border-t border-hairline flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-3">
                           <button
                             type="button"
                             onClick={() => handleTest(conn.id)}
                             disabled={testingId === conn.id}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-[#D4D4D8] hover:text-white"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-ink-2 hover:text-ink"
                           >
                             <Zap className="w-3.5 h-3.5 text-indigo-400" />
                             <span>{testingId === conn.id ? "Testing..." : "Test"}</span>
@@ -1947,7 +1947,7 @@ export function ProvidersView({
                           <button
                             type="button"
                             onClick={() => openEditModal(conn)}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-[#A1A1AA] hover:text-white"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                             <span>Edit</span>
@@ -1967,7 +1967,7 @@ export function ProvidersView({
                           <button
                             type="button"
                             onClick={() => handleToggle(conn)}
-                            className="text-xs text-[#A1A1AA] hover:text-white"
+                            className="text-xs text-ink-muted hover:text-ink"
                           >
                             {conn.isActive ? "Disable" : "Enable"}
                           </button>
@@ -1999,17 +1999,17 @@ export function ProvidersView({
           </section>
 
           {/* Available Web Search Providers */}
-          <section className="pt-6 border-t border-[#2B334E] space-y-4">
+          <section className="pt-6 border-t border-hairline space-y-4">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h3 className="font-display text-sm font-semibold text-white">
+                <h3 className="font-display text-sm font-semibold text-ink">
                   Available Web Search Providers
                 </h3>
-                <p className="mt-0.5 text-xs text-[#8B8B95]">
+                <p className="mt-0.5 text-xs text-ink-muted">
                   Connect any engine below to enable API failover for the Search tab, POST /v1/search, and POST /v1/extract.
                 </p>
               </div>
-              <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-[#1F263D] border border-[#343E5E] text-[#D4D4D8] tabular-nums">
+              <span className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-elevated border border-hairline-strong text-ink-2 tabular-nums">
                 {SEARCH_PROVIDER_PRESETS.length}
               </span>
             </div>
@@ -2030,7 +2030,7 @@ export function ProvidersView({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
             onClick={() => setShowAdd(false)}
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4"
           >
             <motion.div
               ref={providerModalRef}
@@ -2043,18 +2043,18 @@ export function ProvidersView({
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto outline-none"
+              className="w-full max-w-lg bg-surface border border-hairline rounded-xl p-6 max-h-[90vh] overflow-y-auto outline-none"
             >
-            <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline">
               <div className="flex items-center gap-2.5 min-w-0">
                 {quickPreset && (
-                  <span className="w-7 h-7 rounded-md bg-[#1F263D] border border-[#343E5E] flex items-center justify-center font-mono text-[11px] font-bold text-indigo-400 shrink-0">
+                  <span className="w-7 h-7 rounded-md bg-elevated border border-hairline-strong flex items-center justify-center font-mono text-[11px] font-bold text-indigo-400 shrink-0">
                     {quickPreset.badge}
                   </span>
                 )}
                 <h3
                   id="provider-modal-title"
-                  className="font-display text-base font-semibold text-white truncate"
+                  className="font-display text-base font-semibold text-ink truncate"
                 >
                   {editingId
                     ? "Edit Provider Connection"
@@ -2067,7 +2067,7 @@ export function ProvidersView({
                 type="button"
                 aria-label="Close"
                 onClick={() => setShowAdd(false)}
-                className="text-[#A1A1AA] hover:text-white"
+                className="text-ink-muted hover:text-ink"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2075,15 +2075,15 @@ export function ProvidersView({
 
             <form onSubmit={handleSave} className="mt-5 space-y-4">
               {quickPreset && !editingId && (
-                <div className="bg-[#101422] border border-[#2B334E] rounded-lg px-3.5 py-2.5 text-xs space-y-1">
+                <div className="bg-canvas border border-hairline rounded-lg px-3.5 py-2.5 text-xs space-y-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[#8B8B95]">Endpoint</span>
-                    <span className="font-mono text-[#D4D4D8] truncate">
+                    <span className="text-ink-muted">Endpoint</span>
+                    <span className="font-mono text-ink-2 truncate">
                       {baseUrl}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[#8B8B95]">
+                    <span className="text-ink-muted">
                       {isSearchProvider(quickPreset.id)
                         ? "Capability"
                         : "Default Model"}
@@ -2102,7 +2102,7 @@ export function ProvidersView({
                   <div>
                     <label
                       htmlFor="provider-select"
-                      className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                      className="block text-xs font-medium text-ink-2 mb-1.5"
                     >
                       Provider
                     </label>
@@ -2111,7 +2111,7 @@ export function ProvidersView({
                       value={provider}
                       disabled={Boolean(editingId) || Boolean(quickPreset)}
                       onChange={(e) => handleProviderChange(e.target.value)}
-                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-60 focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm text-ink disabled:opacity-60 focus:outline-none focus:border-indigo-500"
                     >
                       <optgroup label="AI Model Providers">
                         {PROVIDER_CATALOG.filter((p) => p.kind !== "search").map(
@@ -2137,7 +2137,7 @@ export function ProvidersView({
                   <div>
                     <label
                       htmlFor="provider-conn-name"
-                      className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                      className="block text-xs font-medium text-ink-2 mb-1.5"
                     >
                       Connection Name
                     </label>
@@ -2148,7 +2148,7 @@ export function ProvidersView({
                       placeholder="e.g. OpenAI Primary"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
@@ -2169,7 +2169,7 @@ export function ProvidersView({
               )}
 
               <div>
-                <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                <label className="block text-xs font-medium text-ink-2 mb-1.5">
                   API Key
                 </label>
                 <input
@@ -2186,7 +2186,7 @@ export function ProvidersView({
                         ? "Leave blank to keep existing key"
                         : quickPreset?.keyPlaceholder || "Paste your API key..."
                   }
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] disabled:opacity-50 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim disabled:opacity-50 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -2194,7 +2194,7 @@ export function ProvidersView({
                 <button
                   type="button"
                   onClick={() => setShowQuickCustomize((v) => !v)}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#A1A1AA] hover:text-white transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-ink transition-colors"
                 >
                   <ChevronDown
                     className={`w-3.5 h-3.5 transition-transform ${
@@ -2214,7 +2214,7 @@ export function ProvidersView({
                   <div>
                     <label
                       htmlFor="provider-base-url"
-                      className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                      className="block text-xs font-medium text-ink-2 mb-1.5"
                     >
                       Base URL
                     </label>
@@ -2224,7 +2224,7 @@ export function ProvidersView({
                       placeholder="e.g. https://api.openai.com/v1"
                       value={baseUrl}
                       onChange={(e) => setBaseUrl(e.target.value)}
-                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
@@ -2232,7 +2232,7 @@ export function ProvidersView({
                     <div>
                       <label
                         htmlFor="provider-model-id"
-                        className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                        className="block text-xs font-medium text-ink-2 mb-1.5"
                       >
                         Model ID
                       </label>
@@ -2246,13 +2246,13 @@ export function ProvidersView({
                           }
                           value={defaultModel}
                           onChange={(e) => setDefaultModel(e.target.value)}
-                          className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                          className="flex-1 bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                         />
                         <button
                           type="button"
                           onClick={() => handleFetchModels()}
                           disabled={fetchingModels}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] disabled:opacity-60 text-white border border-[#343E5E] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-elevated hover:bg-subtle disabled:opacity-60 text-ink border border-hairline-strong rounded-lg transition-colors whitespace-nowrap shrink-0"
                         >
                           <RefreshCw
                             className={`w-3.5 h-3.5 ${fetchingModels ? "animate-spin" : ""}`}
@@ -2286,7 +2286,7 @@ export function ProvidersView({
                           onChange={(e) => {
                             if (e.target.value) setDefaultModel(e.target.value);
                           }}
-                          className="mt-2 w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-indigo-300 focus:outline-none focus:border-indigo-500"
+                          className="mt-2 w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-xs font-mono text-indigo-300 focus:outline-none focus:border-indigo-500"
                         >
                           <option value="">
                             Fetched models ({fetchedModels.length})
@@ -2309,11 +2309,11 @@ export function ProvidersView({
                 </>
               )}
 
-              <div className="border-t border-[#2B334E] pt-3">
+              <div className="border-t border-hairline pt-3">
                 <button
                   type="button"
                   onClick={() => setShowAdvanced((v) => !v)}
-                  className="w-full flex items-center justify-between text-xs font-medium text-[#A1A1AA] hover:text-white transition-colors"
+                  className="w-full flex items-center justify-between text-xs font-medium text-ink-muted hover:text-ink transition-colors"
                 >
                   <span>Rate limits, quotas & key pool</span>
                   <ChevronDown
@@ -2334,7 +2334,7 @@ export function ProvidersView({
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <label className="block text-xs font-medium text-[#D4D4D8]">
+                          <label className="block text-xs font-medium text-ink-2">
                             Free Key Pool (Extra keys, one per line)
                           </label>
                           {editingPoolPreview.length > 0 && (
@@ -2358,10 +2358,10 @@ export function ProvidersView({
                           placeholder="Paste additional backup API keys, one per line..."
                           value={extraApiKeys}
                           onChange={(e) => setExtraApiKeys(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] disabled:opacity-50 focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-xs font-mono text-ink placeholder:text-ink-dim disabled:opacity-50 focus:outline-none focus:border-indigo-500"
                         />
                         {editingPoolPreview.length > 0 && !clearKeyPool && (
-                          <div className="mt-1 text-[11px] font-mono text-[#A1A1AA]">
+                          <div className="mt-1 text-[11px] font-mono text-ink-muted">
                             Saved pool: {editingPoolPreview.join(", ")}
                           </div>
                         )}
@@ -2371,7 +2371,7 @@ export function ProvidersView({
                       <div>
                         <label
                           htmlFor="provider-rpm-limit"
-                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          className="block text-xs font-medium text-ink-2 mb-1.5"
                         >
                           RPM Limit
                         </label>
@@ -2382,14 +2382,14 @@ export function ProvidersView({
                           placeholder="60"
                           value={rpmLimit}
                           onChange={(e) => setRpmLimit(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
                       <div>
                         <label
                           htmlFor="provider-rpd-limit"
-                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          className="block text-xs font-medium text-ink-2 mb-1.5"
                         >
                           Daily Reqs (RPD)
                         </label>
@@ -2400,14 +2400,14 @@ export function ProvidersView({
                           placeholder="1000"
                           value={rpdLimit}
                           onChange={(e) => setRpdLimit(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
                       <div>
                         <label
                           htmlFor="provider-daily-tokens"
-                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          className="block text-xs font-medium text-ink-2 mb-1.5"
                         >
                           Daily Tokens
                         </label>
@@ -2418,14 +2418,14 @@ export function ProvidersView({
                           placeholder="250000"
                           value={dailyTokenQuota}
                           onChange={(e) => setDailyTokenQuota(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
                       <div>
                         <label
                           htmlFor="provider-monthly-usd"
-                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                          className="block text-xs font-medium text-ink-2 mb-1.5"
                         >
                           Monthly USD
                         </label>
@@ -2437,7 +2437,7 @@ export function ProvidersView({
                           placeholder="25.00"
                           value={monthlyUsdQuota}
                           onChange={(e) => setMonthlyUsdQuota(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-dim focus:outline-none focus:border-indigo-500"
                         />
                       </div>
                     </div>
@@ -2446,11 +2446,11 @@ export function ProvidersView({
                 </AnimatePresence>
               </div>
 
-              <div className="pt-3 border-t border-[#2B334E] flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-hairline flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowAdd(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#D4D4D8] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg whitespace-nowrap"
+                  className="px-4 py-2 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline rounded-lg whitespace-nowrap"
                 >
                   Cancel
                 </button>

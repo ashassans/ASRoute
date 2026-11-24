@@ -4,22 +4,97 @@
   --color-indigo-200: #c7d2fe;
   --color-indigo-300: #a5b4fc;
   --color-indigo-400: #818cf8;
-  --color-indigo-500: #6467f2;
-  --color-indigo-600: #5558e6;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+}
+
+@theme inline {
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-subtle: var(--bg-subtle);
+  --color-hairline: var(--border-hairline);
+  --color-hairline-strong: var(--border-strong);
+  --color-ink: var(--text-primary);
+  --color-ink-2: var(--text-secondary);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-dim: var(--text-dim);
 }
 
 @layer base {
-  :root {
+  :root,
+  html[data-theme="dark"] {
     color-scheme: dark;
-    --bg-canvas: #101422;
-    --bg-surface: #171C2E;
-    --bg-elevated: #1F263D;
-    --border-hairline: #2B334E;
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --accent-primary: #6467f2;
-    --accent-indigo: #6467f2;
-    --accent-hover: #5558e6;
+    --bg-canvas: #09090b;
+    --bg-surface: #111216;
+    --bg-elevated: #181a20;
+    --bg-subtle: #20232c;
+    --border-hairline: #23262f;
+    --border-strong: #2e333f;
+    --text-primary: #fafafa;
+    --text-secondary: #d4d4d8;
+    --text-muted: #94a3b8;
+    --text-dim: #71717a;
+    --accent-primary: #6366f1;
+    --accent-indigo: #6366f1;
+    --accent-hover: #4f46e5;
+    --accent-cyan: #22d3ee;
+  }
+
+  html[data-theme="light"] {
+    color-scheme: light;
+    --bg-canvas: #f1f5f9;
+    --bg-surface: #ffffff;
+    --bg-elevated: #e8eef5;
+    --bg-subtle: #dce3ed;
+    --border-hairline: #dce3ed;
+    --border-strong: #c1cbd9;
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-muted: #475569;
+    --text-dim: #64748b;
+    --accent-primary: #4f46e5;
+    --accent-indigo: #4f46e5;
+    --accent-hover: #4338ca;
+    --accent-cyan: #0891b2;
+
+    /* Rich, accessible accent palette for light surfaces */
+    --color-indigo-200: #3730a3;
+    --color-indigo-300: #4338ca;
+    --color-indigo-400: #4338ca;
+    --color-indigo-500: #4f46e5;
+    --color-indigo-600: #4338ca;
+    --color-violet-300: #5b21b6;
+    --color-violet-400: #6d28d9;
+    --color-violet-500: #6d28d9;
+    --color-purple-300: #6b21a8;
+    --color-purple-400: #7e22ce;
+    --color-emerald-200: #065f46;
+    --color-emerald-300: #047857;
+    --color-emerald-400: #059669;
+    --color-sky-300: #0369a1;
+    --color-sky-400: #0284c7;
+    --color-cyan-300: #0e7490;
+    --color-cyan-400: #0891b2;
+    --color-teal-300: #0f766e;
+    --color-teal-400: #0d9488;
+    --color-amber-300: #b45309;
+    --color-amber-400: #d97706;
+    --color-orange-300: #c2410c;
+    --color-orange-400: #ea580c;
+    --color-red-200: #991b1b;
+    --color-red-300: #b91c1c;
+    --color-red-400: #dc2626;
+    --color-rose-300: #be123c;
+    --color-rose-400: #e11d48;
+    --color-pink-300: #be185d;
+    --color-pink-400: #db2777;
+    --color-fuchsia-300: #86198f;
+    --color-fuchsia-400: #a21caf;
+    --color-yellow-300: #a16207;
+    --color-yellow-400: #ca8a04;
+    --color-lime-300: #3f6212;
+    --color-lime-400: #4d7c0f;
   }
 
   html {
@@ -74,24 +149,41 @@
   }
 }
 
+/* Crisp SaaS card elevation in Light Mode */
+html[data-theme="light"] .bg-surface.border {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px -6px rgba(15, 23, 42, 0.06);
+}
+
+.auth-card-shadow {
+  box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.65);
+}
+
+html[data-theme="light"] .auth-card-shadow {
+  box-shadow: 0 12px 36px -10px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+html[data-theme="light"] .animate-aurora-float {
+  opacity: 0.22 !important;
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-/* Subtle dark scrollbars */
+/* Subtle themed scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #101422;
+  background: var(--bg-canvas);
 }
 ::-webkit-scrollbar-thumb {
-  background: #2B334E;
+  background: var(--border-strong);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #333a56;
+  background: var(--text-dim);
 }
 
 @keyframes auroraFloat {
