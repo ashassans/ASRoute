@@ -45,9 +45,11 @@ import type {
   Combo,
   GatewayApiKey,
   LiveRouteActivity,
+  LiveSyncPayload,
   ModelHealthEntry,
   ProviderConnection,
   RequestLog,
+  StreamSyncMode,
   WildcardRoute,
 } from "./types/gateway.ts";
 
@@ -187,6 +189,8 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sseConnected, setSseConnected] = useState(false);
   const [streamPaused, setStreamPaused] = useState(false);
+  const [streamMode, setStreamMode] = useState<StreamSyncMode>("reconnecting");
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [activeRoutes, setActiveRoutes] = useState<LiveRouteActivity[]>([]);
   const [openCreateKeyCounter, setOpenCreateKeyCounter] = useState(0);
   const [copiedBaseUrl, setCopiedBaseUrl] = useState(false);
@@ -289,7 +293,13 @@ export default function App() {
 
   const lastBootstrapAtRef = useRef(0);
   const bootstrapStartedRef = useRef(false);
+  const latestLogCreatedAtRef = useRef<string | null>(null);
+  const liveSyncInFlightRef = useRef(false);
   const sessionUserId = session?.user?.id ?? null;
+
+  useEffect(() => {
+    latestLogCreatedAtRef.current = workspace?.logs[0]?.createdAt ?? null;
+  }, [workspace?.logs]);
 
   const fetchBootstrap = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -310,6 +320,7 @@ export default function App() {
         }
         const data = (await res.json()) as BootstrapPayload;
         lastBootstrapAtRef.current = Date.now();
+        setLastSyncedAt(Date.now());
         setWorkspace(data);
         setHasMoreLogs(data.logs.length >= 100);
       } catch (err: unknown) {
@@ -326,6 +337,126 @@ export default function App() {
     },
     []
   );
+
+  const syncLiveDelta = useCallback(async () => {
+    if (liveSyncInFlightRef.current) return;
+    liveSyncInFlightRef.current = true;
+    try {
+      const since = latestLogCreatedAtRef.current;
+      const qs = since ? `?since=${encodeURIComponent(since)}` : "";
+      const res = await fetch(`/api/live${qs}`);
+      if (res.status === 401) {
+        bootstrapStartedRef.current = false;
+        writeAuthHint(false);
+        setHasAuthHint(false);
+        return;
+      }
+      if (!res.ok) return;
+      const delta = (await res.json()) as LiveSyncPayload;
+      setLastSyncedAt(Date.now());
+
+      let needsFullBootstrap = false;
+      setWorkspace((prev) => {
+        if (!prev) return prev;
+
+        const existingConnIds = new Set(prev.connections.map((c) => c.id));
+        const existingKeyIds = new Set(prev.keys.map((k) => k.id));
+        const existingComboIds = new Set(prev.combos.map((c) => c.id));
+
+        if (
+          delta.connections.length !== prev.connections.length ||
+          delta.keys.length !== prev.keys.length ||
+          delta.combos.length !== prev.combos.length ||
+          delta.connections.some((c) => !existingConnIds.has(c.id)) ||
+          delta.keys.some((k) => !existingKeyIds.has(k.id)) ||
+          delta.combos.some((c) => !existingComboIds.has(c.id))
+        ) {
+          needsFullBootstrap = true;
+        }
+
+        const existingLogIds = new Set(prev.logs.map((l) => l.id));
+        const newLogs = delta.logs.filter((l) => !existingLogIds.has(l.id));
+        const mergedLogs =
+          newLogs.length > 0
+            ? [...newLogs, ...prev.logs]
+                .sort(
+                  (a, b) =>
+                    new Date(b.createdAt).getTime() -
+                    new Date(a.createdAt).getTime()
+                )
+                .slice(0, 200)
+            : prev.logs;
+
+        const connMap = new Map(delta.connections.map((c) => [c.id, c]));
+        const nextConnections = prev.connections.map((c) => {
+          const u = connMap.get(c.id);
+          if (!u) return c;
+          return {
+            ...c,
+            isActive: u.isActive,
+            circuitStatus: u.circuitStatus,
+            failureCount: u.failureCount,
+            cooldownUntil: u.cooldownUntil,
+            lastLatencyMs: u.lastLatencyMs,
+            lastError: u.lastError,
+            usedRequestsToday: u.usedRequestsToday,
+            usedTokensToday: u.usedTokensToday,
+            usedCostMonth: u.usedCostMonth,
+            modelHealth: u.modelHealth,
+          };
+        });
+
+        const keyMap = new Map(delta.keys.map((k) => [k.id, k]));
+        const nextKeys = prev.keys.map((k) => {
+          const u = keyMap.get(k.id);
+          if (!u) return k;
+          return {
+            ...k,
+            isActive: u.isActive,
+            usedTokensToday: u.usedTokensToday,
+            usedCostMonth: u.usedCostMonth,
+            totalRequests: u.totalRequests,
+            totalTokens: u.totalTokens,
+            totalCostUsd: u.totalCostUsd,
+            lastUsedAt: u.lastUsedAt,
+          };
+        });
+
+        const comboMap = new Map(delta.combos.map((c) => [c.id, c]));
+        const nextCombos = prev.combos.map((combo) => {
+          const u = comboMap.get(combo.id);
+          if (!u) return combo;
+          const tierCountMap = new Map(
+            u.tiers.map((t) => [t.id, t.requestCount])
+          );
+          return {
+            ...combo,
+            roundRobinCursor: u.roundRobinCursor,
+            tiers: combo.tiers.map((t) => {
+              const count = tierCountMap.get(t.id);
+              return count !== undefined ? { ...t, requestCount: count } : t;
+            }),
+          };
+        });
+
+        return {
+          ...prev,
+          logs: mergedLogs,
+          connections: nextConnections,
+          keys: nextKeys,
+          combos: nextCombos,
+        };
+      });
+
+      if (needsFullBootstrap) {
+        void fetchBootstrap({ silent: true });
+      }
+    } catch {
+      // ignore transient poll errors
+    } finally {
+      liveSyncInFlightRef.current = false;
+    }
+  }, [fetchBootstrap]);
 
   const refreshWorkspace = useCallback(
     () => fetchBootstrap(),
@@ -348,24 +479,47 @@ export default function App() {
     }
   }, [sessionUserId, routeArea, sessionLoading, hasAuthHint, fetchBootstrap]);
 
-  // Real-time SSE Log, Live Activity, Circuit, Telemetry & Workspace Stream
+  // Real-time SSE Log, Live Activity, Circuit, Telemetry & Workspace Stream (+ Serverless/Fallback Polling)
   useEffect(() => {
     if (!sessionUserId || streamPaused) {
       setSseConnected(false);
+      setStreamMode(streamPaused ? "paused" : "reconnecting");
       setActiveRoutes([]);
       return;
     }
 
     let wasDisconnected = false;
     let disabledByServerless = false;
+    let pollTimer: number | null = null;
+    setStreamMode("reconnecting");
     const es = new EventSource("/api/logs/stream");
+
+    const stopPolling = () => {
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+
+    const startPolling = () => {
+      if (pollTimer !== null) return;
+      void syncLiveDelta();
+      pollTimer = window.setInterval(() => {
+        if (document.visibilityState === "visible") {
+          void syncLiveDelta();
+        }
+      }, 3500);
+    };
 
     const markConnected = () => {
       if (disabledByServerless) return;
+      stopPolling();
       setSseConnected(true);
+      setStreamMode("sse");
+      setLastSyncedAt(Date.now());
       if (wasDisconnected) {
         wasDisconnected = false;
-        void fetchBootstrap({ silent: true });
+        void syncLiveDelta();
       }
     };
 
@@ -375,7 +529,9 @@ export default function App() {
       disabledByServerless = true;
       wasDisconnected = false;
       setSseConnected(false);
+      setStreamMode("polling");
       es.close();
+      startPolling();
     });
 
     es.addEventListener("active_snapshot", (ev) => {
@@ -396,6 +552,7 @@ export default function App() {
         const incoming = JSON.parse(
           (ev as MessageEvent).data
         ) as LiveRouteActivity;
+        setLastSyncedAt(Date.now());
         setActiveRoutes((prev) => {
           if (incoming.phase === "start") {
             const without = prev.filter(
@@ -413,6 +570,7 @@ export default function App() {
     es.addEventListener("log", (ev) => {
       try {
         const incoming = JSON.parse((ev as MessageEvent).data) as RequestLog;
+        setLastSyncedAt(Date.now());
         setWorkspace((prev) => {
           if (!prev) return prev;
           if (prev.logs.some((l) => l.id === incoming.id)) return prev;
@@ -676,15 +834,18 @@ export default function App() {
     es.onerror = () => {
       if (disabledByServerless) return;
       setSseConnected(false);
+      setStreamMode("polling");
       wasDisconnected = true;
+      startPolling();
     };
 
     const onVisibilityChange = () => {
-      if (
-        document.visibilityState === "visible" &&
-        Date.now() - lastBootstrapAtRef.current >= 30_000
-      ) {
-        void fetchBootstrap({ silent: true });
+      if (document.visibilityState === "visible") {
+        if (Date.now() - lastBootstrapAtRef.current >= 30_000) {
+          void fetchBootstrap({ silent: true });
+        } else {
+          void syncLiveDelta();
+        }
       }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -697,12 +858,13 @@ export default function App() {
     }, 10_000);
 
     return () => {
+      stopPolling();
       window.clearInterval(cleanupTimer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       es.close();
       setSseConnected(false);
     };
-  }, [sessionUserId, streamPaused, fetchBootstrap]);
+  }, [sessionUserId, streamPaused, fetchBootstrap, syncLiveDelta]);
 
   const handleSignOut = async () => {
     writeAuthHint(false);
@@ -1265,6 +1427,10 @@ export default function App() {
                     combos={workspace.combos}
                     logs={workspace.logs}
                     activeRoutes={activeRoutes}
+                    streamMode={streamMode}
+                    streamPaused={streamPaused}
+                    lastSyncedAt={lastSyncedAt}
+                    onToggleStreamPause={() => setStreamPaused((p) => !p)}
                     onNavigate={navigateTab}
                     onRefresh={refreshWorkspace}
                     onNotify={notify}
@@ -1347,7 +1513,9 @@ export default function App() {
                     logs={workspace.logs}
                     hasMoreLogs={hasMoreLogs}
                     loadingMoreLogs={loadingMoreLogs}
-                    sseConnected={sseConnected}
+                    sseConnected={
+                      sseConnected || streamMode === "polling"
+                    }
                     streamPaused={streamPaused}
                     onTogglePause={() => setStreamPaused((p) => !p)}
                     onLoadMoreLogs={handleLoadMoreLogs}

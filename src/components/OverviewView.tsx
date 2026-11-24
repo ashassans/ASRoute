@@ -6,6 +6,8 @@ import {
   ChevronRight,
   Copy,
   Network,
+  Pause,
+  Play,
 } from "lucide-react";
 import {
   PROVIDER_CATALOG,
@@ -22,6 +24,7 @@ import type {
   LiveRouteActivity,
   ProviderConnection,
   RequestLog,
+  StreamSyncMode,
 } from "../types/gateway.ts";
 
 interface OverviewViewProps {
@@ -31,6 +34,10 @@ interface OverviewViewProps {
   combos: Combo[];
   logs: RequestLog[];
   activeRoutes?: LiveRouteActivity[];
+  streamMode?: StreamSyncMode;
+  streamPaused?: boolean;
+  lastSyncedAt?: number | null;
+  onToggleStreamPause?: () => void;
   onNavigate: (
     tab:
       | "overview"
@@ -167,10 +174,10 @@ function DeltaLabel({
   );
 }
 
-function formatRelativeTime(iso: string): string {
+function formatRelativeTime(iso: string, nowMs: number = Date.now()): string {
   const diffSec = Math.max(
     0,
-    Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+    Math.floor((nowMs - new Date(iso).getTime()) / 1000)
   );
   if (diffSec < 10) return "just now";
   if (diffSec < 60) return `${diffSec}s ago`;
@@ -188,6 +195,10 @@ export function OverviewView({
   combos,
   logs,
   activeRoutes = [],
+  streamMode = "sse",
+  streamPaused = false,
+  lastSyncedAt = null,
+  onToggleStreamPause,
   onNavigate,
   onRefresh,
   onNotify,
@@ -198,6 +209,8 @@ export function OverviewView({
   >("spend");
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [refreshingAnalytics, setRefreshingAnalytics] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [hoveredBucketIdx, setHoveredBucketIdx] = useState<number | null>(null);
   const [copiedCurl, setCopiedCurl] = useState(false);
   const [endpointMode, setEndpointMode] = useState<"openai" | "anthropic">(
@@ -213,8 +226,12 @@ export function OverviewView({
   const [savingPolicy, setSavingPolicy] = useState(false);
 
   const loadAnalytics = useCallback(
-    async (selectedRange: "24h" | "7d" | "30d") => {
-      setLoadingAnalytics(true);
+    async (selectedRange: "24h" | "7d" | "30d", opts?: { silent?: boolean }) => {
+      if (opts?.silent) {
+        setRefreshingAnalytics(true);
+      } else {
+        setLoadingAnalytics(true);
+      }
       try {
         const res = await fetch(`/api/analytics?range=${selectedRange}`);
         if (res.ok) {
@@ -224,7 +241,11 @@ export function OverviewView({
       } catch {
         // retain previous state
       } finally {
-        setLoadingAnalytics(false);
+        if (opts?.silent) {
+          setRefreshingAnalytics(false);
+        } else {
+          setLoadingAnalytics(false);
+        }
       }
     },
     []
@@ -243,10 +264,18 @@ export function OverviewView({
       return;
     }
     const timer = window.setTimeout(() => {
-      loadAnalytics(range);
-    }, 300);
+      loadAnalytics(range, { silent: true });
+    }, 250);
     return () => window.clearTimeout(timer);
   }, [latestLogId, logs.length, range, loadAnalytics]);
+
+  useEffect(() => {
+    if (streamPaused) return;
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [streamPaused]);
 
   const activeCombo = combos.length
     ? combos[previewComboIdx % combos.length]
@@ -373,13 +402,13 @@ export function OverviewView({
         model: log.resolvedModel,
         connectionName: log.connectionName || log.resolvedProvider,
         status: isErr ? "error" : "recent",
-        meta: formatRelativeTime(log.createdAt),
+        meta: formatRelativeTime(log.createdAt, nowMs),
       });
       if (list.length >= 4) break;
     }
 
     return list;
-  }, [logs]);
+  }, [logs, nowMs]);
 
   const topologyNodes = useMemo(() => {
     if (activeRoutes.length > 0) {
@@ -597,11 +626,55 @@ curl ${environment.gatewayEndpoint}/messages \\
     <div className="space-y-8">
       {/* Header & Time Range Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <h2 className="font-display text-xl font-semibold text-ink tracking-tight">
             Overview
           </h2>
-          {loadingAnalytics && (
+          {onToggleStreamPause && (
+            <button
+              type="button"
+              onClick={onToggleStreamPause}
+              title={
+                streamPaused
+                  ? "Resume real-time updates"
+                  : lastSyncedAt
+                    ? `Real-time updates active (${streamMode === "sse" ? "SSE" : "Auto-sync"}) · Last sync ${formatRelativeTime(new Date(lastSyncedAt).toISOString(), nowMs)}`
+                    : "Pause real-time updates"
+              }
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium bg-surface hover:bg-elevated border border-hairline-strong rounded-md text-ink-2 hover:text-ink transition-colors whitespace-nowrap"
+            >
+              {streamPaused ? (
+                <>
+                  <Play className="w-3 h-3 text-indigo-400" />
+                  <span>Paused</span>
+                </>
+              ) : (
+                <>
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      streamMode === "sse" || streamMode === "polling"
+                        ? "bg-emerald-400 animate-pulse"
+                        : "bg-amber-400 animate-pulse"
+                    }`}
+                  />
+                  <span>
+                    {streamMode === "sse"
+                      ? "Live"
+                      : streamMode === "polling"
+                        ? "Live Sync"
+                        : "Connecting..."}
+                  </span>
+                  <Pause className="w-3 h-3 text-ink-muted ml-0.5" />
+                </>
+              )}
+            </button>
+          )}
+          {isLiveActive && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400">
+              <span>{activeRoutes.length} in flight</span>
+            </span>
+          )}
+          {(loadingAnalytics || refreshingAnalytics) && (
             <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-ink-muted">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping" />
               <span>Updating...</span>

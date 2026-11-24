@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { databaseMode, db, isNeonConfigured } from "../../db/index.ts";
 import {
@@ -14,7 +14,11 @@ import { type AuthedRequest, requireSession } from "../middleware/auth.ts";
 import { isGmailMailerConfigured } from "../mailer.ts";
 import { publishWorkspaceMutation, subscribeUserLogs } from "../sse.ts";
 import { isLocalProvidersAllowed } from "../urlSafety.ts";
-import { getGatewayBaseUrl, sanitizeConnection } from "../utils/connections.ts";
+import {
+  getGatewayBaseUrl,
+  parseModelHealth,
+  sanitizeConnection,
+} from "../utils/connections.ts";
 
 export const analyticsRouter = Router();
 
@@ -227,6 +231,133 @@ analyticsRouter.get(
     req.on("close", () => {
       unsubscribe();
     });
+  }
+);
+
+analyticsRouter.get(
+  "/live",
+  requireSession,
+  async (req: AuthedRequest, res: Response) => {
+    try {
+      const userId = req.authUser!.id;
+      const sinceRaw =
+        typeof req.query.since === "string" ? req.query.since.trim() : "";
+      const sinceMs = sinceRaw ? Date.parse(sinceRaw) : NaN;
+      const hasSince = Number.isFinite(sinceMs) && sinceMs > 0;
+      const sinceDate = hasSince ? new Date(sinceMs) : null;
+
+      const [logsRows, conns, keys, userCombos] = await Promise.all([
+        sinceDate
+          ? db
+              .select()
+              .from(requestLogs)
+              .where(
+                and(
+                  eq(requestLogs.userId, userId),
+                  gt(requestLogs.createdAt, sinceDate)
+                )
+              )
+              .orderBy(desc(requestLogs.createdAt))
+              .limit(50)
+          : db
+              .select()
+              .from(requestLogs)
+              .where(eq(requestLogs.userId, userId))
+              .orderBy(desc(requestLogs.createdAt))
+              .limit(25),
+        db
+          .select({
+            id: providerConnections.id,
+            isActive: providerConnections.isActive,
+            circuitStatus: providerConnections.circuitStatus,
+            failureCount: providerConnections.failureCount,
+            cooldownUntil: providerConnections.cooldownUntil,
+            lastLatencyMs: providerConnections.lastLatencyMs,
+            lastError: providerConnections.lastError,
+            usedRequestsToday: providerConnections.usedRequestsToday,
+            usedTokensToday: providerConnections.usedTokensToday,
+            usedCostMonth: providerConnections.usedCostMonth,
+            modelHealth: providerConnections.modelHealth,
+          })
+          .from(providerConnections)
+          .where(eq(providerConnections.userId, userId)),
+        db
+          .select({
+            id: gatewayApiKeys.id,
+            isActive: gatewayApiKeys.isActive,
+            usedTokensToday: gatewayApiKeys.usedTokensToday,
+            usedCostMonth: gatewayApiKeys.usedCostMonth,
+            quotaResetAt: gatewayApiKeys.quotaResetAt,
+            totalRequests: gatewayApiKeys.totalRequests,
+            totalTokens: gatewayApiKeys.totalTokens,
+            totalCostUsd: gatewayApiKeys.totalCostUsd,
+            lastUsedAt: gatewayApiKeys.lastUsedAt,
+          })
+          .from(gatewayApiKeys)
+          .where(eq(gatewayApiKeys.userId, userId)),
+        db
+          .select({
+            id: combos.id,
+            roundRobinCursor: combos.roundRobinCursor,
+          })
+          .from(combos)
+          .where(eq(combos.userId, userId)),
+      ]);
+
+      const comboIds = userCombos.map((c) => c.id);
+      const tierCounts =
+        comboIds.length > 0
+          ? await db
+              .select({
+                id: comboTiers.id,
+                comboId: comboTiers.comboId,
+                requestCount: comboTiers.requestCount,
+              })
+              .from(comboTiers)
+              .where(inArray(comboTiers.comboId, comboIds))
+          : [];
+
+      const now = new Date();
+      return res.json({
+        serverTime: now.toISOString(),
+        incremental: Boolean(sinceDate),
+        logs: logsRows,
+        connections: conns.map((c) => ({
+          ...c,
+          modelHealth: parseModelHealth(c.modelHealth),
+        })),
+        keys: keys.map((k) => {
+          const lastReset = k.quotaResetAt
+            ? new Date(k.quotaResetAt)
+            : new Date(0);
+          const resetDaily =
+            lastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+            lastReset.getUTCMonth() !== now.getUTCMonth() ||
+            lastReset.getUTCDate() !== now.getUTCDate();
+          const resetMonthly =
+            lastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+            lastReset.getUTCMonth() !== now.getUTCMonth();
+          return {
+            id: k.id,
+            isActive: k.isActive,
+            usedTokensToday: resetDaily ? 0 : k.usedTokensToday,
+            usedCostMonth: resetMonthly ? 0 : k.usedCostMonth,
+            totalRequests: k.totalRequests,
+            totalTokens: k.totalTokens,
+            totalCostUsd: k.totalCostUsd,
+            lastUsedAt: k.lastUsedAt,
+          };
+        }),
+        combos: userCombos.map((c) => ({
+          id: c.id,
+          roundRobinCursor: c.roundRobinCursor,
+          tiers: tierCounts.filter((t) => t.comboId === c.id),
+        })),
+      });
+    } catch (err) {
+      console.error("[AS ROUTER] Live sync error:", err);
+      return res.status(500).json({ error: "Failed to sync live telemetry" });
+    }
   }
 );
 

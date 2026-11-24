@@ -253,6 +253,46 @@ export interface LiveRouteActivity {
   timestamp: string;
 }
 
+export type StreamSyncMode = "sse" | "polling" | "reconnecting" | "paused";
+
+export interface LiveSyncPayload {
+  serverTime: string;
+  incremental: boolean;
+  logs: RequestLog[];
+  connections: Array<{
+    id: string;
+    isActive: boolean;
+    circuitStatus: string;
+    failureCount: number;
+    cooldownUntil: string | null;
+    lastLatencyMs: number | null;
+    lastError: string | null;
+    usedRequestsToday: number;
+    usedTokensToday: number;
+    usedCostMonth: number;
+    modelHealth: Record<string, ModelHealthEntry>;
+  }>;
+  keys: Array<{
+    id: string;
+    isActive: boolean;
+    usedTokensToday: number;
+    usedCostMonth: number;
+    totalRequests: number;
+    totalTokens: number;
+    totalCostUsd: number;
+    lastUsedAt: string | null;
+  }>;
+  combos: Array<{
+    id: string;
+    roundRobinCursor: number;
+    tiers: Array<{
+      id: string;
+      comboId: string;
+      requestCount: number;
+    }>;
+  }>;
+}
+
 export type SearchEnginePreference =
   | "auto"
   | "tavily"
