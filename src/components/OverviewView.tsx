@@ -211,14 +211,6 @@ export function OverviewView({
   const [localCache, setLocalCache] = useState(false);
   const [localStrategy, setLocalStrategy] = useState<string>("intent_auto");
   const [savingPolicy, setSavingPolicy] = useState(false);
-  const [pulseCursor, setPulseCursor] = useState(0);
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setPulseCursor((prev) => (prev + 1) % 26);
-    }, 1100);
-    return () => window.clearInterval(id);
-  }, []);
 
   const loadAnalytics = useCallback(
     async (selectedRange: "24h" | "7d" | "30d") => {
@@ -917,7 +909,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                     >
                       {isHovered && (
                         <div
-                          className={`pointer-events-none absolute top-2 z-30 min-w-[168px] max-w-[220px] rounded-lg bg-surface/95 border border-hairline-strong px-3 py-2 shadow-xl text-[11px] backdrop-blur-md ${
+                          className={`pointer-events-none absolute top-2 z-30 min-w-[168px] max-w-[220px] rounded-lg bg-surface border border-hairline-strong px-3 py-2 shadow-xl text-[11px] ${
                             alignRight ? "right-1" : "left-1"
                           }`}
                         >
@@ -1650,9 +1642,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                     {row.slots.map((state, sIdx) => (
                       <div
                         key={sIdx}
-                        className={`h-3 flex-1 rounded-[2px] transition-all duration-300 ${
-                          sIdx === pulseCursor ? "brightness-125 scale-y-110" : ""
-                        } ${
+                        className={`h-3 flex-1 rounded-[2px] ${
                           state === "ok"
                             ? "bg-[#10B981]"
                             : state === "fail"
@@ -1683,9 +1673,7 @@ curl ${environment.gatewayEndpoint}/messages \\
               {failoverRows.gatewaySlots.map((state, sIdx) => (
                 <div
                   key={sIdx}
-                  className={`h-3 flex-1 rounded-[2px] transition-all duration-300 ${
-                    sIdx === pulseCursor ? "brightness-125 scale-y-110" : ""
-                  } ${
+                  className={`h-3 flex-1 rounded-[2px] ${
                     state === "ok"
                       ? "bg-[#10B981]"
                       : state === "fail"

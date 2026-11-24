@@ -825,41 +825,24 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-canvas text-ink flex relative overflow-x-hidden">
-      {/* Subtle Multi-Color Ambient Glow */}
+      {/* Subtle Static Radial Ambient Glow (Zero GPU blur overhead) */}
       <div
         className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
         aria-hidden="true"
-      >
-        <div
-          className="animate-aurora-float absolute -top-24 left-[22%] w-[460px] h-[280px] rounded-full blur-[110px]"
-          style={{ background: "rgba(99, 102, 241, 0.08)" }}
-        />
-        <div
-          className="animate-aurora-float absolute top-[20%] right-[-6%] w-[380px] h-[300px] rounded-full blur-[120px]"
-          style={{
-            background: "rgba(56, 189, 248, 0.06)",
-            animationDelay: "-3.5s",
-          }}
-        />
-        <div
-          className="animate-aurora-float absolute bottom-[-10%] left-[42%] w-[360px] h-[260px] rounded-full blur-[120px]"
-          style={{
-            background: "rgba(236, 72, 153, 0.045)",
-            animationDelay: "-6s",
-          }}
-        />
-      </div>
+        style={{
+          backgroundImage:
+            "radial-gradient(520px 320px at 30% 0%, rgba(99, 102, 241, 0.08), transparent 70%), radial-gradient(460px 320px at 95% 22%, rgba(56, 189, 248, 0.06), transparent 70%)",
+        }}
+      />
 
       {/* Sidebar Navigation (Desktop 248px) */}
-      <aside className="hidden md:flex md:w-[248px] md:flex-col md:fixed md:inset-y-0 z-20 bg-surface/95 backdrop-blur-md border-r border-hairline">
+      <aside className="hidden md:flex md:w-[248px] md:flex-col md:fixed md:inset-y-0 z-20 bg-surface border-r border-hairline">
         <div className="h-16 px-5 flex items-center justify-between border-b border-hairline">
           <div className="flex items-center gap-2.5">
-            <motion.img
+            <img
               src="/assets/as-logo.png"
               alt="AS ROUTER"
-              whileHover={{ scale: 1.07 }}
-              transition={{ type: "spring", stiffness: 420, damping: 24 }}
-              className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_10px_rgba(56,189,248,0.26)]"
+              className="h-5 w-auto object-contain shrink-0"
             />
             <span className="font-display text-base font-bold tracking-tight text-ink whitespace-nowrap">
               AS ROUTER
@@ -872,11 +855,9 @@ export default function App() {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
-              <motion.button
+              <button
                 key={item.id}
                 type="button"
-                whileHover={{ x: 2 }}
-                transition={{ duration: 0.16 }}
                 onClick={() => navigateTab(item.id)}
                 className={`relative w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive
@@ -885,12 +866,10 @@ export default function App() {
                 }`}
               >
                 {isActive && (
-                  <motion.span
-                    layoutId="sidebar-nav-pill"
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  <span
                     className="absolute inset-0 bg-elevated border border-hairline-strong rounded-lg"
                     style={{
-                      boxShadow: `inset 2px 0 0 ${item.accent}, 0 4px 14px -6px ${item.accent}38`,
+                      boxShadow: `inset 2px 0 0 ${item.accent}`,
                     }}
                   />
                 )}
@@ -934,7 +913,7 @@ export default function App() {
                     {workspace.logs.length}
                   </span>
                 )}
-              </motion.button>
+              </button>
             );
           })}
         </nav>
@@ -1147,7 +1126,7 @@ export default function App() {
       {/* Main Content Area */}
       <div className="flex-1 md:pl-[248px] flex flex-col min-w-0 relative z-10">
         {/* Top Bar Contract */}
-        <header className="h-16 px-4 sm:px-8 border-b border-hairline flex items-center justify-between gap-4 sticky top-0 z-30 bg-surface/90 backdrop-blur-md">
+        <header className="h-16 px-4 sm:px-8 border-b border-hairline flex items-center justify-between gap-4 sticky top-0 z-30 bg-surface">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
@@ -1272,14 +1251,12 @@ export default function App() {
               <div className="h-64 bg-surface border border-hairline rounded-lg animate-pulse" />
             </div>
           ) : workspace ? (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 12, scale: 0.994 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.996 }}
-                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-              >
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.12, ease: "easeOut" }}
+            >
                 {activeTab === "overview" && (
                   <OverviewView
                     environment={workspace.environment}
@@ -1392,7 +1369,6 @@ export default function App() {
                   />
                 )}
               </motion.div>
-            </AnimatePresence>
           ) : null}
         </main>
       </div>

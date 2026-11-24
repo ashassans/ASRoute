@@ -460,48 +460,19 @@ export function AuthGate({
 
   return (
     <div className="min-h-screen bg-canvas text-ink flex flex-col relative overflow-x-hidden">
-      {/* Subtle Architectural Grid & Drifting Aurora Ambient Backdrop */}
+      {/* Subtle Static Architectural Grid & Radial Ambient Backdrop */}
       <div
         className="pointer-events-none fixed inset-0 overflow-hidden"
         aria-hidden="true"
-      >
-        <div
-          className="absolute inset-0 opacity-[0.18]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, rgba(52, 62, 94, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(52, 62, 94, 0.25) 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
-            maskImage:
-              "radial-gradient(ellipse 75% 65% at 50% 40%, #000 35%, transparent 100%)",
-          }}
-        />
-        <div
-          className="animate-aurora-float absolute -top-28 left-[15%] w-[460px] h-[460px] rounded-full blur-3xl opacity-25"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(99,102,241,0.5), transparent 70%)",
-          }}
-        />
-        <div
-          className="animate-aurora-float absolute top-[22%] right-[12%] w-[380px] h-[380px] rounded-full blur-3xl opacity-20"
-          style={{
-            animationDelay: "-4s",
-            background:
-              "radial-gradient(circle, rgba(56,189,248,0.42), transparent 70%)",
-          }}
-        />
-        <div
-          className="animate-aurora-float absolute -bottom-24 left-[36%] w-[380px] h-[380px] rounded-full blur-3xl opacity-18"
-          style={{
-            animationDelay: "-8s",
-            background:
-              "radial-gradient(circle, rgba(244,114,182,0.38), transparent 70%)",
-          }}
-        />
-      </div>
+        style={{
+          backgroundImage:
+            "radial-gradient(560px 420px at 20% 10%, rgba(99,102,241,0.12), transparent 70%), radial-gradient(460px 380px at 85% 28%, rgba(56,189,248,0.10), transparent 70%), linear-gradient(to right, rgba(52, 62, 94, 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(52, 62, 94, 0.06) 1px, transparent 1px)",
+          backgroundSize: "100% 100%, 100% 100%, 56px 56px, 56px 56px",
+        }}
+      />
 
       {/* Minimal Top Bar */}
-      <header className="relative z-10 h-16 border-b border-hairline bg-surface/90 backdrop-blur-md">
+      <header className="relative z-10 h-16 border-b border-hairline bg-surface">
         <div className="max-w-[1200px] mx-auto h-full px-5 sm:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 font-display text-base font-bold tracking-tight text-ink whitespace-nowrap shrink-0">
             <img
@@ -590,7 +561,7 @@ export function AuthGate({
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="lg:col-span-6 w-full max-w-[440px] mx-auto"
           >
-            <div className="relative overflow-hidden bg-surface/95 backdrop-blur-xl border border-hairline-strong rounded-2xl p-6 sm:p-8 auth-card-shadow">
+            <div className="relative overflow-hidden bg-surface border border-hairline-strong rounded-2xl p-6 sm:p-8 auth-card-shadow">
               <div
                 className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
                 style={{

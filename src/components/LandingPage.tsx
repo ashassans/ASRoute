@@ -203,6 +203,117 @@ const NAV_LINKS = [
   { href: "#quickstart", label: "Quickstart" },
 ];
 
+const LandingFailoverMatrix = React.memo(function LandingFailoverMatrix() {
+  const [failoverTick, setFailoverTick] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setFailoverTick((t) => (t + 1) % 28);
+    }, 1800);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const failoverMatrix = useMemo(() => {
+    const SLOTS = 28;
+    const providers = [
+      { name: "Anthropic", tag: "A", faultAt: (failoverTick + 5) % SLOTS },
+      { name: "Google Gemini", tag: "G", faultAt: (failoverTick + 14) % SLOTS },
+      { name: "OpenAI", tag: "O", faultAt: (failoverTick + 21) % SLOTS },
+    ];
+
+    const rows = providers.map((p) => {
+      const slots = Array.from({ length: SLOTS }, (_, i) => {
+        const dist = (i - p.faultAt + SLOTS) % SLOTS;
+        if (dist <= 3) return "fail";
+        if (dist === 4) return "amber";
+        return "ok";
+      });
+      return { ...p, slots };
+    });
+
+    const unified = Array.from({ length: SLOTS }, (_, i) => {
+      const anyAmber = rows.some((r) => r.slots[i] === "fail");
+      return anyAmber ? "recovered" : "ok";
+    });
+
+    return { rows, unified };
+  }, [failoverTick]);
+
+  return (
+    <div className="lg:col-span-7 bg-surface border border-hairline rounded-xl overflow-hidden order-2 lg:order-1">
+      <div className="px-5 py-3 border-b border-hairline flex items-center justify-between">
+        <span className="text-xs font-medium text-ink-2">
+          Provider health matrix
+        </span>
+        <span className="font-mono text-[11px] text-emerald-400 tabular-nums">
+          Live 429 failover stream
+        </span>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {failoverMatrix.rows.map((row) => {
+          const tagColor =
+            row.tag === "A"
+              ? "#8B5CF6"
+              : row.tag === "G"
+                ? "#3B82F6"
+                : "#10B981";
+          return (
+            <div key={row.name} className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-5 h-5 rounded bg-elevated border border-hairline-strong font-mono text-[10px] font-bold flex items-center justify-center"
+                    style={{ color: tagColor, borderColor: `${tagColor}44` }}
+                  >
+                    {row.tag}
+                  </span>
+                  <span className="font-medium text-ink">{row.name}</span>
+                </div>
+                <span className="font-mono text-[11px] text-ink-muted">
+                  {row.slots.includes("fail") ? "429 spike handled" : "healthy"}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                {row.slots.map((state, idx) => (
+                  <div
+                    key={idx}
+                    className={`h-3.5 flex-1 rounded-[2px] transition-colors duration-200 ${
+                      state === "ok"
+                        ? "bg-[#10B981]"
+                        : state === "fail"
+                          ? "bg-rose-500"
+                          : "bg-amber-400"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="pt-3.5 border-t border-hairline space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-ink">Through AS ROUTER</span>
+            <span className="font-mono text-[11px] text-emerald-400 tabular-nums">
+              100.0% request continuity
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            {failoverMatrix.unified.map((_, idx) => (
+              <div
+                key={idx}
+                className="h-3.5 flex-1 rounded-[2px] bg-[#10B981]"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export function LandingPage({
   onOpenAuth,
   isAuthenticated = false,
@@ -218,7 +329,6 @@ export function LandingPage({
   const [activeIntent, setActiveIntent] = useState<
     "coding" | "vision" | "tools" | "fast"
   >("fast");
-  const [failoverTick, setFailoverTick] = useState(0);
   const [compressPolicy, setCompressPolicy] = useState(true);
   const [intentPolicy, setIntentPolicy] = useState(true);
   const [policyMode, setPolicyMode] = useState<"priority" | "intent" | "cost">(
@@ -346,14 +456,6 @@ export function LandingPage({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Live animated failover pulse every 1.4s
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setFailoverTick((t) => (t + 1) % 28);
-    }, 1400);
-    return () => window.clearInterval(timer);
-  }, []);
-
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && mobileMenuOpen) {
@@ -365,32 +467,6 @@ export function LandingPage({
   }, [mobileMenuOpen]);
 
   const currentPreset = INTENT_ROUTING_PRESETS[activeIntent];
-
-  const failoverMatrix = useMemo(() => {
-    const SLOTS = 28;
-    const providers = [
-      { name: "Anthropic", tag: "A", faultAt: (failoverTick + 5) % SLOTS },
-      { name: "Google Gemini", tag: "G", faultAt: (failoverTick + 14) % SLOTS },
-      { name: "OpenAI", tag: "O", faultAt: (failoverTick + 21) % SLOTS },
-    ];
-
-    const rows = providers.map((p) => {
-      const slots = Array.from({ length: SLOTS }, (_, i) => {
-        const dist = (i - p.faultAt + SLOTS) % SLOTS;
-        if (dist <= 3) return "fail";
-        if (dist === 4) return "amber";
-        return "ok";
-      });
-      return { ...p, slots };
-    });
-
-    const unified = Array.from({ length: SLOTS }, (_, i) => {
-      const anyAmber = rows.some((r) => r.slots[i] === "fail");
-      return anyAmber ? "recovered" : "ok";
-    });
-
-    return { rows, unified };
-  }, [failoverTick]);
 
   const originUrl =
     typeof window !== "undefined"
@@ -471,7 +547,7 @@ const msg = await client.messages.create({
   return (
     <div className="min-h-screen bg-canvas text-ink selection:bg-indigo-500 selection:text-white overflow-x-hidden">
       {/* Strict 3-Zone Top Bar Contract + Responsive Mobile Drawer */}
-      <header className="sticky top-0 z-40 h-16 border-b border-hairline bg-surface/90 backdrop-blur-md">
+      <header className="sticky top-0 z-40 h-16 border-b border-hairline bg-surface">
         <div className="max-w-[1280px] mx-auto h-full px-5 sm:px-8 flex items-center justify-between gap-4 sm:gap-8">
           <a
             href="#top"
@@ -648,20 +724,14 @@ const msg = await client.messages.create({
           id="top"
           className="relative overflow-hidden border-b border-hairline"
         >
-          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-            <div
-              className="animate-aurora-float absolute -top-24 left-[18%] w-[420px] h-[280px] rounded-full blur-[110px]"
-              style={{ background: "rgba(99,102,241, 0.12)" }}
-            />
-            <div
-              className="animate-aurora-float absolute top-[20%] right-[8%] w-[360px] h-[300px] rounded-full blur-[120px]"
-              style={{ background: "rgba(56, 189, 248, 0.09)", animationDelay: "-3s" }}
-            />
-            <div
-              className="animate-aurora-float absolute bottom-[-12%] left-[55%] w-[320px] h-[240px] rounded-full blur-[110px]"
-              style={{ background: "rgba(236, 72, 153, 0.07)", animationDelay: "-6s" }}
-            />
-          </div>
+          <div
+            className="pointer-events-none absolute inset-0 overflow-hidden"
+            aria-hidden="true"
+            style={{
+              backgroundImage:
+                "radial-gradient(520px 320px at 22% 10%, rgba(99,102,241,0.10), transparent 70%), radial-gradient(460px 320px at 82% 28%, rgba(56,189,248,0.08), transparent 70%)",
+            }}
+          />
 
           <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-14 sm:py-16 lg:py-24 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center relative">
             {/* Hero Copy Left */}
@@ -777,15 +847,7 @@ const msg = await client.messages.create({
                     stroke="var(--border-strong)"
                     strokeWidth="1.2"
                     strokeDasharray="4 6"
-                  >
-                    <animate
-                      attributeName="stroke-dashoffset"
-                      from="0"
-                      to="-40"
-                      dur="6s"
-                      repeatCount="indefinite"
-                    />
-                  </ellipse>
+                  />
                   <ellipse
                     cx="300"
                     cy="210"
@@ -796,15 +858,7 @@ const msg = await client.messages.create({
                     strokeOpacity="0.65"
                     strokeWidth="1"
                     strokeDasharray="2 8"
-                  >
-                    <animate
-                      attributeName="stroke-dashoffset"
-                      from="0"
-                      to="40"
-                      dur="10s"
-                      repeatCount="indefinite"
-                    />
-                  </ellipse>
+                  />
                   <ellipse
                     cx="300"
                     cy="210"
@@ -833,7 +887,7 @@ const msg = await client.messages.create({
                           }, ${nx.toFixed(1)} ${ny.toFixed(1)}`}
                           fill="none"
                           stroke={isFocused ? p.color : "var(--border-hairline)"}
-                          strokeOpacity={isFocused ? 0.65 : 0.85}
+                          strokeOpacity={isFocused ? 0.72 : 0.85}
                           strokeWidth={isFocused ? "1.6" : "1"}
                         />
 
@@ -854,29 +908,21 @@ const msg = await client.messages.create({
                           />
                         ))}
 
-                        <circle r={isFocused ? 3.5 : 2.4} fill={p.color}>
-                          <animateMotion
-                            dur={`${2.6 + (idx % 3) * 0.65}s`}
-                            repeatCount="indefinite"
-                            begin={`${idx * 0.35}s`}
-                          >
-                            <mpath href={`#${pathId}`} />
-                          </animateMotion>
-                        </circle>
+                        {isFocused && (
+                          <circle r={3.5} fill={p.color}>
+                            <animateMotion dur="2.2s" repeatCount="indefinite">
+                              <mpath href={`#${pathId}`} />
+                            </animateMotion>
+                          </circle>
+                        )}
                       </g>
                     );
                   })}
                 </svg>
 
                 {/* Central Metallic AS ROUTER Emblem */}
-                <motion.div
-                  animate={{ scale: [1, 1.04, 1] }}
-                  transition={{
-                    duration: 4.5,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none px-4 py-3 rounded-2xl bg-surface/95 border border-hairline-strong shadow-[0_8px_28px_rgba(15,23,42,0.12)] backdrop-blur-sm"
+                <div
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none px-4 py-3 rounded-2xl bg-surface border border-hairline-strong shadow-[0_8px_24px_rgba(15,23,42,0.10)]"
                 >
                   <img
                     src="/assets/as-logo.png"
@@ -886,10 +932,10 @@ const msg = await client.messages.create({
                   <span className="mt-1 font-mono text-[9px] font-semibold text-sky-400 tracking-[0.22em]">
                     ROUTER
                   </span>
-                </motion.div>
+                </div>
 
                 {/* Interactive Provider Constellation Nodes */}
-                {ORBIT_PROVIDERS.map((p, idx) => {
+                {ORBIT_PROVIDERS.map((p) => {
                   const rx = p.ring === 1 ? 130 : p.ring === 2 ? 205 : 275;
                   const ry = p.ring === 1 ? 82 : p.ring === 2 ? 132 : 178;
                   const rad = (p.angle * Math.PI) / 180;
@@ -906,33 +952,25 @@ const msg = await client.messages.create({
                       }}
                       className="absolute -translate-x-1/2 -translate-y-1/2"
                     >
-                      <motion.button
+                      <button
                         type="button"
                         aria-label={`Inspect ${p.name} models`}
                         onMouseEnter={() => setHoveredProvider(p)}
                         onClick={() => setHoveredProvider(p)}
-                        animate={{ y: [0, -4, 0] }}
-                        transition={{
-                          duration: 3.0 + (idx % 3) * 0.6,
-                          repeat: Infinity,
-                          ease: "easeInOut",
-                          delay: idx * 0.22,
-                        }}
-                        whileHover={{ scale: 1.15 }}
                         style={{
                           borderColor: isFocused ? p.color : "var(--border-strong)",
                           color: isFocused ? p.color : "var(--text-primary)",
                           boxShadow: isFocused
-                            ? `0 0 20px ${p.color}40`
-                            : "0 2px 10px rgba(15, 23, 42, 0.08)",
+                            ? `0 0 18px ${p.color}38`
+                            : "0 2px 8px rgba(15, 23, 42, 0.08)",
                         }}
-                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg border flex items-center justify-center font-mono text-xs font-bold transition-colors ${
-                          isFocused ? "bg-elevated" : "bg-surface"
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg border flex items-center justify-center font-mono text-xs font-bold transition-transform duration-150 hover:scale-110 ${
+                          isFocused ? "bg-elevated scale-105" : "bg-surface"
                         }`}
                         title={p.name}
                       >
                         {p.short}
-                      </motion.button>
+                      </button>
                     </div>
                   );
                 })}
@@ -1179,83 +1217,7 @@ const msg = await client.messages.create({
           className="max-w-[1280px] mx-auto px-5 sm:px-8 py-16 sm:py-20 border-t border-hairline"
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            <div className="lg:col-span-7 bg-surface border border-hairline rounded-xl overflow-hidden order-2 lg:order-1">
-              <div className="px-5 py-3 border-b border-hairline flex items-center justify-between">
-                <span className="text-xs font-medium text-ink-2">
-                  Provider health matrix
-                </span>
-                <span className="font-mono text-[11px] text-emerald-400 tabular-nums">
-                  Live 429 failover stream
-                </span>
-              </div>
-
-              <div className="p-5 space-y-4">
-                {failoverMatrix.rows.map((row) => {
-                  const tagColor =
-                    row.tag === "A"
-                      ? "#8B5CF6"
-                      : row.tag === "G"
-                        ? "#3B82F6"
-                        : "#10B981";
-                  return (
-                  <div key={row.name} className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-5 h-5 rounded bg-elevated border border-hairline-strong font-mono text-[10px] font-bold flex items-center justify-center"
-                          style={{ color: tagColor, borderColor: `${tagColor}44` }}
-                        >
-                          {row.tag}
-                        </span>
-                        <span className="font-medium text-ink">
-                          {row.name}
-                        </span>
-                      </div>
-                      <span className="font-mono text-[11px] text-ink-muted">
-                        {row.slots.includes("fail")
-                          ? "429 spike handled"
-                          : "healthy"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {row.slots.map((state, idx) => (
-                        <div
-                          key={idx}
-                          className={`h-3.5 flex-1 rounded-[2px] transition-colors duration-300 ${
-                            state === "ok"
-                              ? "bg-[#10B981]"
-                              : state === "fail"
-                                ? "bg-rose-500"
-                                : "bg-amber-400"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-                })}
-
-                <div className="pt-3.5 border-t border-hairline space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-ink">
-                      Through AS ROUTER
-                    </span>
-                    <span className="font-mono text-[11px] text-emerald-400 tabular-nums">
-                      100.0% request continuity
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {failoverMatrix.unified.map((_, idx) => (
-                      <div
-                        key={idx}
-                        className="h-3.5 flex-1 rounded-[2px] bg-[#10B981] transition-colors duration-300"
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <LandingFailoverMatrix />
 
             <div className="lg:col-span-5 space-y-5 order-1 lg:order-2">
               <p className="font-mono text-xs uppercase tracking-wider text-indigo-400">
