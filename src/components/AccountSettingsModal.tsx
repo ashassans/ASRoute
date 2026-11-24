@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { X } from "lucide-react";
+import { Eye, EyeOff, X } from "lucide-react";
 import { authClient } from "../lib/auth-client.ts";
+import { useFocusTrap } from "../lib/useFocusTrap.ts";
 
 interface AccountSettingsModalProps {
   userName: string;
@@ -28,8 +29,14 @@ export function AccountSettingsModal({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  useFocusTrap(dialogRef, true);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -103,15 +110,23 @@ export function AccountSettingsModal({
       onClick={onClose}
     >
       <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="account-settings-title"
+        tabIndex={-1}
         initial={{ opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-md bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto outline-none"
       >
         <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
-          <h3 className="font-display text-base font-semibold text-white">
+          <h3
+            id="account-settings-title"
+            className="font-display text-base font-semibold text-white"
+          >
             Account Settings
           </h3>
           <button
@@ -132,33 +147,44 @@ export function AccountSettingsModal({
 
         <form onSubmit={handleSaveProfile} className="mt-5 space-y-3">
           <div>
-            <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+            <label
+              htmlFor="account-email"
+              className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+            >
               Email
             </label>
             <input
+              id="account-email"
               type="email"
               disabled
               value={userEmail}
-              className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-[#71717A]"
+              className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-[#94A3B8]"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+            <label
+              htmlFor="account-name"
+              className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+            >
               Name
             </label>
             <div className="flex gap-2">
               <input
+                id="account-name"
                 type="text"
                 required
+                placeholder="Your display name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-400"
+                className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-400"
               />
               <button
                 type="submit"
-                disabled={savingProfile}
-                className="px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-lg whitespace-nowrap"
+                disabled={
+                  savingProfile || !name.trim() || name.trim() === userName
+                }
+                className="px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg whitespace-nowrap"
               >
                 {savingProfile ? "Saving..." : "Save"}
               </button>
@@ -176,44 +202,111 @@ export function AccountSettingsModal({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+              <label
+                htmlFor="account-current-pw"
+                className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+              >
                 Current Password
               </label>
-              <input
-                type="password"
-                required
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-400"
-              />
+              <div className="relative">
+                <input
+                  id="account-current-pw"
+                  type={showCurrentPassword ? "text" : "password"}
+                  required
+                  placeholder="Enter current password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg pl-3 pr-10 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword((v) => !v)}
+                  aria-label={
+                    showCurrentPassword
+                      ? "Hide current password"
+                      : "Show current password"
+                  }
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#94A3B8] hover:text-white"
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+              <label
+                htmlFor="account-new-pw"
+                className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+              >
                 New Password
               </label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-400"
-              />
+              <div className="relative">
+                <input
+                  id="account-new-pw"
+                  type={showNewPassword ? "text" : "password"}
+                  required
+                  minLength={6}
+                  placeholder="At least 6 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg pl-3 pr-10 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((v) => !v)}
+                  aria-label={
+                    showNewPassword ? "Hide new password" : "Show new password"
+                  }
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#94A3B8] hover:text-white"
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+              <label
+                htmlFor="account-confirm-pw"
+                className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+              >
                 Confirm New Password
               </label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-400"
-              />
+              <div className="relative">
+                <input
+                  id="account-confirm-pw"
+                  type={showConfirmPassword ? "text" : "password"}
+                  required
+                  minLength={6}
+                  placeholder="Re-enter new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg pl-3 pr-10 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  aria-label={
+                    showConfirmPassword
+                      ? "Hide confirm password"
+                      : "Show confirm password"
+                  }
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#94A3B8] hover:text-white"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="pt-2 flex items-center justify-end gap-3">

@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowDown,
   ArrowUp,
   Check,
+  ChevronDown,
   Copy,
   GripVertical,
   Pencil,
@@ -24,6 +25,7 @@ import {
 } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import { getComboAccent, getProviderVisual } from "../lib/providerVisuals.ts";
+import { useFocusTrap } from "../lib/useFocusTrap.ts";
 import type {
   BootstrapPayload,
   Combo,
@@ -58,6 +60,180 @@ interface SimulationStep {
   reason: string;
 }
 
+interface ComboboxOption {
+  value: string;
+  label?: string;
+  group?: string;
+}
+
+function ModelCombobox({
+  id,
+  value,
+  onChange,
+  options,
+  placeholder,
+  ariaLabel,
+  inputClassName = "w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500",
+}: {
+  id?: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: ComboboxOption[];
+  placeholder?: string;
+  ariaLabel?: string;
+  inputClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    if (showAll || !q) return options;
+    return options.filter(
+      (opt) =>
+        opt.value.toLowerCase().includes(q) ||
+        (opt.label && opt.label.toLowerCase().includes(q)) ||
+        (opt.group && opt.group.toLowerCase().includes(q))
+    );
+  }, [options, value, showAll]);
+
+  useEffect(() => {
+    setHighlighted(0);
+  }, [filtered.length, open]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      setOpen(true);
+      setShowAll(true);
+      e.preventDefault();
+      return;
+    }
+    if (!open) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (filtered.length > 0) {
+        setHighlighted((prev) => (prev + 1) % filtered.length);
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (filtered.length > 0) {
+        setHighlighted((prev) => (prev - 1 + filtered.length) % filtered.length);
+      }
+    } else if (e.key === "Enter" && filtered[highlighted]) {
+      e.preventDefault();
+      onChange(filtered[highlighted].value);
+      setOpen(false);
+      setShowAll(false);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div ref={rootRef} className="relative w-full">
+      <input
+        id={id}
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        aria-autocomplete="list"
+        autoComplete="off"
+        onFocus={() => {
+          setOpen(true);
+          setShowAll(true);
+        }}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setShowAll(false);
+          setOpen(true);
+        }}
+        onKeyDown={handleKeyDown}
+        className={`${inputClassName} pr-7`}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Toggle model suggestions"
+        onClick={() => {
+          setOpen((prev) => {
+            const next = !prev;
+            if (next) setShowAll(true);
+            return next;
+          });
+        }}
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-[#71717A] hover:text-white transition-colors"
+      >
+        <ChevronDown
+          className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && filtered.length > 0 && (
+        <div
+          role="listbox"
+          className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-[#101422] border border-[#2B334E] rounded-lg shadow-2xl z-40 py-1 divide-y divide-[#1A2036]"
+        >
+          {filtered.map((opt, idx) => {
+            const isSelected = opt.value === value;
+            const isActive = idx === highlighted;
+            return (
+              <button
+                key={`${opt.group || "opt"}-${opt.value}-${idx}`}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onMouseEnter={() => setHighlighted(idx)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(opt.value);
+                  setOpen(false);
+                  setShowAll(false);
+                }}
+                className={`w-full px-2.5 py-1.5 text-left flex items-center justify-between gap-2 transition-colors ${
+                  isSelected
+                    ? "bg-indigo-500/15 text-indigo-300"
+                    : isActive
+                      ? "bg-[#1F263D] text-white"
+                      : "text-[#D4D4D8] hover:bg-[#171C2E]"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-xs truncate">{opt.value}</div>
+                  {opt.label && opt.label !== opt.value && (
+                    <div className="text-[10px] text-[#71717A] truncate">
+                      {opt.label}
+                    </div>
+                  )}
+                </div>
+                {opt.group && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#171C2E] border border-[#2B334E] text-[#94A3B8] shrink-0">
+                    {opt.group}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CombosView({
   combos,
   connections,
@@ -67,6 +243,8 @@ export function CombosView({
   onNotify,
 }: CombosViewProps) {
   const [showBuilder, setShowBuilder] = useState(false);
+  const builderModalRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(builderModalRef, showBuilder);
   const [editingComboId, setEditingComboId] = useState<string | null>(null);
   const [comboName, setComboName] = useState("");
   const [description, setDescription] = useState("");
@@ -133,6 +311,46 @@ export function CombosView({
     (c) => !isSearchProvider(c.provider)
   );
   const connMap = new Map(connections.map((c) => [c.id, c]));
+
+  const simulatorOptions = useMemo<ComboboxOption[]>(() => {
+    const seen = new Set<string>();
+    const opts: ComboboxOption[] = [];
+    const push = (value: string, label?: string, group?: string) => {
+      const v = value.trim();
+      if (!v || seen.has(v)) return;
+      seen.add(v);
+      opts.push({ value: v, label, group });
+    };
+
+    for (const c of combos) {
+      push(c.name, `${c.strategy} · ${c.tiers.length} tiers`, "Combo");
+    }
+    for (const wc of wildcards) {
+      if (wc.isActive) {
+        const target = combos.find((c) => c.id === wc.comboId);
+        push(
+          wc.pattern.replace(/\*+$/, "mini"),
+          target ? `Matches ${wc.pattern} → ${target.name}` : wc.pattern,
+          "Wildcard"
+        );
+      }
+    }
+    for (const conn of llmConnections) {
+      if (!conn.isActive) continue;
+      const spec = getProviderSpec(conn.provider);
+      const prefix = getConnectionPrefix(conn);
+      if (conn.defaultModel) {
+        push(`${prefix}/${conn.defaultModel}`, conn.name, spec.label);
+      }
+      for (const m of conn.availableModels || []) {
+        push(`${prefix}/${m}`, conn.name, spec.label);
+      }
+      for (const m of spec.models) {
+        push(`${prefix}/${m.id}`, m.label, spec.label);
+      }
+    }
+    return opts;
+  }, [combos, wildcards, llmConnections]);
 
   const openCreateBuilder = () => {
     const firstConn = llmConnections[0];
@@ -927,20 +1145,24 @@ export function CombosView({
             Wildcard Routes
           </h3>
 
-          <form onSubmit={handleAddWildcard} className="mt-4 flex gap-2">
+          <form onSubmit={handleAddWildcard} className="mt-4 flex flex-wrap sm:flex-nowrap gap-2">
             <input
               type="text"
               aria-label="Wildcard model pattern"
+              placeholder="e.g. gpt-4*"
               value={wcPattern}
               onChange={(e) => setWcPattern(e.target.value)}
-              className="w-36 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+              className="w-full sm:w-40 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
             />
             <select
               value={wcComboId}
               onChange={(e) => setWcComboId(e.target.value)}
-              className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+              disabled={combos.length === 0}
+              className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
             >
-              <option value="">Select target combo...</option>
+              <option value="">
+                {combos.length === 0 ? "Create a combo first..." : "Select target combo..."}
+              </option>
               {combos.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -949,12 +1171,17 @@ export function CombosView({
             </select>
             <button
               type="submit"
-              disabled={!wcPattern.trim() || !wcComboId}
+              disabled={!wcPattern.trim() || !wcComboId || combos.length === 0}
               className="px-3.5 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#1F2937] disabled:opacity-50 text-white border border-[#2B334E] rounded-lg whitespace-nowrap"
             >
               Add Rule
             </button>
           </form>
+          {combos.length === 0 && (
+            <p className="mt-2 text-[11px] text-[#94A3B8]">
+              Wildcard rules redirect matching model aliases to a Combo. Create a combo above first.
+            </p>
+          )}
 
           <div className="mt-4 border-t border-[#2B334E] divide-y divide-[#2B334E]">
             {wildcards.length === 0 ? (
@@ -1018,20 +1245,27 @@ export function CombosView({
 
           <form onSubmit={runDrySimulation} className="space-y-3">
             <div>
-              <label className="block text-xs text-[#A1A1AA] mb-1.5">
+              <label
+                htmlFor="combo-sim-model"
+                className="block text-xs text-[#A1A1AA] mb-1.5"
+              >
                 Combo or model alias
               </label>
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={simModel}
-                  onChange={(e) => setSimModel(e.target.value)}
-                  className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                />
+                <div className="flex-1 min-w-0">
+                  <ModelCombobox
+                    id="combo-sim-model"
+                    ariaLabel="Combo or model alias"
+                    placeholder="e.g. production-chat or gpt-4o"
+                    value={simModel}
+                    onChange={setSimModel}
+                    options={simulatorOptions}
+                  />
+                </div>
                 <button
                   type="submit"
                   disabled={simRunning}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] border border-[#343E5E] text-white rounded-lg whitespace-nowrap transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-[#1F263D] hover:bg-[#2B334E] border border-[#343E5E] text-white rounded-lg whitespace-nowrap transition-colors shrink-0"
                 >
                   <Play className="w-3.5 h-3.5 text-indigo-400" />
                   <span>{simRunning ? "Simulating..." : "Run"}</span>
@@ -1040,14 +1274,19 @@ export function CombosView({
             </div>
 
             <div>
-              <label className="block text-xs text-[#A1A1AA] mb-1.5">
+              <label
+                htmlFor="combo-sim-prompt"
+                className="block text-xs text-[#A1A1AA] mb-1.5"
+              >
                 Sample prompt
               </label>
               <input
+                id="combo-sim-prompt"
                 type="text"
+                placeholder="Enter a test prompt to inspect intent & tier order..."
                 value={simPrompt}
                 onChange={(e) => setSimPrompt(e.target.value)}
-                className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
               />
             </div>
 
@@ -1196,21 +1435,30 @@ export function CombosView({
             className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
           >
             <motion.div
+              ref={builderModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="combo-builder-title"
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.96, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-2xl bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-2xl bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto outline-none"
             >
             <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
-              <h3 className="font-display text-base font-semibold text-white">
+              <h3
+                id="combo-builder-title"
+                className="font-display text-base font-semibold text-white"
+              >
                 {editingComboId
                   ? "Edit Routing Combo"
                   : "Create Routing Combo"}
               </h3>
               <button
                 type="button"
+                aria-label="Close modal"
                 onClick={() => setShowBuilder(false)}
                 className="text-[#A1A1AA] hover:text-white"
               >
@@ -1221,23 +1469,32 @@ export function CombosView({
             <form onSubmit={handleSaveCombo} className="mt-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                  <label
+                    htmlFor="combo-alias-input"
+                    className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                  >
                     Virtual Model Alias
                   </label>
                   <input
+                    id="combo-alias-input"
                     type="text"
                     required
+                    placeholder="e.g. production-chat"
                     value={comboName}
                     onChange={(e) => setComboName(e.target.value)}
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                  <label
+                    htmlFor="combo-strategy-select"
+                    className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                  >
                     Balancing Strategy
                   </label>
                   <select
+                    id="combo-strategy-select"
                     value={strategy}
                     onChange={(e) => setStrategy(e.target.value)}
                     className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
@@ -1258,14 +1515,19 @@ export function CombosView({
               )}
 
               <div>
-                <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                <label
+                  htmlFor="combo-description-input"
+                  className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                >
                   Description (Optional)
                 </label>
                 <input
+                  id="combo-description-input"
                   type="text"
+                  placeholder="e.g. Primary fast model with paid fallback"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -1375,26 +1637,49 @@ export function CombosView({
                         </div>
 
                         <div className="sm:col-span-3">
-                          <input
-                            type="text"
-                            list={`models-${idx}`}
+                          <ModelCombobox
+                            ariaLabel={`Tier ${idx + 1} model ID`}
+                            placeholder="e.g. gpt-4o-mini"
                             value={tier.upstreamModel}
-                            onChange={(e) =>
-                              updateTier(idx, { upstreamModel: e.target.value })
+                            onChange={(val) =>
+                              updateTier(idx, { upstreamModel: val })
                             }
-                            className="w-full bg-[#171C2E] border border-[#2B334E] rounded-md px-2.5 py-1.5 text-xs font-mono text-white"
+                            inputClassName="w-full bg-[#171C2E] border border-[#2B334E] rounded-md px-2.5 py-1.5 text-xs font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
+                            options={Array.from(
+                              new Map<string, ComboboxOption>([
+                                ...(conn?.defaultModel
+                                  ? [
+                                      [
+                                        conn.defaultModel,
+                                        {
+                                          value: conn.defaultModel,
+                                          label: "Default model",
+                                          group: "Default",
+                                        },
+                                      ] as const,
+                                    ]
+                                  : []),
+                                ...(conn?.availableModels || []).map(
+                                  (mId) =>
+                                    [
+                                      mId,
+                                      { value: mId, group: "Synced" },
+                                    ] as const
+                                ),
+                                ...spec.models.map(
+                                  (m) =>
+                                    [
+                                      m.id,
+                                      {
+                                        value: m.id,
+                                        label: m.label,
+                                        group: spec.label,
+                                      },
+                                    ] as const
+                                ),
+                              ]).values()
+                            )}
                           />
-                          <datalist id={`models-${idx}`}>
-                            {Array.from(
-                              new Set([
-                                ...(conn?.defaultModel ? [conn.defaultModel] : []),
-                                ...(conn?.availableModels || []),
-                                ...spec.models.map((m) => m.id),
-                              ])
-                            ).map((modelId) => (
-                              <option key={modelId} value={modelId} />
-                            ))}
-                          </datalist>
                         </div>
 
                         <div className="sm:col-span-2 flex items-center gap-1.5">
@@ -1431,6 +1716,7 @@ export function CombosView({
                         <div className="sm:col-span-2 flex items-center justify-end gap-1">
                           <button
                             type="button"
+                            aria-label={`Move tier ${idx + 1} up`}
                             onClick={() => reorderTiers(idx, idx - 1)}
                             disabled={idx === 0}
                             className="p-1 text-[#A1A1AA] hover:text-white disabled:opacity-30"
@@ -1439,6 +1725,7 @@ export function CombosView({
                           </button>
                           <button
                             type="button"
+                            aria-label={`Move tier ${idx + 1} down`}
                             onClick={() => reorderTiers(idx, idx + 1)}
                             disabled={idx === tiers.length - 1}
                             className="p-1 text-[#A1A1AA] hover:text-white disabled:opacity-30"
@@ -1447,6 +1734,7 @@ export function CombosView({
                           </button>
                           <button
                             type="button"
+                            aria-label={`Remove tier ${idx + 1}`}
                             onClick={() =>
                               setTiers((prev) =>
                                 prev.filter((_, i) => i !== idx)

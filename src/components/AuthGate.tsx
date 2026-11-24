@@ -506,7 +506,7 @@ export function AuthGate({
             <img
               src="/assets/as-logo.png"
               alt="AS ROUTER"
-              className="h-7 w-auto object-contain shrink-0 drop-shadow-[0_0_12px_rgba(56,189,248,0.3)]"
+              className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_10px_rgba(56,189,248,0.28)]"
             />
             <span>AS ROUTER</span>
           </div>
@@ -538,7 +538,7 @@ export function AuthGate({
               <img
                 src="/assets/as-logo.png"
                 alt="AS ROUTER"
-                className="h-11 w-auto object-contain drop-shadow-[0_0_24px_rgba(99,102,241,0.35)]"
+                className="h-8 w-auto object-contain drop-shadow-[0_0_18px_rgba(99,102,241,0.32)]"
               />
               <h2
                 className="font-display font-bold tracking-tight text-[#FAFAFA] leading-[1.12]"
@@ -875,7 +875,7 @@ export function AuthGate({
                       <img
                         src="/assets/as-logo.png"
                         alt="AS ROUTER"
-                        className="h-9 w-auto object-contain mb-3 lg:hidden drop-shadow-[0_0_16px_rgba(99,102,241,0.35)]"
+                        className="h-6 w-auto object-contain mb-3 lg:hidden drop-shadow-[0_0_12px_rgba(99,102,241,0.3)]"
                       />
                       <h1 className="font-display text-2xl font-bold tracking-tight text-[#FAFAFA]">
                         {mode === "signin"

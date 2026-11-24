@@ -29,6 +29,7 @@ import { AccountSettingsModal } from "./components/AccountSettingsModal.tsx";
 import { ApiKeysView } from "./components/ApiKeysView.tsx";
 import { AuthGate } from "./components/AuthGate.tsx";
 import { CombosView } from "./components/CombosView.tsx";
+import { CommandPalette } from "./components/CommandPalette.tsx";
 import { LandingPage } from "./components/LandingPage.tsx";
 import { LogsView } from "./components/LogsView.tsx";
 import { ModelsView } from "./components/ModelsView.tsx";
@@ -37,6 +38,7 @@ import { PlaygroundView } from "./components/PlaygroundView.tsx";
 import { ProvidersView } from "./components/ProvidersView.tsx";
 import { SearchView } from "./components/SearchView.tsx";
 import { authClient } from "./lib/auth-client.ts";
+import { useFocusTrap } from "./lib/useFocusTrap.ts";
 import type {
   BootstrapPayload,
   Combo,
@@ -170,6 +172,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>(initialRoute.tab);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [playgroundLaunch, setPlaygroundLaunch] = useState<{
+    model?: string;
+    prompt?: string;
+    nonce: number;
+  } | null>(null);
+  const mobileDrawerRef = useRef<HTMLDivElement | null>(null);
   const [workspace, setWorkspace] = useState<BootstrapPayload | null>(null);
   const [loadingWorkspace, setLoadingWorkspace] = useState(false);
   const [hasMoreLogs, setHasMoreLogs] = useState(false);
@@ -184,6 +193,8 @@ export default function App() {
     message: string;
     tone: "success" | "error";
   } | null>(null);
+
+  useFocusTrap(mobileDrawerRef, mobileMenuOpen);
 
   const navigateTo = useCallback((path: string, replace = false) => {
     const parsed = parseRoute(path);
@@ -216,16 +227,36 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  const openPlaygroundWith = useCallback(
+    (opts: { model?: string; prompt?: string }) => {
+      setPlaygroundLaunch({
+        model: opts.model,
+        prompt: opts.prompt,
+        nonce: Date.now(),
+      });
+      navigateTab("playground");
+    },
+    [navigateTab]
+  );
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        if (session?.user && routeArea === "dashboard") {
+          e.preventDefault();
+          setCommandPaletteOpen((v) => !v);
+        }
+        return;
+      }
       if (e.key === "Escape") {
+        if (commandPaletteOpen) setCommandPaletteOpen(false);
         if (mobileMenuOpen) setMobileMenuOpen(false);
         if (settingsOpen) setSettingsOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mobileMenuOpen, settingsOpen]);
+  }, [commandPaletteOpen, mobileMenuOpen, settingsOpen, session?.user, routeArea]);
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -239,11 +270,17 @@ export default function App() {
     }
   }, [sessionLoading, session?.user, routeArea, navigateTo]);
 
+  const toastTimerRef = useRef<number | null>(null);
+
   const notify = useCallback(
     (message: string, tone: "success" | "error" = "success") => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
       setToast({ message, tone });
-      setTimeout(() => {
+      toastTimerRef.current = window.setTimeout(() => {
         setToast((prev) => (prev?.message === message ? null : prev));
+        toastTimerRef.current = null;
       }, 3600);
     },
     []
@@ -761,7 +798,7 @@ export default function App() {
         <img
           src="/assets/as-logo.png"
           alt="AS ROUTER"
-          className="h-10 w-auto object-contain animate-pulse drop-shadow-[0_0_18px_rgba(99,102,241,0.35)]"
+          className="h-7 w-auto object-contain animate-pulse drop-shadow-[0_0_14px_rgba(99,102,241,0.32)]"
         />
         <span>Loading AS ROUTER...</span>
       </div>
@@ -821,7 +858,7 @@ export default function App() {
               alt="AS ROUTER"
               whileHover={{ scale: 1.07 }}
               transition={{ type: "spring", stiffness: 420, damping: 24 }}
-              className="h-7 w-auto object-contain shrink-0 drop-shadow-[0_0_12px_rgba(56,189,248,0.28)]"
+              className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_10px_rgba(56,189,248,0.26)]"
             />
             <span className="font-display text-base font-bold tracking-tight text-white whitespace-nowrap">
               AS ROUTER
@@ -829,7 +866,7 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -952,20 +989,25 @@ export default function App() {
             className="fixed inset-0 z-50 md:hidden bg-black/70 flex"
           >
             <motion.div
+              ref={mobileDrawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation menu"
+              tabIndex={-1}
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-64 bg-[#101422] border-r border-[#2B334E] h-full flex flex-col justify-between p-4"
+              className="w-64 bg-[#101422] border-r border-[#2B334E] h-full flex flex-col justify-between p-4 outline-none"
             >
-            <div>
-              <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
+            <div className="flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center justify-between pb-4 border-b border-[#2B334E] shrink-0">
                 <div className="flex items-center gap-2.5">
                   <img
                     src="/assets/as-logo.png"
                     alt="AS ROUTER"
-                    className="h-6 w-auto object-contain shrink-0 drop-shadow-[0_0_10px_rgba(56,189,248,0.28)]"
+                    className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.25)]"
                   />
                   <span className="font-display text-base font-bold text-white">
                     AS ROUTER
@@ -973,13 +1015,14 @@ export default function App() {
                 </div>
                 <button
                   type="button"
+                  aria-label="Close navigation"
                   onClick={() => setMobileMenuOpen(false)}
                   className="text-[#A1A1AA] hover:text-white"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <nav className="mt-4 space-y-1">
+              <nav className="mt-4 flex-1 min-h-0 overflow-y-auto space-y-1 pr-1">
                 {NAV_ITEMS.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
@@ -1117,7 +1160,7 @@ export default function App() {
               <img
                 src="/assets/as-logo.png"
                 alt="AS ROUTER"
-                className="h-5 w-auto object-contain sm:hidden shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.25)]"
+                className="h-4 w-auto object-contain sm:hidden shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.22)]"
               />
               <span className="text-[#A1A1AA] hidden sm:inline">
                 AS ROUTER
@@ -1133,6 +1176,20 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setCommandPaletteOpen(true)}
+              aria-label="Open command palette"
+              title="Command Palette (Cmd+K / Ctrl+K)"
+              className="inline-flex items-center gap-2 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#A1A1AA] hover:text-white bg-[#171C2E] hover:bg-[#1F263D] border border-[#2B334E] rounded-lg transition-colors whitespace-nowrap shrink-0"
+            >
+              <Search className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden lg:inline">Search commands...</span>
+              <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-[#101422] border border-[#2B334E] rounded text-[#94A3B8]">
+                ⌘K
+              </kbd>
+            </button>
+
             <button
               type="button"
               onClick={async () => {
@@ -1185,31 +1242,6 @@ export default function App() {
         </header>
 
         <main className="flex-1 px-4 sm:px-8 py-6 max-w-[1280px] w-full mx-auto">
-          <AnimatePresence>
-            {toast && (
-              <motion.div
-                key={toast.message}
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                className={`mb-5 px-4 py-3 rounded-lg border text-xs flex items-center justify-between ${
-                  toast.tone === "error"
-                    ? "bg-red-500/10 border-red-500/30 text-red-300"
-                    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                }`}
-              >
-                <span>{toast.message}</span>
-                <button
-                  type="button"
-                  onClick={() => setToast(null)}
-                  className="text-current opacity-70 hover:opacity-100"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           {loadError && (
             <div className="mb-5 px-4 py-3 rounded-lg border border-red-500/30 bg-red-500/10 text-xs text-red-300 flex items-center justify-between">
@@ -1293,6 +1325,9 @@ export default function App() {
                     combos={workspace.combos}
                     connections={workspace.connections}
                     onConnectProvider={() => navigateTab("provider-list")}
+                    onTestInPlayground={(modelId) =>
+                      openPlaygroundWith({ model: modelId })
+                    }
                     onNotify={notify}
                   />
                 )}
@@ -1338,12 +1373,17 @@ export default function App() {
                     onLoadMoreLogs={handleLoadMoreLogs}
                     onClearLogs={handleClearLogs}
                     onOpenPlayground={() => navigateTab("playground")}
+                    onReplayInPlayground={(modelId) =>
+                      openPlaygroundWith({ model: modelId })
+                    }
                   />
                 )}
                 {activeTab === "playground" && (
                   <PlaygroundView
                     combos={workspace.combos}
                     connections={workspace.connections}
+                    launchRequest={playgroundLaunch}
+                    onConnectProvider={() => navigateTab("provider-list")}
                     onRefresh={refreshWorkspace}
                     onNotify={notify}
                   />
@@ -1353,6 +1393,94 @@ export default function App() {
           ) : null}
         </main>
       </div>
+
+      {/* Floating Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key={toast.message}
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.96 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className={`fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-50 px-4 py-3 rounded-xl border text-xs flex items-center justify-between gap-3 shadow-2xl backdrop-blur-md ${
+              toast.tone === "error"
+                ? "bg-[#1A1016]/95 border-red-500/40 text-red-200"
+                : "bg-[#0F1B1D]/95 border-emerald-500/40 text-emerald-200"
+            }`}
+          >
+            <span className="leading-snug">{toast.message}</span>
+            <button
+              type="button"
+              aria-label="Dismiss notification"
+              onClick={() => {
+                if (toastTimerRef.current !== null) {
+                  window.clearTimeout(toastTimerRef.current);
+                  toastTimerRef.current = null;
+                }
+                setToast(null);
+              }}
+              className="text-current opacity-75 hover:opacity-100 shrink-0 p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {commandPaletteOpen && (
+          <CommandPalette
+            open={commandPaletteOpen}
+            onClose={() => setCommandPaletteOpen(false)}
+            navItems={NAV_ITEMS}
+            combos={workspace?.combos || []}
+            connections={workspace?.connections || []}
+            onNavigateTab={(tabId) => navigateTab(tabId as NavTab)}
+            onOpenPlaygroundModel={(modelId) =>
+              openPlaygroundWith({ model: modelId })
+            }
+            onCreateApiKey={() => {
+              navigateTab("keys");
+              setOpenCreateKeyCounter((c) => c + 1);
+            }}
+            onCopyBaseUrl={async () => {
+              const baseUrl =
+                workspace?.environment.gatewayEndpoint ||
+                (typeof window !== "undefined"
+                  ? `${window.location.origin}/v1`
+                  : "");
+              if (!baseUrl) return;
+              try {
+                await navigator.clipboard.writeText(baseUrl);
+                setCopiedBaseUrl(true);
+                notify("Base URL copied.", "success");
+                setTimeout(() => setCopiedBaseUrl(false), 1800);
+              } catch {
+                notify("Clipboard access denied", "error");
+              }
+            }}
+            onClearCache={async () => {
+              try {
+                const res = await fetch("/api/cache/clear", { method: "POST" });
+                if (res.ok) {
+                  notify("Response cache cleared.", "success");
+                } else {
+                  notify("Failed to clear response cache.", "error");
+                }
+              } catch {
+                notify("Network error clearing cache.", "error");
+              }
+            }}
+            onRefreshWorkspace={() => {
+              void refreshWorkspace();
+            }}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {settingsOpen && (

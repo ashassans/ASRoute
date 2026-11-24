@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Activity,
@@ -30,6 +30,7 @@ import {
 } from "../shared/catalog.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import { getProviderVisual } from "../lib/providerVisuals.ts";
+import { useFocusTrap } from "../lib/useFocusTrap.ts";
 import type { BootstrapPayload, ProviderConnection } from "../types/gateway.ts";
 
 interface ProvidersViewProps {
@@ -79,6 +80,8 @@ export function ProvidersView({
   onNotify,
 }: ProvidersViewProps) {
   const [showAdd, setShowAdd] = useState(false);
+  const providerModalRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(providerModalRef, showAdd);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [quickPreset, setQuickPreset] = useState<ReadyMadeProviderPreset | null>(
     null
@@ -2030,12 +2033,17 @@ export function ProvidersView({
             className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
           >
             <motion.div
+              ref={providerModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="provider-modal-title"
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.96, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-lg bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 max-h-[90vh] overflow-y-auto outline-none"
             >
             <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -2044,7 +2052,10 @@ export function ProvidersView({
                     {quickPreset.badge}
                   </span>
                 )}
-                <h3 className="font-display text-base font-semibold text-white truncate">
+                <h3
+                  id="provider-modal-title"
+                  className="font-display text-base font-semibold text-white truncate"
+                >
                   {editingId
                     ? "Edit Provider Connection"
                     : quickPreset
@@ -2054,6 +2065,7 @@ export function ProvidersView({
               </div>
               <button
                 type="button"
+                aria-label="Close"
                 onClick={() => setShowAdd(false)}
                 className="text-[#A1A1AA] hover:text-white"
               >
@@ -2088,10 +2100,14 @@ export function ProvidersView({
               {(!quickPreset || showQuickCustomize || Boolean(editingId)) && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                    <label
+                      htmlFor="provider-select"
+                      className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                    >
                       Provider
                     </label>
                     <select
+                      id="provider-select"
                       value={provider}
                       disabled={Boolean(editingId) || Boolean(quickPreset)}
                       onChange={(e) => handleProviderChange(e.target.value)}
@@ -2119,15 +2135,20 @@ export function ProvidersView({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                    <label
+                      htmlFor="provider-conn-name"
+                      className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                    >
                       Connection Name
                     </label>
                     <input
+                      id="provider-conn-name"
                       type="text"
                       required
+                      placeholder="e.g. OpenAI Primary"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
@@ -2191,29 +2212,41 @@ export function ProvidersView({
               {(!quickPreset || showQuickCustomize || Boolean(editingId)) && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                    <label
+                      htmlFor="provider-base-url"
+                      className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                    >
                       Base URL
                     </label>
                     <input
+                      id="provider-base-url"
                       type="url"
+                      placeholder="e.g. https://api.openai.com/v1"
                       value={baseUrl}
                       onChange={(e) => setBaseUrl(e.target.value)}
-                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
                   {!isSearchProvider(provider) && (
                     <div>
-                      <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                      <label
+                        htmlFor="provider-model-id"
+                        className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                      >
                         Model ID
                       </label>
                       <div className="flex items-center gap-2">
                         <input
+                          id="provider-model-id"
                           type="text"
                           list="provider-model-suggestions"
+                          placeholder={
+                            quickPreset?.defaultModel || "e.g. gpt-4o-mini"
+                          }
                           value={defaultModel}
                           onChange={(e) => setDefaultModel(e.target.value)}
-                          className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                          className="flex-1 bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                         />
                         <button
                           type="button"
@@ -2322,9 +2355,10 @@ export function ProvidersView({
                         <textarea
                           rows={2}
                           disabled={clearKeyPool}
+                          placeholder="Paste additional backup API keys, one per line..."
                           value={extraApiKeys}
                           onChange={(e) => setExtraApiKeys(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white disabled:opacity-50 focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-[#6B7280] disabled:opacity-50 focus:outline-none focus:border-indigo-500"
                         />
                         {editingPoolPreview.length > 0 && !clearKeyPool && (
                           <div className="mt-1 text-[11px] font-mono text-[#A1A1AA]">
@@ -2335,55 +2369,75 @@ export function ProvidersView({
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                        <label
+                          htmlFor="provider-rpm-limit"
+                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                        >
                           RPM Limit
                         </label>
                         <input
+                          id="provider-rpm-limit"
                           type="number"
                           min={1}
+                          placeholder="60"
                           value={rpmLimit}
                           onChange={(e) => setRpmLimit(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                        <label
+                          htmlFor="provider-rpd-limit"
+                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                        >
                           Daily Reqs (RPD)
                         </label>
                         <input
+                          id="provider-rpd-limit"
                           type="number"
                           min={1}
+                          placeholder="1000"
                           value={rpdLimit}
                           onChange={(e) => setRpdLimit(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                        <label
+                          htmlFor="provider-daily-tokens"
+                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                        >
                           Daily Tokens
                         </label>
                         <input
+                          id="provider-daily-tokens"
                           type="number"
                           min={1000}
+                          placeholder="250000"
                           value={dailyTokenQuota}
                           onChange={(e) => setDailyTokenQuota(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                        <label
+                          htmlFor="provider-monthly-usd"
+                          className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                        >
                           Monthly USD
                         </label>
                         <input
+                          id="provider-monthly-usd"
                           type="number"
                           step="0.01"
                           min={0.1}
+                          placeholder="25.00"
                           value={monthlyUsdQuota}
                           onChange={(e) => setMonthlyUsdQuota(e.target.value)}
-                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                         />
                       </div>
                     </div>

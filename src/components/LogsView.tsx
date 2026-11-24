@@ -1,7 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Download, Pause, Play, Search, Terminal, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Download,
+  Pause,
+  Play,
+  RotateCcw,
+  Search,
+  Terminal,
+  Trash2,
+  X,
+} from "lucide-react";
 import { getProviderVisual } from "../lib/providerVisuals.ts";
+import { useFocusTrap } from "../lib/useFocusTrap.ts";
 import type { FallbackHop, RequestLog } from "../types/gateway.ts";
 
 interface LogsViewProps {
@@ -14,6 +26,7 @@ interface LogsViewProps {
   onLoadMoreLogs?: () => Promise<void>;
   onClearLogs: () => Promise<void>;
   onOpenPlayground?: () => void;
+  onReplayInPlayground?: (modelId: string) => void;
 }
 
 function parseHops(raw: string): FallbackHop[] {
@@ -47,13 +60,19 @@ export function LogsView({
   onLoadMoreLogs,
   onClearLogs,
   onOpenPlayground,
+  onReplayInPlayground,
 }: LogsViewProps) {
   const [filter, setFilter] = useState<"all" | "success" | "fallback" | "error">(
     "all"
   );
+  const [providerFilter, setProviderFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [selectedLog, setSelectedLog] = useState<RequestLog | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [copiedTrace, setCopiedTrace] = useState(false);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
+
+  useFocusTrap(drawerRef, Boolean(selectedLog));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -62,6 +81,14 @@ export function LogsView({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedLog]);
+
+  const providerOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const log of logs) {
+      if (log.resolvedProvider) set.add(log.resolvedProvider);
+    }
+    return Array.from(set).sort();
+  }, [logs]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -80,17 +107,24 @@ export function LogsView({
         log.outcome !== "rate_limited"
       )
         return false;
+      if (
+        providerFilter !== "all" &&
+        log.resolvedProvider !== providerFilter
+      ) {
+        return false;
+      }
       if (!q) return true;
       return (
         log.requestedModel.toLowerCase().includes(q) ||
         log.resolvedModel.toLowerCase().includes(q) ||
         log.resolvedProvider.toLowerCase().includes(q) ||
+        (log.connectionName || "").toLowerCase().includes(q) ||
         (log.detectedIntent || "").toLowerCase().includes(q) ||
         (log.apiKeyPrefix || "").toLowerCase().includes(q) ||
         (log.errorMessage || "").toLowerCase().includes(q)
       );
     });
-  }, [logs, filter, query]);
+  }, [logs, filter, providerFilter, query]);
 
   const selectedHops = selectedLog
     ? parseHops(selectedLog.fallbackAttempts)
@@ -225,45 +259,72 @@ export function LogsView({
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="inline-flex items-center gap-1 p-1 bg-[#171C2E] border border-[#2B334E] rounded-lg self-start overflow-x-auto max-w-full">
-          {(
-            [
-              ["all", "All"],
-              ["success", "200 OK"],
-              ["fallback", "Fallback"],
-              ["error", "Errors"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setFilter(id)}
-              className={`relative px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-                filter === id
-                  ? "text-white"
-                  : "text-[#A1A1AA] hover:text-white"
-              }`}
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-1 p-1 bg-[#171C2E] border border-[#2B334E] rounded-lg self-start overflow-x-auto max-w-full">
+            {(
+              [
+                ["all", "All"],
+                ["success", "200 OK"],
+                ["fallback", "Fallback"],
+                ["error", "Errors"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setFilter(id)}
+                className={`relative px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                  filter === id
+                    ? "text-white"
+                    : "text-[#A1A1AA] hover:text-white"
+                }`}
+              >
+                {filter === id && (
+                  <motion.span
+                    layoutId="logs-filter-pill"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    className="absolute inset-0 bg-[#1F263D] rounded-md"
+                  />
+                )}
+                <span className="relative z-10">{label}</span>
+              </button>
+            ))}
+          </div>
+
+          {providerOptions.length > 1 && (
+            <select
+              value={providerFilter}
+              onChange={(e) => setProviderFilter(e.target.value)}
+              aria-label="Filter logs by provider"
+              className="bg-[#171C2E] border border-[#2B334E] rounded-lg px-2.5 py-2 text-xs text-[#D4D4D8] focus:outline-none focus:border-indigo-400"
             >
-              {filter === id && (
-                <motion.span
-                  layoutId="logs-filter-pill"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  className="absolute inset-0 bg-[#1F263D] rounded-md"
-                />
-              )}
-              <span className="relative z-10">{label}</span>
-            </button>
-          ))}
+              <option value="all">All Providers</option>
+              {providerOptions.map((prov) => (
+                <option key={prov} value={prov}>
+                  {prov}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {logs.length > 0 && (
+            <span className="text-[11px] font-mono text-[#71717A] tabular-nums">
+              {filtered.length === logs.length
+                ? `${logs.length} traces`
+                : `${filtered.length} / ${logs.length}`}
+            </span>
+          )}
         </div>
 
-        <div className="relative sm:w-72">
-          <Search className="w-3.5 h-3.5 text-[#A1A1AA] absolute left-3 top-1/2 -translate-y-1/2" />
+        <div className="relative lg:w-72">
+          <Search className="w-3.5 h-3.5 text-[#A1A1AA] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter by model, provider, intent..."
+            placeholder="Filter by model, provider, key, error..."
+            aria-label="Search logs"
             className="w-full bg-[#171C2E] border border-[#2B334E] rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-[#8B8B95] focus:outline-none focus:border-indigo-400"
           />
         </div>
@@ -467,16 +528,24 @@ export function LogsView({
             className="fixed inset-0 z-50 bg-black/60 flex justify-end"
           >
             <motion.div
+              ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="trace-inspector-title"
+              tabIndex={-1}
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg bg-[#171C2E] border-l border-[#2B334E] h-full overflow-y-auto p-6"
+              className="w-full max-w-lg bg-[#171C2E] border-l border-[#2B334E] h-full overflow-y-auto p-6 outline-none"
             >
             <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
               <div>
-                <h3 className="font-display text-base font-semibold text-white">
+                <h3
+                  id="trace-inspector-title"
+                  className="font-display text-base font-semibold text-white"
+                >
                   Request Trace Inspector
                 </h3>
                 <div className="font-mono text-xs text-[#A1A1AA] mt-0.5">
@@ -485,10 +554,59 @@ export function LogsView({
               </div>
               <button
                 type="button"
+                aria-label="Close trace inspector"
                 onClick={() => setSelectedLog(null)}
-                className="text-[#A1A1AA] hover:text-white"
+                className="text-[#A1A1AA] hover:text-white p-1"
               >
                 <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {onReplayInPlayground && selectedLog.requestedModel && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const modelToReplay = selectedLog.requestedModel;
+                    setSelectedLog(null);
+                    onReplayInPlayground(modelToReplay);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Replay in Playground</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(
+                      JSON.stringify(
+                        { ...selectedLog, hops: selectedHops },
+                        null,
+                        2
+                      )
+                    );
+                    setCopiedTrace(true);
+                    setTimeout(() => setCopiedTrace(false), 1500);
+                  } catch {
+                    // ignore clipboard failure
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#101422] hover:bg-[#1F263D] border border-[#2B334E] text-[#D4D4D8] hover:text-white rounded-lg transition-colors"
+              >
+                {copiedTrace ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Copied Trace JSON</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-[#94A3B8]" />
+                    <span>Copy Trace JSON</span>
+                  </>
+                )}
               </button>
             </div>
 

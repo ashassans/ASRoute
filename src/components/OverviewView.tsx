@@ -63,17 +63,6 @@ const MODEL_SERIES_COLORS = [
   "#FBBF24", // amber
 ];
 
-const POLICY_CHECK_COLORS = [
-  "#818CF8",
-  "#38BDF8",
-  "#34D399",
-  "#C084FC",
-  "#F472B6",
-  "#FB923C",
-  "#2DD4BF",
-  "#FBBF24",
-];
-
 function formatCompactNumber(value: number): string {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -219,9 +208,8 @@ export function OverviewView({
   // Interactive landing showcase states
   const [previewComboIdx, setPreviewComboIdx] = useState(0);
   const [localCompress, setLocalCompress] = useState(false);
-  const [localStrategy, setLocalStrategy] = useState<
-    "priority" | "intent_auto" | "cost_optimized"
-  >("intent_auto");
+  const [localCache, setLocalCache] = useState(false);
+  const [localStrategy, setLocalStrategy] = useState<string>("intent_auto");
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [pulseCursor, setPulseCursor] = useState(0);
 
@@ -275,18 +263,19 @@ export function OverviewView({
   useEffect(() => {
     if (activeCombo) {
       setLocalCompress(activeCombo.compressPrompt);
-      if (
-        activeCombo.strategy === "priority" ||
-        activeCombo.strategy === "intent_auto" ||
-        activeCombo.strategy === "cost_optimized"
-      ) {
-        setLocalStrategy(activeCombo.strategy);
-      }
+      setLocalCache(activeCombo.enableCache);
+      setLocalStrategy(activeCombo.strategy || "priority");
     }
-  }, [activeCombo?.id, activeCombo?.compressPrompt, activeCombo?.strategy]);
+  }, [
+    activeCombo?.id,
+    activeCombo?.compressPrompt,
+    activeCombo?.enableCache,
+    activeCombo?.strategy,
+  ]);
 
   const updateGatewayPolicy = async (patch: {
     compressPrompt?: boolean;
+    enableCache?: boolean;
     strategy?: "priority" | "intent_auto" | "cost_optimized";
   }) => {
     if (!activeCombo) {
@@ -298,9 +287,13 @@ export function OverviewView({
     }
 
     const prevCompress = localCompress;
+    const prevCache = localCache;
     const prevStrategy = localStrategy;
     if (patch.compressPrompt !== undefined) {
       setLocalCompress(patch.compressPrompt);
+    }
+    if (patch.enableCache !== undefined) {
+      setLocalCache(patch.enableCache);
     }
     if (patch.strategy !== undefined) {
       setLocalStrategy(patch.strategy);
@@ -321,11 +314,13 @@ export function OverviewView({
         );
       } else {
         setLocalCompress(prevCompress);
+        setLocalCache(prevCache);
         setLocalStrategy(prevStrategy);
         onNotify?.("Failed to update combo policy.", "error");
       }
     } catch {
       setLocalCompress(prevCompress);
+      setLocalCache(prevCache);
       setLocalStrategy(prevStrategy);
       onNotify?.("Network error updating gateway policy.", "error");
     } finally {
@@ -535,9 +530,10 @@ export function OverviewView({
     (firstActiveLlmConn && firstActiveModelId
       ? `${getConnectionPrefix(firstActiveLlmConn)}/${firstActiveModelId}`
       : "YOUR_PROVIDER/MODEL");
+  const snippetApiKeyPlaceholder = "sk-asr-YOUR_GATEWAY_API_KEY";
   const openaiCurlSnippet = `curl ${environment.gatewayEndpoint}/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer ${keys[0]?.keyPrefix || "sk-asr-YOUR_KEY"}" \\
+  -H "Authorization: Bearer ${snippetApiKeyPlaceholder}" \\
   -d '{
     "model": "${defaultModelAlias}",
     "messages": [{"role": "user", "content": "Hello from AS ROUTER"}]
@@ -546,11 +542,11 @@ export function OverviewView({
   const anthropicBaseOrigin = environment.gatewayEndpoint.replace(/\/v1\/?$/, "");
   const anthropicCurlSnippet = `# Claude Code / Anthropic SDK env
 export ANTHROPIC_BASE_URL="${anthropicBaseOrigin}"
-export ANTHROPIC_API_KEY="${keys[0]?.keyPrefix || "sk-asr-YOUR_KEY"}"
+export ANTHROPIC_API_KEY="${snippetApiKeyPlaceholder}"
 
 curl ${environment.gatewayEndpoint}/messages \\
   -H "Content-Type: application/json" \\
-  -H "x-api-key: ${keys[0]?.keyPrefix || "sk-asr-YOUR_KEY"}" \\
+  -H "x-api-key: ${snippetApiKeyPlaceholder}" \\
   -H "anthropic-version: 2023-06-01" \\
   -d '{
     "model": "${defaultModelAlias}",
@@ -609,9 +605,17 @@ curl ${environment.gatewayEndpoint}/messages \\
     <div className="space-y-8">
       {/* Header & Time Range Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h2 className="font-display text-xl font-semibold text-[#FAFAFA] tracking-tight">
-          Overview
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="font-display text-xl font-semibold text-[#FAFAFA] tracking-tight">
+            Overview
+          </h2>
+          {loadingAnalytics && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-[#94A3B8]">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping" />
+              <span>Updating...</span>
+            </span>
+          )}
+        </div>
 
         <div className="inline-flex items-center gap-1 p-1 bg-[#171C2E] border border-[#343E5E] rounded-lg self-start">
           {(
@@ -769,32 +773,426 @@ curl ${environment.gatewayEndpoint}/messages \\
         </motion.div>
       </div>
 
-      {/* SECTION 1 (Landing-Style Animated): Better, faster, cheaper. Route smarter. */}
-      <motion.section
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.06 }}
-        className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-2"
-      >
-        <div className="lg:col-span-5 space-y-4">
-          <h3 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#FAFAFA] leading-[1.15]">
-            Better, faster, cheaper. Route all three.
-          </h3>
-          <button
-            type="button"
-            onClick={() => onNavigate("combos")}
-            className="inline-flex items-center gap-2 text-xs font-medium text-[#D4D4D8] hover:text-[#FAFAFA] transition-colors whitespace-nowrap"
-          >
-            <span>Configure combos & routing</span>
-            <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
-          </button>
+      {/* Usage by model Stacked Bar Chart (Above the Fold) */}
+      <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
+              Usage by model
+            </h3>
+            {hoveredBucket && (
+              <span className="text-xs font-mono text-[#A1A1AA] tabular-nums">
+                {hoveredBucket.label} · {hoveredBucket.total} reqs ·{" "}
+                {formatUsdSmart(hoveredBucket.costUsd)} ·{" "}
+                {formatCompactNumber(hoveredBucket.tokens)} tok
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="inline-flex items-center gap-0.5 p-0.5 bg-[#101422] border border-[#343E5E] rounded-md">
+              {(
+                [
+                  ["spend", "Spend"],
+                  ["tokens", "Tokens"],
+                  ["requests", "Reqs"],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setChartMetric(m)}
+                  className={`relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
+                    chartMetric === m
+                      ? "text-[#FAFAFA]"
+                      : "text-[#94A3B8] hover:text-[#D4D4D8]"
+                  }`}
+                >
+                  {chartMetric === m && (
+                    <motion.span
+                      layoutId="overview-metric-pill"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      className="absolute inset-0 bg-[#1F263D] rounded"
+                    />
+                  )}
+                  <span className="relative z-10">{label}</span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigate("logs")}
+              className="inline-flex items-center gap-0.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors whitespace-nowrap shrink-0"
+            >
+              <span className="underline underline-offset-4 decoration-[#3F3F46]">
+                Explore
+              </span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
-        <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between gap-3">
+        <div
+          className={`relative transition-opacity duration-200 ${
+            loadingAnalytics ? "opacity-60" : "opacity-100"
+          }`}
+        >
+          <div className="flex gap-3">
+            <div className="w-14 h-52 flex flex-col justify-between text-right pr-1 font-mono text-[11px] text-[#94A3B8] tabular-nums shrink-0">
+              {yTicks.map((tick, i) => (
+                <span key={i}>{formatYAxisTick(tick, chartMetric)}</span>
+              ))}
+            </div>
+
+            <div className="flex-1 h-52 relative border-b border-l border-[#2B334E]">
+              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                {[0, 1, 2, 3, 4].map((row) => (
+                  <div
+                    key={row}
+                    className={`w-full ${
+                      row === 4 ? "" : "border-t border-dashed border-[#28304A]"
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {bucketTotals.every((v) => v === 0) && !loadingAnalytics && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+                  <span className="px-3 py-1.5 rounded-lg bg-[#101422]/90 border border-[#2B334E] text-xs text-[#94A3B8]">
+                    No usage recorded for this timeframe yet
+                  </span>
+                </div>
+              )}
+
+              <div className="relative z-10 h-full flex items-end gap-1 px-1.5">
+                {buckets.map((bucket, bIdx) => {
+                  const totalMetric = bucketTotals[bIdx] || 0;
+                  const heightPct =
+                    totalMetric > 0
+                      ? Math.max(
+                          4,
+                          Math.min(100, (totalMetric / maxChartVal) * 100)
+                        )
+                      : 0;
+
+                  const segments = modelNames
+                    .map((mName) => {
+                      const mData = bucket.byModel?.[mName];
+                      if (!mData) return null;
+                      const val =
+                        chartMetric === "spend"
+                          ? mData.costUsd
+                          : chartMetric === "tokens"
+                            ? mData.tokens
+                            : mData.requests;
+                      if (val <= 0) return null;
+                      return {
+                        model: mName,
+                        val,
+                        color: modelColorMap.get(mName) || "#10B981",
+                      };
+                    })
+                    .filter(Boolean) as Array<{
+                    model: string;
+                    val: number;
+                    color: string;
+                  }>;
+
+                  const segTotal = segments.reduce((acc, s) => acc + s.val, 0);
+                  const isHovered = hoveredBucketIdx === bIdx;
+                  const alignRight = bIdx >= buckets.length - 3;
+
+                  return (
+                    <div
+                      key={`${bucket.label}-${bIdx}`}
+                      onMouseEnter={() => setHoveredBucketIdx(bIdx)}
+                      onMouseLeave={() => setHoveredBucketIdx(null)}
+                      onClick={() =>
+                        setHoveredBucketIdx((prev) => (prev === bIdx ? null : bIdx))
+                      }
+                      className={`flex-1 h-full flex items-end justify-center border-r border-dashed border-[#1B1B20] last:border-r-0 group relative cursor-pointer ${
+                        isHovered ? "bg-[#1F263D]/35" : ""
+                      }`}
+                    >
+                      {isHovered && (
+                        <div
+                          className={`pointer-events-none absolute top-2 z-30 min-w-[168px] max-w-[220px] rounded-lg bg-[#101422]/95 border border-[#343E5E] px-3 py-2 shadow-2xl text-[11px] backdrop-blur-md ${
+                            alignRight ? "right-1" : "left-1"
+                          }`}
+                        >
+                          <div className="font-mono font-semibold text-white border-b border-[#2B334E] pb-1 mb-1.5">
+                            {bucket.label}
+                          </div>
+                          <div className="space-y-0.5 font-mono tabular-nums text-[#D4D4D8]">
+                            <div className="flex justify-between gap-3">
+                              <span className="text-[#94A3B8]">Spend</span>
+                              <span>{formatUsdSmart(bucket.costUsd)}</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="text-[#94A3B8]">Tokens</span>
+                              <span>{formatCompactNumber(bucket.tokens)}</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="text-[#94A3B8]">Reqs</span>
+                              <span>{bucket.total}</span>
+                            </div>
+                          </div>
+                          {segments.length > 0 && (
+                            <div className="mt-1.5 pt-1.5 border-t border-[#2B334E] space-y-1">
+                              {segments.slice(0, 3).map((seg) => (
+                                <div
+                                  key={seg.model}
+                                  className="flex items-center justify-between gap-2 text-[10px] font-mono"
+                                >
+                                  <span className="flex items-center gap-1.5 min-w-0">
+                                    <span
+                                      className="w-2 h-2 rounded-sm shrink-0"
+                                      style={{ backgroundColor: seg.color }}
+                                    />
+                                    <span className="truncate text-[#D4D4D8]">
+                                      {seg.model}
+                                    </span>
+                                  </span>
+                                  <span className="text-[#94A3B8] shrink-0">
+                                    {chartMetric === "spend"
+                                      ? formatUsdSmart(seg.val)
+                                      : formatCompactNumber(seg.val)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {heightPct > 0 && segTotal > 0 ? (
+                        <motion.div
+                          initial={{ scaleY: 0 }}
+                          animate={{ scaleY: 1 }}
+                          transition={{
+                            duration: 0.4,
+                            delay: Math.min(bIdx * 0.015, 0.25),
+                            ease: [0.22, 1, 0.36, 1],
+                          }}
+                          style={{ height: `${heightPct}%` }}
+                          className="w-[74%] max-w-[26px] origin-bottom flex flex-col-reverse rounded-t-[2px] overflow-hidden group-hover:brightness-110 opacity-95"
+                        >
+                          {segments.map((seg) => (
+                            <div
+                              key={seg.model}
+                              style={{
+                                height: `${Math.max(
+                                  4,
+                                  (seg.val / segTotal) * 100
+                                )}%`,
+                                backgroundColor: seg.color,
+                              }}
+                              className="w-full"
+                            />
+                          ))}
+                        </motion.div>
+                      ) : totalMetric > 0 ? (
+                        <motion.div
+                          initial={{ scaleY: 0 }}
+                          animate={{ scaleY: 1 }}
+                          transition={{
+                            duration: 0.4,
+                            delay: Math.min(bIdx * 0.015, 0.25),
+                            ease: [0.22, 1, 0.36, 1],
+                          }}
+                          style={{ height: `${heightPct}%` }}
+                          className="w-[74%] max-w-[26px] origin-bottom bg-gradient-to-t from-indigo-500 via-sky-400 to-cyan-300 rounded-t-[2px]"
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-2">
+            <div className="w-14 shrink-0" />
+            <div className="flex-1 flex items-center justify-between font-mono text-[11px] text-[#94A3B8] tabular-nums px-1">
+              {xLabelIndices.map((idx) => (
+                <span key={idx}>{buckets[idx]?.label || ""}</span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-[#28304A] flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-4 flex-wrap text-xs text-[#D4D4D8]">
+              {modelNames.length === 0 ? (
+                <span className="text-[#94A3B8]">No usage data</span>
+              ) : (
+                modelNames.map((mName) => (
+                  <div key={mName} className="inline-flex items-center gap-1.5">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{
+                        backgroundColor:
+                          modelColorMap.get(mName) || "#10B981",
+                      }}
+                    />
+                    <span className="font-mono text-xs text-[#D4D4D8]">
+                      {mName}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={copyChartSummary}
+              title="Copy chart usage JSON"
+              aria-label="Copy chart usage JSON"
+              className="p-1.5 text-[#94A3B8] hover:text-[#FAFAFA] transition-colors rounded"
+            >
+              {copiedChart ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ANALYTICS LEADERBOARDS: Top API Keys & Top Combos / Models */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
+              Top API Keys
+            </h3>
+            <button
+              type="button"
+              onClick={() => onNavigate("keys")}
+              className="inline-flex items-center gap-0.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors whitespace-nowrap shrink-0"
+            >
+              <span className="underline underline-offset-4 decoration-[#3F3F46]">
+                Explore
+              </span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {topApiKeys.length === 0 ? (
+            <div className="py-10 text-center text-xs text-[#94A3B8]">
+              No active keys
+            </div>
+          ) : (
+            <div className="space-y-3.5">
+              {topApiKeys.map((k, idx) => (
+                <div
+                  key={k.id}
+                  className="flex items-center justify-between gap-3 text-sm"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-4 text-xs font-mono text-[#94A3B8] tabular-nums shrink-0">
+                      {idx + 1}
+                    </span>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{
+                        backgroundColor:
+                          KEY_DOT_COLORS[idx % KEY_DOT_COLORS.length],
+                      }}
+                    />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-[#FAFAFA] truncate">
+                        {k.name}
+                      </div>
+                      <div className="text-xs font-mono text-[#94A3B8] truncate">
+                        {k.keyPrefix}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="font-mono text-sm text-[#FAFAFA] tabular-nums whitespace-nowrap shrink-0">
+                    {formatCompactNumber(k.tokens)}{" "}
+                    <span className="text-xs text-[#94A3B8]">tok</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
+              Top Combos & Models
+            </h3>
+            <button
+              type="button"
+              onClick={() => onNavigate("combos")}
+              className="inline-flex items-center gap-0.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors whitespace-nowrap shrink-0"
+            >
+              <span className="underline underline-offset-4 decoration-[#3F3F46]">
+                Explore
+              </span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {topRoutes.length === 0 ? (
+            <div className="py-10 text-center text-xs text-[#94A3B8]">
+              No traffic recorded
+            </div>
+          ) : (
+            <div className="space-y-3.5">
+              {topRoutes.map((route, idx) => {
+                const routeBadge = getProviderVisual(route.provider);
+                return (
+                <div
+                  key={`${route.name}-${idx}`}
+                  className="flex items-center justify-between gap-3 text-sm"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-4 text-xs font-mono text-[#94A3B8] tabular-nums shrink-0">
+                      {idx + 1}
+                    </span>
+                    <div
+                      className="w-6 h-6 rounded-md border flex items-center justify-center font-mono text-[10px] font-bold uppercase shrink-0"
+                      style={{
+                        color: routeBadge.color,
+                        backgroundColor: routeBadge.softBg,
+                        borderColor: routeBadge.border,
+                      }}
+                    >
+                      {routeBadge.short}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-[#FAFAFA] truncate">
+                        {route.name}
+                      </div>
+                      <div className="text-xs text-[#94A3B8] truncate">
+                        {route.subtitle}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="font-mono text-sm text-[#FAFAFA] tabular-nums whitespace-nowrap shrink-0">
+                    {formatCompactNumber(route.tokens)}{" "}
+                    <span className="text-xs text-[#94A3B8]">tok</span>
+                  </div>
+                </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Live Routing Topology & Gateway Policy Quick Controls */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+        {/* Live Topology */}
+        <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden flex flex-col">
+          <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-xs font-medium text-[#FAFAFA] whitespace-nowrap">
-                Provider Topology
+              <span className="text-xs font-semibold text-[#FAFAFA] whitespace-nowrap">
+                Live Provider Topology
               </span>
               {isLiveActive && (
                 <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-emerald-400 whitespace-nowrap">
@@ -817,12 +1215,19 @@ curl ${environment.gatewayEndpoint}/messages \\
                 <span className="w-2 h-2 rounded-full bg-rose-500" />
                 <span>Error</span>
               </span>
+              <button
+                type="button"
+                onClick={() => onNavigate("combos")}
+                className="text-indigo-400 hover:text-indigo-300 font-medium ml-1"
+              >
+                Combos →
+              </button>
             </div>
           </div>
 
-          <div className="px-5 py-5 relative min-h-[240px] flex items-center">
+          <div className="px-5 py-5 relative min-h-[220px] flex-1 flex items-center">
             {topologyNodes.length === 0 ? (
-              <div className="w-full py-10 flex flex-col items-center justify-center gap-2 text-[#71717A]">
+              <div className="w-full py-10 flex flex-col items-center justify-center gap-2 text-[#94A3B8]">
                 <Network className="w-5 h-5 opacity-70" />
                 <span className="text-xs">
                   {connections.length === 0
@@ -833,13 +1238,12 @@ curl ${environment.gatewayEndpoint}/messages \\
             ) : (
               <div className="w-full grid grid-cols-12 items-center gap-2">
                 {/* Left Hub + SVG Curves */}
-                <div className="col-span-4 sm:col-span-5 relative h-[200px]">
+                <div className="col-span-4 sm:col-span-5 relative h-[190px]">
                   <svg
                     viewBox="0 0 260 200"
                     className="w-full h-full overflow-visible"
                     preserveAspectRatio="none"
                   >
-                    {/* Incoming line */}
                     <path
                       id="ov-in-path"
                       d="M 0 100 L 58 100"
@@ -857,7 +1261,6 @@ curl ${environment.gatewayEndpoint}/messages \\
                       </circle>
                     )}
 
-                    {/* Fan-out Bezier Paths */}
                     {branchYs.map((ty, idx) => {
                       const node = topologyNodes[idx];
                       const pid = `ov-branch-${idx}`;
@@ -910,23 +1313,23 @@ curl ${environment.gatewayEndpoint}/messages \\
                           }
                         : { duration: 0.25 }
                     }
-                    className={`absolute top-1/2 -translate-y-1/2 left-[42px] w-12 h-10 flex items-center justify-center transition-all ${
+                    className={`absolute top-1/2 -translate-y-1/2 left-[42px] w-9 h-8 flex items-center justify-center transition-all ${
                       isLiveActive
-                        ? "drop-shadow-[0_0_18px_rgba(56,189,248,0.5)]"
-                        : "drop-shadow-[0_0_12px_rgba(100,103,242,0.3)]"
+                        ? "drop-shadow-[0_0_16px_rgba(56,189,248,0.45)]"
+                        : "drop-shadow-[0_0_10px_rgba(100,103,242,0.28)]"
                     }`}
                     title="AS ROUTER Engine"
                   >
                     <img
                       src="/assets/as-logo.png"
                       alt="AS ROUTER"
-                      className="w-11 h-auto object-contain"
+                      className="w-7 h-auto object-contain"
                     />
                   </motion.div>
                 </div>
 
                 {/* Right Active / Recent Provider + Model Nodes */}
-                <div className="col-span-8 sm:col-span-7 h-[200px] flex flex-col justify-center gap-3 py-1">
+                <div className="col-span-8 sm:col-span-7 h-[190px] flex flex-col justify-center gap-3 py-1">
                   {topologyNodes.map((node, idx) => {
                     const badge = getProviderVisual(node.provider);
                     const borderTone =
@@ -975,7 +1378,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                               ? "text-emerald-400 font-semibold"
                               : node.status === "error"
                                 ? "text-rose-400"
-                                : "text-[#71717A]"
+                                : "text-[#94A3B8]"
                           }`}
                         >
                           {node.meta}
@@ -1001,664 +1404,297 @@ curl ${environment.gatewayEndpoint}/messages \\
             </span>
           </div>
         </div>
-      </motion.section>
 
-      {/* SECTION 2 (Landing-Style Animated): Stay up through outages and rate limits */}
-      <motion.section
-        initial={{ opacity: 0, y: 16 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-40px" }}
-        transition={{ duration: 0.4 }}
-        className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-2"
-      >
-        <div className="lg:col-span-7 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden order-2 lg:order-1">
-          <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between">
-            <span className="text-xs font-medium text-[#A1A1AA]">
-              Providers
-            </span>
-            <span className="text-xs font-mono text-[#71717A] tabular-nums">
-              {fallbackRecovered} failover recoveries
-            </span>
-          </div>
-
-          <div className="p-5 space-y-4">
-            {failoverRows.rows.length === 0 ? (
-              <div className="py-4 text-xs text-[#71717A]">
-                Connect providers to visualize real-time failover uptime blocks.
-              </div>
-            ) : (
-              failoverRows.rows.map((row) => {
-                const badge = getProviderVisual(row.provider);
-                return (
-                  <div key={row.id} className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="w-5 h-5 rounded flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
-                          style={{
-                            color: badge.color,
-                            backgroundColor: badge.softBg,
-                          }}
-                        >
-                          {badge.short}
-                        </span>
-                        <span className="text-[#D4D4D8] font-medium truncate">
-                          {row.name}
-                        </span>
-                      </div>
-                      <span
-                        className={`font-mono text-[11px] ${
-                          row.isHealthy ? "text-emerald-400" : "text-amber-400"
-                        }`}
-                      >
-                        {row.isHealthy ? "healthy" : "degraded"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {row.slots.map((state, sIdx) => (
-                        <div
-                          key={sIdx}
-                          className={`h-3.5 flex-1 rounded-[2px] transition-all duration-300 ${
-                            sIdx === pulseCursor ? "brightness-125 scale-y-110" : ""
-                          } ${
-                            state === "ok"
-                              ? "bg-[#10B981]"
-                              : state === "fail"
-                                ? "bg-rose-500"
-                                : state === "amber"
-                                  ? "bg-amber-400"
-                                  : "bg-[#28304A]"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-
-            {/* Aggregated Through AS ROUTER strip */}
-            <div className="pt-3.5 border-t border-[#2B334E] space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-[#FAFAFA]">
-                  Through AS ROUTER
+        {/* Gateway Policy Quick Controls */}
+        <div className="lg:col-span-5 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between gap-3 text-xs">
+              {combos.length > 1 ? (
+                <div className="flex items-center gap-2 min-w-0">
+                  <label
+                    htmlFor="overview-policy-combo"
+                    className="text-[#94A3B8] shrink-0"
+                  >
+                    Policy:
+                  </label>
+                  <select
+                    id="overview-policy-combo"
+                    value={previewComboIdx % combos.length}
+                    onChange={(e) => setPreviewComboIdx(Number(e.target.value))}
+                    className="bg-[#101422] border border-[#343E5E] rounded-md px-2 py-1 text-xs font-mono text-[#FAFAFA] focus:outline-none focus:border-indigo-400 truncate max-w-[175px]"
+                  >
+                    {combos.map((c, idx) => (
+                      <option key={c.id} value={idx}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : activeCombo ? (
+                <span className="font-mono font-medium text-[#FAFAFA] truncate">
+                  Policy: {activeCombo.name}
                 </span>
-                <span className="font-mono text-[11px] text-emerald-400 tabular-nums">
-                  {successRate.toFixed(1)}% uptime
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onNavigate("combos")}
+                  className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  + Create a combo for policies
+                </button>
+              )}
+              <span className="text-[#94A3B8] shrink-0">
+                {savingPolicy ? "Saving..." : "Combo controls"}
+              </span>
+            </div>
+
+            <div className="divide-y divide-[#28304A]">
+              <div className="px-5 py-3.5 flex items-center justify-between gap-4">
+                <span className="text-xs sm:text-sm text-[#D4D4D8]">
+                  Prompt compression
                 </span>
-              </div>
-              <div className="flex items-center gap-1">
-                {failoverRows.gatewaySlots.map((state, sIdx) => (
-                  <div
-                    key={sIdx}
-                    className={`h-3.5 flex-1 rounded-[2px] transition-all duration-300 ${
-                      sIdx === pulseCursor ? "brightness-125 scale-y-110" : ""
-                    } ${
-                      state === "ok"
-                        ? "bg-[#10B981]"
-                        : state === "fail"
-                          ? "bg-rose-500"
-                          : "bg-[#28304A]"
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Prompt compression"
+                  aria-checked={localCompress}
+                  disabled={savingPolicy || !activeCombo}
+                  onClick={() =>
+                    updateGatewayPolicy({ compressPrompt: !localCompress })
+                  }
+                  className={`w-10 h-5.5 rounded-full p-0.5 transition-colors flex items-center shrink-0 disabled:opacity-50 ${
+                    localCompress ? "bg-indigo-500" : "bg-[#343E5E]"
+                  }`}
+                >
+                  <motion.span
+                    layout
+                    transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                    className={`w-4.5 h-4.5 rounded-full bg-white ${
+                      localCompress ? "ml-auto" : "mr-auto"
                     }`}
                   />
-                ))}
+                </button>
               </div>
-            </div>
-          </div>
-        </div>
 
-        <div className="lg:col-span-5 space-y-4 order-1 lg:order-2">
-          <h3 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#FAFAFA] leading-[1.15]">
-            Stay up through outages and rate limits
-          </h3>
-          <button
-            type="button"
-            onClick={() => onNavigate("logs")}
-            className="inline-flex items-center gap-2 text-xs font-medium text-[#D4D4D8] hover:text-[#FAFAFA] transition-colors whitespace-nowrap"
-          >
-            <span>See live failover traces</span>
-            <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
-          </button>
-        </div>
-      </motion.section>
-
-      {/* SECTION 3 (Landing-Style Animated): Your gateway, your policies */}
-      <motion.section
-        initial={{ opacity: 0, y: 16 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-40px" }}
-        transition={{ duration: 0.4 }}
-        className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-2"
-      >
-        <div className="lg:col-span-6 bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between text-xs">
-            <span className="font-medium text-[#FAFAFA]">
-              {activeCombo?.name || "Production"}
-            </span>
-            <span className="text-[#71717A]">
-              {savingPolicy ? "Saving policy..." : "Gateway policy"}
-            </span>
-          </div>
-
-          <div className="divide-y divide-[#28304A]">
-            {/* Row 1: Prompt Compression Toggle */}
-            <div className="px-5 py-3.5 flex items-center justify-between gap-4">
-              <span className="text-xs sm:text-sm text-[#D4D4D8]">
-                Prompt compression
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={localCompress}
-                disabled={savingPolicy}
-                onClick={() =>
-                  updateGatewayPolicy({ compressPrompt: !localCompress })
-                }
-                className={`w-10 h-5.5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-                  localCompress ? "bg-indigo-500" : "bg-[#343E5E]"
-                }`}
-              >
-                <motion.span
-                  layout
-                  transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                  className={`w-4.5 h-4.5 rounded-full bg-white ${
-                    localCompress ? "ml-auto" : "mr-auto"
+              <div className="px-5 py-3.5 flex items-center justify-between gap-4">
+                <span className="text-xs sm:text-sm text-[#D4D4D8]">
+                  Response caching (10m)
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Response caching"
+                  aria-checked={localCache}
+                  disabled={savingPolicy || !activeCombo}
+                  onClick={() =>
+                    updateGatewayPolicy({ enableCache: !localCache })
+                  }
+                  className={`w-10 h-5.5 rounded-full p-0.5 transition-colors flex items-center shrink-0 disabled:opacity-50 ${
+                    localCache ? "bg-indigo-500" : "bg-[#343E5E]"
                   }`}
-                />
-              </button>
-            </div>
-
-            {/* Row 2: Intent Auto-Routing Toggle */}
-            <div className="px-5 py-3.5 flex items-center justify-between gap-4">
-              <span className="text-xs sm:text-sm text-[#D4D4D8]">
-                Intent-based smart auto-routing
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={localStrategy === "intent_auto"}
-                disabled={savingPolicy}
-                onClick={() =>
-                  updateGatewayPolicy({
-                    strategy:
-                      localStrategy === "intent_auto"
-                        ? "priority"
-                        : "intent_auto",
-                  })
-                }
-                className={`w-10 h-5.5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-                  localStrategy === "intent_auto"
-                    ? "bg-indigo-500"
-                    : "bg-[#343E5E]"
-                }`}
-              >
-                <motion.span
-                  layout
-                  transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                  className={`w-4.5 h-4.5 rounded-full bg-white ${
-                    localStrategy === "intent_auto" ? "ml-auto" : "mr-auto"
-                  }`}
-                />
-              </button>
-            </div>
-
-            {/* Row 3: Routing Strategy Mode Segmented Switch */}
-            <div className="px-5 py-3.5 flex items-center justify-between gap-4">
-              <span className="text-xs sm:text-sm text-[#D4D4D8]">
-                Routing mode
-              </span>
-              <div className="inline-flex items-center p-0.5 bg-[#101422] border border-[#343E5E] rounded-md">
-                {(
-                  [
-                    ["priority", "Priority"],
-                    ["intent_auto", "Intent"],
-                    ["cost_optimized", "Cost"],
-                  ] as const
-                ).map(([modeId, label]) => (
-                  <button
-                    key={modeId}
-                    type="button"
-                    disabled={savingPolicy}
-                    onClick={() => updateGatewayPolicy({ strategy: modeId })}
-                    className={`relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
-                      localStrategy === modeId
-                        ? "text-indigo-400"
-                        : "text-[#71717A] hover:text-[#D4D4D8]"
+                >
+                  <motion.span
+                    layout
+                    transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                    className={`w-4.5 h-4.5 rounded-full bg-white ${
+                      localCache ? "ml-auto" : "mr-auto"
                     }`}
-                  >
-                    {localStrategy === modeId && (
-                      <motion.span
-                        layoutId="overview-policy-mode"
-                        transition={{
-                          type: "spring",
-                          stiffness: 420,
-                          damping: 32,
-                        }}
-                        className="absolute inset-0 bg-[#1F263D] rounded"
-                      />
-                    )}
-                    <span className="relative z-10">{label}</span>
-                  </button>
-                ))}
+                  />
+                </button>
               </div>
-            </div>
 
-            {/* Row 4: Allowed Providers Strip */}
-            <div className="px-5 py-3.5 flex items-center justify-between gap-4">
-              <span className="text-xs sm:text-sm text-[#D4D4D8] whitespace-nowrap">
-                Connected providers
-              </span>
-              <button
-                type="button"
-                onClick={() => onNavigate("provider-connected")}
-                className="flex items-center gap-1.5 flex-wrap justify-end"
-                title="Manage connected providers"
-              >
-                {PROVIDER_CATALOG.filter((spec) => spec.id !== "custom").map((spec) => {
-                  const active = connectedProviderSet.has(spec.id);
-                  const badge = getProviderVisual(spec.id);
-                  return (
-                    <span
-                      key={spec.id}
-                      className={`w-6 h-6 rounded-full border flex items-center justify-center font-mono text-[10px] font-bold transition-all ${
-                        active ? "opacity-100 scale-105" : "border-[#2B334E] opacity-35"
+              <div className="px-5 py-3.5 flex items-center justify-between gap-4">
+                <span className="text-xs sm:text-sm text-[#D4D4D8]">
+                  Routing mode
+                </span>
+                <div className="inline-flex items-center p-0.5 bg-[#101422] border border-[#343E5E] rounded-md">
+                  {(
+                    [
+                      ["priority", "Priority"],
+                      ["intent_auto", "Intent"],
+                      ["cost_optimized", "Cost"],
+                    ] as const
+                  ).map(([modeId, label]) => (
+                    <button
+                      key={modeId}
+                      type="button"
+                      disabled={savingPolicy || !activeCombo}
+                      onClick={() => updateGatewayPolicy({ strategy: modeId })}
+                      className={`relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap disabled:opacity-50 ${
+                        localStrategy === modeId
+                          ? "text-indigo-400"
+                          : "text-[#94A3B8] hover:text-[#D4D4D8]"
                       }`}
-                      style={{
-                        color: active ? badge.color : "#71717A",
-                        backgroundColor: active ? badge.softBg : "#101422",
-                        borderColor: active ? badge.border : undefined,
-                      }}
                     >
-                      {badge.short}
-                    </span>
-                  );
-                })}
-              </button>
+                      {localStrategy === modeId && (
+                        <motion.span
+                          layoutId="overview-policy-mode"
+                          transition={{
+                            type: "spring",
+                            stiffness: 420,
+                            damping: 32,
+                          }}
+                          className="absolute inset-0 bg-[#1F263D] rounded"
+                        />
+                      )}
+                      <span className="relative z-10">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="px-5 py-3.5 flex items-center justify-between gap-4">
+                <span className="text-xs sm:text-sm text-[#D4D4D8] whitespace-nowrap">
+                  Providers
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("provider-connected")}
+                  className="flex items-center gap-1.5 flex-wrap justify-end"
+                  title="Manage connected providers"
+                >
+                  {PROVIDER_CATALOG.filter((spec) => spec.id !== "custom").map((spec) => {
+                    const active = connectedProviderSet.has(spec.id);
+                    const badge = getProviderVisual(spec.id);
+                    return (
+                      <span
+                        key={spec.id}
+                        className={`w-6 h-6 rounded-full border flex items-center justify-center font-mono text-[10px] font-bold transition-all ${
+                          active ? "opacity-100 scale-105" : "border-[#2B334E] opacity-35"
+                        }`}
+                        style={{
+                          color: active ? badge.color : "#94A3B8",
+                          backgroundColor: active ? badge.softBg : "#101422",
+                          borderColor: active ? badge.border : undefined,
+                        }}
+                      >
+                        {badge.short}
+                      </span>
+                    );
+                  })}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="lg:col-span-6 space-y-5">
-          <h3 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#FAFAFA] leading-[1.15]">
-            Your gateway, your policies
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 text-xs sm:text-sm text-[#D4D4D8]">
-            {[
-              "Encrypted provider vault",
-              "Scoped gateway API keys",
-              "Daily token & USD budgets",
-              "Intent-based smart routing",
-              "Tool calling & vision translation",
-              "Real-time telemetry logs",
-              "Automatic health probes",
-              "Cloud workspace persistence",
-            ].map((item, idx) => (
-              <div key={item} className="flex items-center gap-2">
-                <Check
-                  className="w-3.5 h-3.5 shrink-0"
-                  style={{
-                    color:
-                      POLICY_CHECK_COLORS[idx % POLICY_CHECK_COLORS.length],
-                  }}
-                />
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onNavigate("keys")}
-            className="inline-flex items-center gap-2 text-xs font-medium text-[#D4D4D8] hover:text-[#FAFAFA] transition-colors whitespace-nowrap"
-          >
-            <span>Manage API keys & guardrails</span>
-            <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
-          </button>
-        </div>
-      </motion.section>
-
-      {/* ANALYTICS LEADERBOARDS: Top API Keys & Top Combos / Models */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
-              Top API Keys
-            </h3>
+          <div className="px-5 py-3 border-t border-[#2B334E] flex items-center justify-between text-xs text-[#94A3B8]">
+            <span>Guardrails & scoped keys</span>
             <button
               type="button"
               onClick={() => onNavigate("keys")}
-              className="inline-flex items-center gap-0.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-medium"
             >
-              <span className="underline underline-offset-4 decoration-[#3F3F46]">
-                Explore
-              </span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <span>Manage API Keys</span>
+              <ArrowRight className="w-3 h-3" />
             </button>
           </div>
-
-          {topApiKeys.length === 0 ? (
-            <div className="py-10 text-center text-xs text-[#71717A]">
-              No active keys
-            </div>
-          ) : (
-            <div className="space-y-3.5">
-              {topApiKeys.map((k, idx) => (
-                <div
-                  key={k.id}
-                  className="flex items-center justify-between gap-3 text-sm"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-4 text-xs font-mono text-[#71717A] tabular-nums shrink-0">
-                      {idx + 1}
-                    </span>
-                    <span
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{
-                        backgroundColor:
-                          KEY_DOT_COLORS[idx % KEY_DOT_COLORS.length],
-                      }}
-                    />
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-[#FAFAFA] truncate">
-                        {k.name}
-                      </div>
-                      <div className="text-xs font-mono text-[#71717A] truncate">
-                        {k.keyPrefix}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="font-mono text-sm text-[#FAFAFA] tabular-nums whitespace-nowrap shrink-0">
-                    {formatCompactNumber(k.tokens)}{" "}
-                    <span className="text-xs text-[#71717A]">tok</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
-              Top Combos & Models
-            </h3>
-            <button
-              type="button"
-              onClick={() => onNavigate("combos")}
-              className="inline-flex items-center gap-0.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors whitespace-nowrap shrink-0"
-            >
-              <span className="underline underline-offset-4 decoration-[#3F3F46]">
-                Explore
-              </span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {topRoutes.length === 0 ? (
-            <div className="py-10 text-center text-xs text-[#71717A]">
-              No traffic recorded
-            </div>
-          ) : (
-            <div className="space-y-3.5">
-              {topRoutes.map((route, idx) => {
-                const routeBadge = getProviderVisual(route.provider);
-                return (
-                <div
-                  key={`${route.name}-${idx}`}
-                  className="flex items-center justify-between gap-3 text-sm"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-4 text-xs font-mono text-[#71717A] tabular-nums shrink-0">
-                      {idx + 1}
-                    </span>
-                    <div
-                      className="w-6 h-6 rounded-md border flex items-center justify-center font-mono text-[10px] font-bold uppercase shrink-0"
-                      style={{
-                        color: routeBadge.color,
-                        backgroundColor: routeBadge.softBg,
-                        borderColor: routeBadge.border,
-                      }}
-                    >
-                      {routeBadge.short}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-[#FAFAFA] truncate">
-                        {route.name}
-                      </div>
-                      <div className="text-xs text-[#71717A] truncate">
-                        {route.subtitle}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="font-mono text-sm text-[#FAFAFA] tabular-nums whitespace-nowrap shrink-0">
-                    {formatCompactNumber(route.tokens)}{" "}
-                    <span className="text-xs text-[#71717A]">tok</span>
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Full-Width Stacked Bar Chart: Usage by model */}
-      <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+      {/* Failover Uptime Matrix */}
+      <div className="bg-[#171C2E] border border-[#2B334E] rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-[#2B334E] flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <h3 className="font-display text-sm font-semibold text-[#FAFAFA]">
-              Usage by model
-            </h3>
-            {hoveredBucket && (
-              <span className="text-xs font-mono text-[#A1A1AA] tabular-nums">
-                {hoveredBucket.label} · {hoveredBucket.total} reqs ·{" "}
-                {formatUsdSmart(hoveredBucket.costUsd)} ·{" "}
-                {formatCompactNumber(hoveredBucket.tokens)} tok
-              </span>
-            )}
+            <span className="text-xs font-semibold text-[#FAFAFA]">
+              Failover & Uptime Matrix
+            </span>
+            <span className="text-xs font-mono text-[#94A3B8] tabular-nums">
+              {fallbackRecovered} failover recoveries
+            </span>
           </div>
-
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center gap-0.5 p-0.5 bg-[#101422] border border-[#343E5E] rounded-md">
-              {(
-                [
-                  ["spend", "Spend"],
-                  ["tokens", "Tokens"],
-                  ["requests", "Reqs"],
-                ] as const
-              ).map(([m, label]) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setChartMetric(m)}
-                  className={`relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
-                    chartMetric === m
-                      ? "text-[#FAFAFA]"
-                      : "text-[#8B8B95] hover:text-[#D4D4D8]"
-                  }`}
-                >
-                  {chartMetric === m && (
-                    <motion.span
-                      layoutId="overview-metric-pill"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      className="absolute inset-0 bg-[#1F263D] rounded"
-                    />
-                  )}
-                  <span className="relative z-10">{label}</span>
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => onNavigate("logs")}
-              className="inline-flex items-center gap-0.5 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors whitespace-nowrap shrink-0"
-            >
-              <span className="underline underline-offset-4 decoration-[#3F3F46]">
-                Explore
-              </span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate("logs")}
+            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors whitespace-nowrap"
+          >
+            <span>See live failover traces</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        <div className="relative">
-          <div className="flex gap-3">
-            <div className="w-14 h-52 flex flex-col justify-between text-right pr-1 font-mono text-[11px] text-[#71717A] tabular-nums shrink-0">
-              {yTicks.map((tick, i) => (
-                <span key={i}>{formatYAxisTick(tick, chartMetric)}</span>
-              ))}
+        <div className="p-5 space-y-4">
+          {failoverRows.rows.length === 0 ? (
+            <div className="py-4 text-xs text-[#94A3B8]">
+              Connect providers to visualize real-time failover uptime blocks.
             </div>
-
-            <div className="flex-1 h-52 relative border-b border-l border-[#2B334E]">
-              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                {[0, 1, 2, 3, 4].map((row) => (
-                  <div
-                    key={row}
-                    className={`w-full ${
-                      row === 4 ? "" : "border-t border-dashed border-[#28304A]"
-                    }`}
-                  />
-                ))}
-              </div>
-
-              <div className="relative z-10 h-full flex items-end gap-1 px-1.5">
-                {buckets.map((bucket, bIdx) => {
-                  const totalMetric = bucketTotals[bIdx] || 0;
-                  const heightPct =
-                    totalMetric > 0
-                      ? Math.max(
-                          4,
-                          Math.min(100, (totalMetric / maxChartVal) * 100)
-                        )
-                      : 0;
-
-                  const segments = modelNames
-                    .map((mName) => {
-                      const mData = bucket.byModel?.[mName];
-                      if (!mData) return null;
-                      const val =
-                        chartMetric === "spend"
-                          ? mData.costUsd
-                          : chartMetric === "tokens"
-                            ? mData.tokens
-                            : mData.requests;
-                      if (val <= 0) return null;
-                      return {
-                        model: mName,
-                        val,
-                        color: modelColorMap.get(mName) || "#10B981",
-                      };
-                    })
-                    .filter(Boolean) as Array<{
-                    model: string;
-                    val: number;
-                    color: string;
-                  }>;
-
-                  const segTotal = segments.reduce((acc, s) => acc + s.val, 0);
-
-                  return (
-                    <div
-                      key={`${bucket.label}-${bIdx}`}
-                      onMouseEnter={() => setHoveredBucketIdx(bIdx)}
-                      onMouseLeave={() => setHoveredBucketIdx(null)}
-                      onClick={() =>
-                        setHoveredBucketIdx((prev) => (prev === bIdx ? null : bIdx))
-                      }
-                      className="flex-1 h-full flex items-end justify-center border-r border-dashed border-[#1B1B20] last:border-r-0 group relative cursor-pointer"
-                    >
-                      {heightPct > 0 && segTotal > 0 ? (
-                        <motion.div
-                          initial={{ scaleY: 0 }}
-                          animate={{ scaleY: 1 }}
-                          transition={{
-                            duration: 0.4,
-                            delay: Math.min(bIdx * 0.015, 0.25),
-                            ease: [0.22, 1, 0.36, 1],
-                          }}
-                          style={{ height: `${heightPct}%` }}
-                          className="w-[74%] max-w-[26px] origin-bottom flex flex-col-reverse rounded-t-[2px] overflow-hidden group-hover:brightness-110 opacity-95"
-                        >
-                          {segments.map((seg) => (
-                            <div
-                              key={seg.model}
-                              style={{
-                                height: `${Math.max(
-                                  4,
-                                  (seg.val / segTotal) * 100
-                                )}%`,
-                                backgroundColor: seg.color,
-                              }}
-                              className="w-full"
-                            />
-                          ))}
-                        </motion.div>
-                      ) : totalMetric > 0 ? (
-                        <motion.div
-                          initial={{ scaleY: 0 }}
-                          animate={{ scaleY: 1 }}
-                          transition={{
-                            duration: 0.4,
-                            delay: Math.min(bIdx * 0.015, 0.25),
-                            ease: [0.22, 1, 0.36, 1],
-                          }}
-                          style={{ height: `${heightPct}%` }}
-                          className="w-[74%] max-w-[26px] origin-bottom bg-gradient-to-t from-indigo-500 via-sky-400 to-cyan-300 rounded-t-[2px]"
-                        />
-                      ) : null}
+          ) : (
+            failoverRows.rows.map((row) => {
+              const badge = getProviderVisual(row.provider);
+              return (
+                <div key={row.id} className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-5 h-5 rounded flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
+                        style={{
+                          color: badge.color,
+                          backgroundColor: badge.softBg,
+                        }}
+                      >
+                        {badge.short}
+                      </span>
+                      <span className="text-[#D4D4D8] font-medium truncate">
+                        {row.name}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-2">
-            <div className="w-14 shrink-0" />
-            <div className="flex-1 flex items-center justify-between font-mono text-[11px] text-[#71717A] tabular-nums px-1">
-              {xLabelIndices.map((idx) => (
-                <span key={idx}>{buckets[idx]?.label || ""}</span>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-[#28304A] flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-4 flex-wrap text-xs text-[#D4D4D8]">
-              {modelNames.length === 0 ? (
-                <span className="text-[#71717A]">No usage data</span>
-              ) : (
-                modelNames.map((mName) => (
-                  <div key={mName} className="inline-flex items-center gap-1.5">
                     <span
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{
-                        backgroundColor:
-                          modelColorMap.get(mName) || "#10B981",
-                      }}
-                    />
-                    <span className="font-mono text-xs text-[#D4D4D8]">
-                      {mName}
+                      className={`font-mono text-[11px] ${
+                        row.isHealthy ? "text-emerald-400" : "text-amber-400"
+                      }`}
+                    >
+                      {row.isHealthy ? "healthy" : "degraded"}
                     </span>
                   </div>
-                ))
-              )}
-            </div>
 
-            <button
-              type="button"
-              onClick={copyChartSummary}
-              title="Copy chart usage JSON"
-              className="p-1.5 text-[#71717A] hover:text-[#FAFAFA] transition-colors rounded"
-            >
-              {copiedChart ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )}
-            </button>
+                  <div className="flex items-center gap-1">
+                    {row.slots.map((state, sIdx) => (
+                      <div
+                        key={sIdx}
+                        className={`h-3 flex-1 rounded-[2px] transition-all duration-300 ${
+                          sIdx === pulseCursor ? "brightness-125 scale-y-110" : ""
+                        } ${
+                          state === "ok"
+                            ? "bg-[#10B981]"
+                            : state === "fail"
+                              ? "bg-rose-500"
+                              : state === "amber"
+                                ? "bg-amber-400"
+                                : "bg-[#28304A]"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+
+          {/* Aggregated Through AS ROUTER strip */}
+          <div className="pt-3.5 border-t border-[#2B334E] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-[#FAFAFA]">
+                Through AS ROUTER
+              </span>
+              <span className="font-mono text-[11px] text-emerald-400 tabular-nums">
+                {successRate.toFixed(1)}% uptime · p50 {p50}ms / p95 {p95}ms
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              {failoverRows.gatewaySlots.map((state, sIdx) => (
+                <div
+                  key={sIdx}
+                  className={`h-3 flex-1 rounded-[2px] transition-all duration-300 ${
+                    sIdx === pulseCursor ? "brightness-125 scale-y-110" : ""
+                  } ${
+                    state === "ok"
+                      ? "bg-[#10B981]"
+                      : state === "fail"
+                        ? "bg-rose-500"
+                        : "bg-[#28304A]"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -1733,6 +1769,20 @@ curl ${environment.gatewayEndpoint}/messages \\
         <pre className="p-3.5 bg-[#101422] border border-[#343E5E] rounded-lg font-mono text-xs text-[#D4D4D8] overflow-x-auto leading-relaxed">
           {activeSnippet}
         </pre>
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#94A3B8]">
+          <span>
+            {keys.length > 0
+              ? `Replace ${snippetApiKeyPlaceholder} with your full secret from API Keys (prefix ${keys[0].keyPrefix} is masked).`
+              : "Create a gateway API key first, then paste the generated sk-asr-... token."}
+          </span>
+          <button
+            type="button"
+            onClick={() => onNavigate("keys")}
+            className="text-indigo-400 hover:text-indigo-300 font-medium whitespace-nowrap"
+          >
+            {keys.length > 0 ? "Manage API Keys →" : "Create API Key →"}
+          </button>
+        </div>
       </div>
     </div>
   );

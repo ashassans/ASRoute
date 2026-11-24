@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
+import { useFocusTrap } from "../lib/useFocusTrap.ts";
 import type { BootstrapPayload, Combo, GatewayApiKey } from "../types/gateway.ts";
 
 const KEY_DOT_COLORS = [
@@ -30,6 +31,8 @@ export function ApiKeysView({
   onNotify,
 }: ApiKeysViewProps) {
   const [showCreate, setShowCreate] = useState(false);
+  const createModalRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(createModalRef, showCreate);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [allowedCombo, setAllowedCombo] = useState("");
@@ -39,6 +42,7 @@ export function ApiKeysView({
   const [submitting, setSubmitting] = useState(false);
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
+  const [copiedPrefixId, setCopiedPrefixId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -197,6 +201,70 @@ export function ApiKeysView({
     }
   };
 
+  const copyPrefix = async (k: GatewayApiKey) => {
+    try {
+      await navigator.clipboard.writeText(k.keyPrefix);
+      setCopiedPrefixId(k.id);
+      onNotify(`Copied prefix ${k.keyPrefix}`, "success");
+      setTimeout(() => {
+        setCopiedPrefixId((prev) => (prev === k.id ? null : prev));
+      }, 1500);
+    } catch {
+      onNotify("Clipboard access denied", "error");
+    }
+  };
+
+  const renderQuotaBars = (k: GatewayApiKey) => {
+    if (!k.dailyTokenLimit && !k.monthlyUsdLimit) return null;
+    const tokenPct = k.dailyTokenLimit
+      ? Math.min(100, Math.round(((k.usedTokensToday || 0) / k.dailyTokenLimit) * 100))
+      : 0;
+    const costPct = k.monthlyUsdLimit
+      ? Math.min(100, Math.round(((k.usedCostMonth || 0) / k.monthlyUsdLimit) * 100))
+      : 0;
+    const barTone = (pct: number) =>
+      pct >= 95 ? "bg-red-500" : pct >= 75 ? "bg-amber-400" : "bg-emerald-400";
+
+    return (
+      <div className="mt-1.5 space-y-1.5 max-w-[240px]">
+        {k.dailyTokenLimit !== null && (
+          <div className="space-y-0.5">
+            <div className="flex items-center justify-between text-[10px] font-mono text-[#94A3B8] tabular-nums">
+              <span>
+                {(k.usedTokensToday || 0).toLocaleString()} /{" "}
+                {k.dailyTokenLimit.toLocaleString()} tok/d
+              </span>
+              <span>{tokenPct}%</span>
+            </div>
+            <div className="h-1 w-full rounded-full bg-[#101422] overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${barTone(tokenPct)}`}
+                style={{ width: `${tokenPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+        {k.monthlyUsdLimit !== null && (
+          <div className="space-y-0.5">
+            <div className="flex items-center justify-between text-[10px] font-mono text-[#94A3B8] tabular-nums">
+              <span>
+                ${(k.usedCostMonth || 0).toFixed(2)} / $
+                {k.monthlyUsdLimit.toFixed(2)}/mo
+              </span>
+              <span>{costPct}%</span>
+            </div>
+            <div className="h-1 w-full rounded-full bg-[#101422] overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${barTone(costPct)}`}
+                style={{ width: `${costPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -303,8 +371,20 @@ export function ApiKeysView({
                         {k.name}
                       </span>
                     </div>
-                    <div className="mt-0.5 font-mono text-xs text-[#A1A1AA] truncate">
-                      {k.keyPrefix}
+                    <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-[#A1A1AA] truncate">
+                      <span className="truncate">{k.keyPrefix}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyPrefix(k)}
+                        aria-label={`Copy prefix for ${k.name}`}
+                        className="text-[#94A3B8] hover:text-white shrink-0"
+                      >
+                        {copiedPrefixId === k.id ? (
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
                     </div>
                   </div>
                   <span
@@ -325,23 +405,12 @@ export function ApiKeysView({
                       <span className="text-emerald-400">· Free-only</span>
                     )}
                   </div>
-                  <div className="text-[#8B8B95] tabular-nums">
+                  <div className="text-[#94A3B8] tabular-nums">
                     {k.totalRequests.toLocaleString()} req ·{" "}
                     {k.totalTokens.toLocaleString()} tok · $
                     {k.totalCostUsd.toFixed(4)}
                   </div>
-                  {(k.dailyTokenLimit || k.monthlyUsdLimit) && (
-                    <div className="text-[#71717A] tabular-nums">
-                      Cap:{" "}
-                      {k.dailyTokenLimit
-                        ? `${k.dailyTokenLimit.toLocaleString()} tok/d`
-                        : "∞ tok/d"}{" "}
-                      ·{" "}
-                      {k.monthlyUsdLimit
-                        ? `$${k.monthlyUsdLimit.toFixed(2)}/mo`
-                        : "∞ $/mo"}
-                    </div>
-                  )}
+                  {renderQuotaBars(k)}
                 </div>
 
                 <div className="pt-2 border-t border-[#28304A] flex items-center justify-between gap-2">
@@ -416,8 +485,20 @@ export function ApiKeysView({
                         />
                         <span className="font-medium text-white">{k.name}</span>
                       </div>
-                      <div className="mt-0.5 font-mono text-xs text-[#A1A1AA]">
-                        {k.keyPrefix}
+                      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-[#A1A1AA]">
+                        <span>{k.keyPrefix}</span>
+                        <button
+                          type="button"
+                          onClick={() => copyPrefix(k)}
+                          aria-label={`Copy prefix for ${k.name}`}
+                          className="text-[#94A3B8] hover:text-white transition-colors"
+                        >
+                          {copiedPrefixId === k.id ? (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
                       </div>
                     </td>
                     <td className="py-3 px-4 text-xs text-[#A1A1AA] font-mono">
@@ -429,17 +510,7 @@ export function ApiKeysView({
                           <span className="text-emerald-400">· Free-only</span>
                         )}
                       </div>
-                      {(k.dailyTokenLimit || k.monthlyUsdLimit) && (
-                        <div className="mt-0.5 tabular-nums">
-                          {k.dailyTokenLimit
-                            ? `${k.dailyTokenLimit.toLocaleString()} tok`
-                            : "∞ tok"}
-                          {" · "}
-                          {k.monthlyUsdLimit
-                            ? `$${k.monthlyUsdLimit.toFixed(2)} cap`
-                            : "∞ $"}
-                        </div>
-                      )}
+                      {renderQuotaBars(k)}
                     </td>
                     <td className="py-3 px-4 text-xs font-medium">
                       <span
@@ -522,19 +593,28 @@ export function ApiKeysView({
             className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
           >
             <motion.div
+              ref={createModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="api-key-modal-title"
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.96, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-[#171C2E] border border-[#2B334E] rounded-xl p-6"
+              className="w-full max-w-md bg-[#171C2E] border border-[#2B334E] rounded-xl p-6 outline-none"
             >
             <div className="flex items-center justify-between pb-4 border-b border-[#2B334E]">
-              <h3 className="font-display text-base font-semibold text-white">
+              <h3
+                id="api-key-modal-title"
+                className="font-display text-base font-semibold text-white"
+              >
                 {editingId ? "Edit API Key" : "Create API Key"}
               </h3>
               <button
                 type="button"
+                aria-label="Close"
                 onClick={() => setShowCreate(false)}
                 className="text-[#A1A1AA] hover:text-white"
               >
@@ -544,23 +624,32 @@ export function ApiKeysView({
 
             <form onSubmit={handleSave} className="mt-5 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                <label
+                  htmlFor="apikey-label-input"
+                  className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                >
                   Key Label
                 </label>
                 <input
+                  id="apikey-label-input"
                   type="text"
                   required
+                  placeholder="e.g. Production Backend"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                <label
+                  htmlFor="apikey-combo-select"
+                  className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                >
                   Allowed Combo
                 </label>
                 <select
+                  id="apikey-combo-select"
                   value={allowedCombo}
                   onChange={(e) => setAllowedCombo(e.target.value)}
                   className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
@@ -576,29 +665,39 @@ export function ApiKeysView({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                  <label
+                    htmlFor="apikey-daily-tokens"
+                    className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                  >
                     Daily Token Limit
                   </label>
                   <input
+                    id="apikey-daily-tokens"
                     type="number"
                     min={100}
+                    placeholder="e.g. 250000"
                     value={dailyTokenLimit}
                     onChange={(e) => setDailyTokenLimit(e.target.value)}
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                  <label
+                    htmlFor="apikey-monthly-usd"
+                    className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                  >
                     Monthly USD Cap
                   </label>
                   <input
+                    id="apikey-monthly-usd"
                     type="number"
                     step="0.01"
                     min={0.1}
+                    placeholder="e.g. 25.00"
                     value={monthlyUsdLimit}
                     onChange={(e) => setMonthlyUsdLimit(e.target.value)}
-                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-[#101422] border border-[#2B334E] rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>

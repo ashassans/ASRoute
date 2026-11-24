@@ -480,7 +480,7 @@ const msg = await client.messages.create({
             <img
               src="/assets/as-logo.png"
               alt="AS ROUTER"
-              className="h-7 w-auto object-contain shrink-0 drop-shadow-[0_0_12px_rgba(56,189,248,0.3)]"
+              className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_10px_rgba(56,189,248,0.28)]"
             />
             <span>AS ROUTER</span>
           </a>
@@ -878,7 +878,7 @@ const msg = await client.messages.create({
                   <img
                     src="/assets/as-logo.png"
                     alt="AS ROUTER"
-                    className="h-14 sm:h-16 w-auto object-contain drop-shadow-[0_0_26px_rgba(100,103,242,0.45)]"
+                    className="h-9 sm:h-11 w-auto object-contain drop-shadow-[0_0_20px_rgba(100,103,242,0.4)]"
                   />
                   <span className="mt-1 font-mono text-[9px] font-semibold text-sky-300/90 tracking-[0.22em]">
                     ROUTER
@@ -1617,7 +1617,7 @@ const msg = await client.messages.create({
             <img
               src="/assets/as-logo.png"
               alt="AS ROUTER"
-              className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.25)]"
+              className="h-4 w-auto object-contain shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.22)]"
             />
             <span className="font-display font-bold text-[#FAFAFA]">
               AS ROUTER

@@ -5,14 +5,21 @@ import {
   Check,
   Copy,
   ImagePlus,
+  Pencil,
   RefreshCw,
+  RotateCcw,
   SlidersHorizontal,
   Square,
   SquarePen,
   X,
 } from "lucide-react";
-import { getProviderSpec, isSearchProvider } from "../shared/catalog.ts";
+import {
+  getConnectionPrefix,
+  getProviderSpec,
+  isSearchProvider,
+} from "../shared/catalog.ts";
 import { getProviderVisual } from "../lib/providerVisuals.ts";
+import { useFocusTrap } from "../lib/useFocusTrap.ts";
 import { ToggleSwitch } from "./ToggleSwitch.tsx";
 import type {
   Combo,
@@ -23,6 +30,12 @@ import type {
 interface PlaygroundViewProps {
   combos: Combo[];
   connections: ProviderConnection[];
+  launchRequest?: {
+    model?: string;
+    prompt?: string;
+    nonce: number;
+  } | null;
+  onConnectProvider?: () => void;
   onRefresh?: () => Promise<void>;
   onNotify: (msg: string, tone?: "success" | "error") => void;
 }
@@ -83,6 +96,275 @@ const STARTER_PROMPTS = [
   "Draft a crisp JSON API error response schema for rate limits.",
 ];
 
+function safeMarkdownHref(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl.trim());
+    if (
+      parsed.protocol === "http:" ||
+      parsed.protocol === "https:" ||
+      parsed.protocol === "mailto:"
+    ) {
+      return parsed.href;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  const tokenRe =
+    /(`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\*[^*\n]+\*|\[[^\]\n]+\]\((?:[^)\s]+)\))/g;
+  const parts: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  let keyCounter = 0;
+
+  while ((match = tokenRe.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(text.slice(lastIdx, match.index));
+    }
+    const token = match[0];
+    const key = `inl-${keyCounter++}`;
+    if (token.startsWith("`") && token.endsWith("`")) {
+      parts.push(
+        <code
+          key={key}
+          className="px-1.5 py-0.5 rounded bg-[#101422] border border-[#2B334E] font-mono text-[12px] text-sky-300"
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
+    } else if (token.startsWith("**") && token.endsWith("**")) {
+      parts.push(
+        <strong key={key} className="font-semibold text-white">
+          {renderInlineMarkdown(token.slice(2, -2))}
+        </strong>
+      );
+    } else if (token.startsWith("~~") && token.endsWith("~~")) {
+      parts.push(
+        <del key={key} className="line-through text-[#94A3B8]">
+          {renderInlineMarkdown(token.slice(2, -2))}
+        </del>
+      );
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      parts.push(
+        <em key={key} className="italic text-[#F4F4F5]">
+          {renderInlineMarkdown(token.slice(1, -1))}
+        </em>
+      );
+    } else if (token.startsWith("[")) {
+      const m = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
+      if (m) {
+        const href = safeMarkdownHref(m[2]);
+        if (href) {
+          parts.push(
+            <a
+              key={key}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
+            >
+              {m[1]}
+            </a>
+          );
+        } else {
+          parts.push(m[1]);
+        }
+      } else {
+        parts.push(token);
+      }
+    }
+    lastIdx = match.index + token.length;
+  }
+
+  if (lastIdx < text.length) {
+    parts.push(text.slice(lastIdx));
+  }
+  return parts;
+}
+
+function renderMarkdownBlocks(rawText: string, keyPrefix: string): React.ReactNode {
+  const lines = rawText.replace(/^\n+|\n+$/g, "").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      i += 1;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      blocks.push(<hr key={`${keyPrefix}-hr-${i}`} className="border-[#2B334E] my-3" />);
+      i += 1;
+      continue;
+    }
+
+    // Headings
+    const headingMatch = /^(#{1,4})\s+(.+)$/.exec(trimmed);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const headingClasses =
+        level === 1
+          ? "text-lg font-bold text-white mt-3 mb-1"
+          : level === 2
+            ? "text-base font-semibold text-white mt-2.5 mb-1"
+            : level === 3
+              ? "text-sm font-semibold text-[#FAFAFA] mt-2 mb-0.5"
+              : "text-xs font-semibold uppercase tracking-wide text-indigo-300 mt-2 mb-0.5";
+      blocks.push(
+        <div key={`${keyPrefix}-h-${i}`} className={`font-display ${headingClasses}`}>
+          {renderInlineMarkdown(headingMatch[2])}
+        </div>
+      );
+      i += 1;
+      continue;
+    }
+
+    // Markdown Table
+    if (
+      trimmed.includes("|") &&
+      i + 1 < lines.length &&
+      /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1])
+    ) {
+      const parseRow = (rowLine: string) =>
+        rowLine
+          .trim()
+          .replace(/^\|/, "")
+          .replace(/\|$/, "")
+          .split("|")
+          .map((cell) => cell.trim());
+
+      const headers = parseRow(line);
+      i += 2;
+      const bodyRows: string[][] = [];
+      while (i < lines.length && lines[i].trim().includes("|") && lines[i].trim() !== "") {
+        bodyRows.push(parseRow(lines[i]));
+        i += 1;
+      }
+
+      blocks.push(
+        <div
+          key={`${keyPrefix}-tbl-${i}`}
+          className="overflow-x-auto rounded-xl border border-[#2B334E] bg-[#101422]"
+        >
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-[#2B334E] bg-[#171C2E] text-[#FAFAFA]">
+                {headers.map((h, hIdx) => (
+                  <th key={hIdx} className="px-3 py-2 font-semibold whitespace-nowrap">
+                    {renderInlineMarkdown(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#28304A]">
+              {bodyRows.map((row, rIdx) => (
+                <tr key={rIdx}>
+                  {headers.map((_, cIdx) => (
+                    <td key={cIdx} className="px-3 py-2 text-[#D4D4D8]">
+                      {renderInlineMarkdown(row[cIdx] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    // Blockquote
+    if (trimmed.startsWith(">")) {
+      const quoteLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith(">")) {
+        quoteLines.push(lines[i].trim().replace(/^>\s?/, ""));
+        i += 1;
+      }
+      blocks.push(
+        <blockquote
+          key={`${keyPrefix}-bq-${i}`}
+          className="border-l-2 border-indigo-400/70 pl-3.5 py-0.5 text-[#D4D4D8] italic bg-[#171C2E]/50 rounded-r-lg"
+        >
+          {quoteLines.map((ql, qIdx) => (
+            <p key={qIdx}>{renderInlineMarkdown(ql)}</p>
+          ))}
+        </blockquote>
+      );
+      continue;
+    }
+
+    // Unordered list
+    if (/^\s*[-*•]\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*[-*•]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*•]\s+/, ""));
+        i += 1;
+      }
+      blocks.push(
+        <ul
+          key={`${keyPrefix}-ul-${i}`}
+          className="list-disc pl-5 space-y-1 text-[#E4E4E7]"
+        >
+          {items.map((item, idx) => (
+            <li key={idx}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    // Ordered list
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*\d+\.\s+/, ""));
+        i += 1;
+      }
+      blocks.push(
+        <ol
+          key={`${keyPrefix}-ol-${i}`}
+          className="list-decimal pl-5 space-y-1 text-[#E4E4E7]"
+        >
+          {items.map((item, idx) => (
+            <li key={idx}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    // Paragraph (collect consecutive plain lines)
+    const paraLines: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !/^(#{1,4})\s+/.test(lines[i].trim()) &&
+      !/^(-{3,}|\*{3,}|_{3,})$/.test(lines[i].trim()) &&
+      !lines[i].trim().startsWith(">") &&
+      !/^\s*[-*•]\s+/.test(lines[i]) &&
+      !/^\s*\d+\.\s+/.test(lines[i])
+    ) {
+      paraLines.push(lines[i]);
+      i += 1;
+    }
+    blocks.push(
+      <p key={`${keyPrefix}-p-${i}`} className="whitespace-pre-wrap">
+        {renderInlineMarkdown(paraLines.join("\n"))}
+      </p>
+    );
+  }
+
+  return blocks;
+}
+
 function AssistantMessageBody({
   content,
   isError,
@@ -120,7 +402,7 @@ function AssistantMessageBody({
               key={idx}
               className="rounded-xl border border-[#343E5E] bg-[#101422] overflow-hidden"
             >
-              <div className="px-3.5 py-1.5 border-b border-[#28304A] flex items-center justify-between text-[11px] font-mono text-[#8B8B95]">
+              <div className="px-3.5 py-1.5 border-b border-[#28304A] flex items-center justify-between text-[11px] font-mono text-[#94A3B8]">
                 <span>{lang || "code"}</span>
                 <button
                   type="button"
@@ -157,10 +439,10 @@ function AssistantMessageBody({
             </div>
           );
         }
-        if (!seg) return null;
+        if (!seg || !seg.trim()) return null;
         return (
-          <div key={idx} className="whitespace-pre-wrap">
-            {seg.replace(/^\n+|\n+$/g, "")}
+          <div key={idx} className="space-y-2.5">
+            {renderMarkdownBlocks(seg, `seg-${idx}`)}
           </div>
         );
       })}
@@ -171,6 +453,8 @@ function AssistantMessageBody({
 export function PlaygroundView({
   combos,
   connections,
+  launchRequest,
+  onConnectProvider,
   onRefresh,
   onNotify,
 }: PlaygroundViewProps) {
@@ -185,6 +469,7 @@ export function PlaygroundView({
     for (const conn of connections) {
       if (!conn.isActive || isSearchProvider(conn.provider)) continue;
       const spec = getProviderSpec(conn.provider);
+      const prefix = getConnectionPrefix(conn);
       const connModels = Array.from(
         new Set([
           ...(conn.defaultModel ? [conn.defaultModel] : []),
@@ -192,7 +477,7 @@ export function PlaygroundView({
         ])
       );
       for (const m of connModels) {
-        const key = `${conn.provider}/${m}`;
+        const key = `${prefix}/${m}`;
         if (!seen.has(key)) {
           seen.add(key);
           list.push({
@@ -201,11 +486,13 @@ export function PlaygroundView({
           });
         }
       }
-      for (const m of spec.models) {
-        const key = `${conn.provider}/${m.id}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          list.push({ value: key, label: `${spec.label} — ${m.id}` });
+      if (conn.provider !== "custom") {
+        for (const m of spec.models) {
+          const key = `${prefix}/${m.id}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            list.push({ value: key, label: `${spec.label} — ${m.id}` });
+          }
         }
       }
     }
@@ -216,24 +503,42 @@ export function PlaygroundView({
     () => connections.filter((c) => c.isActive && !isSearchProvider(c.provider)),
     [connections]
   );
-  const hasActiveLlmOptions = modelOptions.length > 0;
 
   const [selectedModel, setSelectedModel] = useState(
-    modelOptions[0]?.value || ""
+    launchRequest?.model || modelOptions[0]?.value || ""
+  );
+  const [customLaunchModel, setCustomLaunchModel] = useState<string | null>(
+    launchRequest?.model || null
   );
   const [syncingModels, setSyncingModels] = useState(false);
 
+  const effectiveModelOptions = useMemo(() => {
+    if (
+      customLaunchModel &&
+      !modelOptions.some((opt) => opt.value === customLaunchModel)
+    ) {
+      return [
+        { value: customLaunchModel, label: `Target: ${customLaunchModel}` },
+        ...modelOptions,
+      ];
+    }
+    return modelOptions;
+  }, [modelOptions, customLaunchModel]);
+
+  const hasActiveLlmOptions =
+    effectiveModelOptions.length > 0 && activeLlmConnections.length > 0;
+
   useEffect(() => {
-    if (modelOptions.length === 0) {
+    if (effectiveModelOptions.length === 0) {
       if (selectedModel !== "") {
         setSelectedModel("");
       }
       return;
     }
-    if (!modelOptions.some((opt) => opt.value === selectedModel)) {
-      setSelectedModel(modelOptions[0].value);
+    if (!effectiveModelOptions.some((opt) => opt.value === selectedModel)) {
+      setSelectedModel(effectiveModelOptions[0].value);
     }
-  }, [modelOptions, selectedModel]);
+  }, [effectiveModelOptions, selectedModel]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
@@ -252,12 +557,29 @@ export function PlaygroundView({
   const [showSettings, setShowSettings] = useState(false);
   const [running, setRunning] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editDraftText, setEditDraftText] = useState("");
   const [toolReplyDrafts, setToolReplyDrafts] = useState<Record<string, string>>({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const settingsDialogRef = useRef<HTMLDivElement | null>(null);
+
+  useFocusTrap(settingsDialogRef, showSettings);
+
+  useEffect(() => {
+    if (!launchRequest) return;
+    if (launchRequest.model) {
+      setCustomLaunchModel(launchRequest.model);
+      setSelectedModel(launchRequest.model);
+    }
+    if (launchRequest.prompt) {
+      setInputText(launchRequest.prompt);
+    }
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [launchRequest?.nonce]);
 
   useEffect(() => {
     return () => {
@@ -675,9 +997,45 @@ export function PlaygroundView({
     }
   };
 
+  const parseActiveTools = (): unknown | undefined => {
+    if (!enableTools) return undefined;
+    try {
+      const parsed = JSON.parse(toolsJson);
+      return Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+      onNotify("Tools JSON is invalid — ignoring tools for this request.", "error");
+      return undefined;
+    }
+  };
+
+  const handleRegenerate = async (assistantMsgIndex: number) => {
+    if (running || !selectedModel) return;
+    const prefixHistory = messages.slice(0, assistantMsgIndex);
+    if (prefixHistory.length === 0) return;
+    const parsedTools = parseActiveTools();
+    setMessages(prefixHistory);
+    await executeTurn(prefixHistory, parsedTools);
+  };
+
+  const handleResendEditedUser = async (msgIndex: number) => {
+    if (running || !selectedModel) return;
+    const trimmed = editDraftText.trim();
+    const target = messages[msgIndex];
+    if (!target || (!trimmed && !target.imageDataUrl)) return;
+    const updatedUser: ChatMessage = { ...target, content: trimmed };
+    const nextHistory = [...messages.slice(0, msgIndex), updatedUser];
+    setEditingMsgId(null);
+    setEditDraftText("");
+    const parsedTools = parseActiveTools();
+    setMessages(nextHistory);
+    await executeTurn(nextHistory, parsedTools);
+  };
+
   const handleNewChat = () => {
     abortRef.current?.abort();
     setMessages([]);
+    setEditingMsgId(null);
+    setEditDraftText("");
     setInputText("");
     setImageDataUrl(null);
     textareaRef.current?.focus();
@@ -698,7 +1056,7 @@ export function PlaygroundView({
             {!hasActiveLlmOptions ? (
               <option value="">No active providers configured</option>
             ) : (
-              modelOptions.map((opt) => (
+              effectiveModelOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -706,16 +1064,23 @@ export function PlaygroundView({
             )}
           </select>
 
-          {freeOnly && (
-            <span className="text-[11px] font-medium text-emerald-400 whitespace-nowrap hidden sm:inline">
-              Free-only
-            </span>
-          )}
-          {useCache && (
-            <span className="text-[11px] font-medium text-sky-400 whitespace-nowrap hidden sm:inline">
-              Cached
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {freeOnly && (
+              <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-medium text-emerald-300 whitespace-nowrap">
+                Free
+              </span>
+            )}
+            {useCache && (
+              <span className="px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-500/30 text-[10px] font-medium text-sky-300 whitespace-nowrap hidden sm:inline">
+                Cached
+              </span>
+            )}
+            {enableTools && (
+              <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-[10px] font-medium text-indigo-300 whitespace-nowrap">
+                Tools
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -758,11 +1123,16 @@ export function PlaygroundView({
                 aria-hidden="true"
               />
               <motion.div
+                ref={settingsDialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Chat options"
+                tabIndex={-1}
                 initial={{ opacity: 0, scale: 0.95, y: -6 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute right-0 top-11 z-30 w-80 sm:w-96 bg-[#171C2E] border border-[#343E5E] rounded-2xl shadow-2xl p-4 space-y-4 origin-top-right"
+                className="absolute right-0 top-11 z-30 w-[min(calc(100vw-2rem),24rem)] max-h-[75dvh] overflow-y-auto bg-[#171C2E] border border-[#343E5E] rounded-2xl shadow-2xl p-4 space-y-4 origin-top-right outline-none"
               >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-white">
@@ -770,22 +1140,28 @@ export function PlaygroundView({
                 </span>
                 <button
                   type="button"
+                  aria-label="Close chat options"
                   onClick={() => setShowSettings(false)}
-                  className="text-[#71717A] hover:text-white"
+                  className="text-[#94A3B8] hover:text-white"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#D4D4D8] mb-1.5">
+                <label
+                  htmlFor="pg-system-prompt"
+                  className="block text-xs font-medium text-[#D4D4D8] mb-1.5"
+                >
                   System Instruction
                 </label>
                 <textarea
+                  id="pg-system-prompt"
                   rows={2}
+                  placeholder="Optional system instruction for the assistant..."
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  className="w-full bg-[#101422] border border-[#2B334E] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#101422] border border-[#2B334E] rounded-xl px-3 py-2 text-xs text-white placeholder-[#6B7280] focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -919,15 +1295,24 @@ export function PlaygroundView({
               alt="AS ROUTER"
               animate={{ scale: [1, 1.045, 1] }}
               transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-              className="h-12 w-auto object-contain mb-4 drop-shadow-[0_0_24px_rgba(129,140,248,0.38)]"
+              className="h-8 w-auto object-contain mb-3 drop-shadow-[0_0_16px_rgba(129,140,248,0.35)]"
             />
             <h2 className="font-display text-xl sm:text-2xl font-semibold text-white tracking-tight">
               {!hasActiveLlmOptions
                 ? "Connect a provider to start chatting"
                 : "What would you like to ask?"}
             </h2>
+            {!hasActiveLlmOptions && onConnectProvider && (
+              <button
+                type="button"
+                onClick={onConnectProvider}
+                className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl transition-colors"
+              >
+                Connect Provider
+              </button>
+            )}
             {hasActiveLlmOptions && selectedModel && (
-              <p className="mt-1.5 text-xs text-[#71717A] font-mono">
+              <p className="mt-1.5 text-xs text-[#94A3B8] font-mono">
                 {selectedModel}
               </p>
             )}
@@ -957,16 +1342,16 @@ export function PlaygroundView({
           </div>
         ) : (
           <div className="space-y-6 max-w-3xl mx-auto w-full pb-2">
-            {messages.map((msg) =>
+            {messages.map((msg, msgIdx) =>
               msg.role === "user" ? (
                 <motion.div
                   key={msg.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                  className="flex justify-end"
+                  className="flex flex-col items-end group"
                 >
-                  <div className="max-w-[82%] bg-[#1F263D] border border-[#343E5E] rounded-2xl px-4 py-3 text-sm text-[#F4F4F5] space-y-2.5">
+                  <div className="max-w-[85%] bg-[#1F263D] border border-[#343E5E] rounded-2xl px-4 py-3 text-sm text-[#F4F4F5] space-y-2.5">
                     {msg.imageDataUrl && (
                       <img
                         src={msg.imageDataUrl}
@@ -974,12 +1359,73 @@ export function PlaygroundView({
                         className="max-h-48 rounded-lg border border-[#343E5E] object-contain"
                       />
                     )}
-                    {msg.content && (
-                      <div className="whitespace-pre-wrap leading-relaxed">
-                        {msg.content}
+                    {editingMsgId === msg.id ? (
+                      <div className="space-y-2 min-w-[240px] sm:min-w-[340px]">
+                        <textarea
+                          rows={3}
+                          value={editDraftText}
+                          onChange={(e) => setEditDraftText(e.target.value)}
+                          className="w-full bg-[#101422] border border-[#343E5E] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-400"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMsgId(null);
+                              setEditDraftText("");
+                            }}
+                            className="px-2.5 py-1 text-xs text-[#A1A1AA] hover:text-white bg-[#101422] border border-[#2B334E] rounded-lg"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            disabled={running}
+                            onClick={() => handleResendEditedUser(msgIdx)}
+                            className="px-2.5 py-1 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg"
+                          >
+                            Save & Resend
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      msg.content && (
+                        <div className="whitespace-pre-wrap leading-relaxed">
+                          {msg.content}
+                        </div>
+                      )
                     )}
                   </div>
+                  {editingMsgId !== msg.id && (
+                    <div className="mt-1 flex items-center gap-2 opacity-70 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity pr-1">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyMessage(msg)}
+                        aria-label="Copy message"
+                        title="Copy"
+                        className="text-[#94A3B8] hover:text-white p-1"
+                      >
+                        {copiedId === msg.id ? (
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={running}
+                        onClick={() => {
+                          setEditingMsgId(msg.id);
+                          setEditDraftText(msg.content);
+                        }}
+                        aria-label="Edit and resend"
+                        title="Edit & resend"
+                        className="text-[#94A3B8] hover:text-white p-1 disabled:opacity-40"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               ) : msg.role === "tool" ? (
                 <div key={msg.id} className="flex justify-end">
@@ -998,17 +1444,17 @@ export function PlaygroundView({
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-                  className="flex items-start gap-3.5"
+                  className="flex items-start gap-3"
                 >
                   <div
-                    className={`w-8 h-7 flex items-center justify-center shrink-0 mt-0.5 ${
+                    className={`w-6 h-6 flex items-center justify-center shrink-0 mt-0.5 ${
                       msg.isError ? "opacity-75 grayscale contrast-125" : ""
                     }`}
                   >
                     <img
                       src="/assets/as-logo.png"
                       alt="AS ROUTER"
-                      className="w-7 h-auto object-contain drop-shadow-[0_0_8px_rgba(129,140,248,0.28)]"
+                      className="w-5 h-auto object-contain drop-shadow-[0_0_6px_rgba(129,140,248,0.26)]"
                     />
                   </div>
 
@@ -1064,56 +1510,82 @@ export function PlaygroundView({
                       </div>
                     )}
 
-                    {msg.meta && (
+                    {(msg.meta || (!running && (msg.content || msg.isError))) && (
                       <div className="space-y-1.5 pt-1">
                         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-[#71717A] tabular-nums">
                           <div className="flex flex-wrap items-center gap-x-1.5">
-                            <span>
-                              <span
-                                className="font-semibold"
-                                style={{
-                                  color: getProviderVisual(
-                                    msg.meta.resolvedProvider
-                                  ).color,
-                                }}
-                              >
-                                {msg.meta.resolvedProvider}
-                              </span>
-                              <span className="text-[#A1A1AA]">
-                                /{msg.meta.resolvedModel}
-                              </span>
-                            </span>
-                            <span>·</span>
-                            <span>{msg.meta.latencyMs}ms</span>
-                            <span>·</span>
-                            <span>
-                              {msg.meta.promptTokens + msg.meta.completionTokens}{" "}
-                              tok
-                            </span>
-                            <span>·</span>
-                            <span>${msg.meta.estimatedCostUsd.toFixed(5)}</span>
-                            {msg.meta.cached && (
+                            {msg.meta ? (
                               <>
+                                <span>
+                                  <span
+                                    className="font-semibold"
+                                    style={{
+                                      color: getProviderVisual(
+                                        msg.meta.resolvedProvider
+                                      ).color,
+                                    }}
+                                  >
+                                    {msg.meta.resolvedProvider}
+                                  </span>
+                                  <span className="text-[#A1A1AA]">
+                                    /{msg.meta.resolvedModel}
+                                  </span>
+                                </span>
                                 <span>·</span>
-                                <span className="text-sky-400">Cache hit</span>
+                                <span>{msg.meta.latencyMs}ms</span>
+                                <span>·</span>
+                                <span>
+                                  {msg.meta.promptTokens + msg.meta.completionTokens}{" "}
+                                  tok
+                                </span>
+                                <span>·</span>
+                                <span>${msg.meta.estimatedCostUsd.toFixed(5)}</span>
+                                {msg.meta.cached && (
+                                  <>
+                                    <span>·</span>
+                                    <span className="text-sky-400">Cache hit</span>
+                                  </>
+                                )}
                               </>
+                            ) : (
+                              <span className="text-[#71717A]">
+                                {msg.isError ? "Request failed" : "Streamed response"}
+                              </span>
                             )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyMessage(msg)}
-                            className="inline-flex items-center gap-1 text-[#71717A] hover:text-white transition-colors"
-                            title="Copy response"
-                          >
-                            {copiedId === msg.id ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              disabled={running}
+                              onClick={() => handleRegenerate(msgIdx)}
+                              className="inline-flex items-center gap-1 text-[#71717A] hover:text-white transition-colors disabled:opacity-40"
+                              title="Regenerate response"
+                              aria-label="Regenerate response"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline font-sans">
+                                Regenerate
+                              </span>
+                            </button>
+                            {msg.content && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyMessage(msg)}
+                                className="inline-flex items-center gap-1 text-[#71717A] hover:text-white transition-colors"
+                                title="Copy response"
+                                aria-label="Copy response"
+                              >
+                                {copiedId === msg.id ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
                             )}
-                          </button>
+                          </div>
                         </div>
 
-                        {msg.meta.fallbackAttempts.length > 1 && (
+                        {msg.meta && msg.meta.fallbackAttempts.length > 1 && (
                           <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
                             {msg.meta.fallbackAttempts.map((hop, hIdx) => (
                               <span
@@ -1141,12 +1613,12 @@ export function PlaygroundView({
             )}
 
             {running && (
-              <div className="flex items-start gap-3.5">
-                <div className="w-8 h-7 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="flex items-start gap-3">
+                <div className="w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">
                   <img
                     src="/assets/as-logo.png"
                     alt="AS ROUTER"
-                    className="w-7 h-auto object-contain animate-pulse drop-shadow-[0_0_10px_rgba(56,189,248,0.38)]"
+                    className="w-5 h-auto object-contain animate-pulse drop-shadow-[0_0_8px_rgba(56,189,248,0.34)]"
                   />
                 </div>
                 <div className="py-1 text-sm text-[#A1A1AA] animate-pulse">
