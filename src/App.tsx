@@ -959,7 +959,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-canvas text-ink-muted flex flex-col items-center justify-center gap-3 text-sm">
         <img
-          src="/assets/as-logo.png"
+          src="/assets/as-logo.svg"
           alt="AS ROUTER"
           className="h-7 w-auto object-contain animate-pulse drop-shadow-[0_0_14px_rgba(99,102,241,0.32)]"
         />
@@ -1002,7 +1002,7 @@ export default function App() {
         <div className="h-16 px-5 flex items-center justify-between border-b border-hairline">
           <div className="flex items-center gap-2.5">
             <img
-              src="/assets/as-logo.png"
+              src="/assets/as-logo.svg"
               alt="AS ROUTER"
               className="h-5 w-auto object-contain shrink-0"
             />
@@ -1147,7 +1147,7 @@ export default function App() {
               <div className="flex items-center justify-between pb-4 border-b border-hairline shrink-0">
                 <div className="flex items-center gap-2.5">
                   <img
-                    src="/assets/as-logo.png"
+                    src="/assets/as-logo.svg"
                     alt="AS ROUTER"
                     className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.25)]"
                   />
@@ -1300,7 +1300,7 @@ export default function App() {
             </button>
             <div className="flex items-center gap-2 text-sm truncate">
               <img
-                src="/assets/as-logo.png"
+                src="/assets/as-logo.svg"
                 alt="AS ROUTER"
                 className="h-4 w-auto object-contain sm:hidden shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.22)]"
               />

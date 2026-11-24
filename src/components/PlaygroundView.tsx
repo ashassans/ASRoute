@@ -1291,7 +1291,7 @@ export function PlaygroundView({
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-4">
             <motion.img
-              src="/assets/as-logo.png"
+              src="/assets/as-logo.svg"
               alt="AS ROUTER"
               animate={{ scale: [1, 1.045, 1] }}
               transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
@@ -1452,7 +1452,7 @@ export function PlaygroundView({
                     }`}
                   >
                     <img
-                      src="/assets/as-logo.png"
+                      src="/assets/as-logo.svg"
                       alt="AS ROUTER"
                       className="w-5 h-auto object-contain drop-shadow-[0_0_6px_rgba(129,140,248,0.26)]"
                     />
@@ -1616,7 +1616,7 @@ export function PlaygroundView({
               <div className="flex items-start gap-3">
                 <div className="w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">
                   <img
-                    src="/assets/as-logo.png"
+                    src="/assets/as-logo.svg"
                     alt="AS ROUTER"
                     className="w-5 h-auto object-contain animate-pulse drop-shadow-[0_0_8px_rgba(56,189,248,0.34)]"
                   />

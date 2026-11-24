@@ -476,7 +476,7 @@ export function AuthGate({
         <div className="max-w-[1200px] mx-auto h-full px-5 sm:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 font-display text-base font-bold tracking-tight text-ink whitespace-nowrap shrink-0">
             <img
-              src="/assets/as-logo.png"
+              src="/assets/as-logo.svg"
               alt="AS ROUTER"
               className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_10px_rgba(56,189,248,0.28)]"
             />
@@ -511,7 +511,7 @@ export function AuthGate({
           >
             <div className="space-y-4">
               <img
-                src="/assets/as-logo.png"
+                src="/assets/as-logo.svg"
                 alt="AS ROUTER"
                 className="h-8 w-auto object-contain drop-shadow-[0_0_18px_rgba(99,102,241,0.32)]"
               />
@@ -848,7 +848,7 @@ export function AuthGate({
                     {/* Header */}
                     <div className="mb-6">
                       <img
-                        src="/assets/as-logo.png"
+                        src="/assets/as-logo.svg"
                         alt="AS ROUTER"
                         className="h-6 w-auto object-contain mb-3 lg:hidden drop-shadow-[0_0_12px_rgba(99,102,241,0.3)]"
                       />

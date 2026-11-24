@@ -1386,7 +1386,7 @@ curl ${environment.gatewayEndpoint}/messages \\
                     title="AS ROUTER Engine"
                   >
                     <img
-                      src="/assets/as-logo.png"
+                      src="/assets/as-logo.svg"
                       alt="AS ROUTER"
                       className="w-7 h-auto object-contain"
                     />

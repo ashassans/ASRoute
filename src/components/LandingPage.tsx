@@ -14,6 +14,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { LLM_PROVIDER_PRESETS } from "../shared/catalog.ts";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 interface LandingPageProps {
@@ -45,7 +46,7 @@ const ORBIT_PROVIDERS = [
     id: "anthropic",
     name: "Anthropic",
     short: "A",
-    color: "var(--accent-primary)",
+    color: "#6366F1",
     angle: 205,
     ring: 1,
     models: [
@@ -555,7 +556,7 @@ const msg = await client.messages.create({
             className="font-display text-base font-bold tracking-tight text-ink whitespace-nowrap shrink-0 flex items-center gap-2.5"
           >
             <img
-              src="/assets/as-logo.png"
+              src="/assets/as-logo.svg"
               alt="AS ROUTER"
               className="h-5 w-auto object-contain shrink-0 drop-shadow-[0_0_10px_rgba(56,189,248,0.28)]"
             />
@@ -789,7 +790,7 @@ const msg = await client.messages.create({
               <div className="pt-4 border-t border-hairline grid grid-cols-3 gap-4">
                 <div>
                   <div className="font-mono text-sm font-semibold text-sky-300 tabular-nums">
-                    12+ Providers
+                    {LLM_PROVIDER_PRESETS.length}+ Providers
                   </div>
                   <div className="text-xs text-ink-muted mt-0.5">
                     Popular &amp; custom APIs
@@ -925,7 +926,7 @@ const msg = await client.messages.create({
                   className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none px-4 py-3 rounded-2xl bg-surface border border-hairline-strong shadow-[0_8px_24px_rgba(15,23,42,0.10)]"
                 >
                   <img
-                    src="/assets/as-logo.png"
+                    src="/assets/as-logo.svg"
                     alt="AS ROUTER"
                     className="h-8 sm:h-10 w-auto object-contain"
                   />
@@ -984,8 +985,11 @@ const msg = await client.messages.create({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.18 }}
-                  className="mt-3 px-4 py-2 bg-surface border border-hairline rounded-lg flex flex-wrap items-center justify-center gap-2.5 text-xs"
-                  style={{ borderColor: `${hoveredProvider.color}40` }}
+                  className="mt-3 px-4 py-2 bg-surface border rounded-lg flex flex-wrap items-center justify-center gap-2.5 text-xs"
+                  style={{
+                    borderColor: `color-mix(in srgb, ${hoveredProvider.color} 32%, var(--border-hairline))`,
+                    boxShadow: `0 4px 14px -6px color-mix(in srgb, ${hoveredProvider.color} 28%, transparent)`,
+                  }}
                 >
                   <span
                     className="font-medium"
@@ -1582,7 +1586,7 @@ const msg = await client.messages.create({
         <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-muted">
           <div className="flex items-center gap-2.5">
             <img
-              src="/assets/as-logo.png"
+              src="/assets/as-logo.svg"
               alt="AS ROUTER"
               className="h-4 w-auto object-contain shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.22)]"
             />
