@@ -28,6 +28,11 @@ const authHandler = toNodeHandler(auth);
 
 app.set("trust proxy", 1);
 
+const isServerlessRuntime =
+  process.env.VERCEL === "1" ||
+  process.env.NETLIFY === "true" ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
 function isTrustedControlPlaneOrigin(origin: string | undefined, req: Request): boolean {
   if (!origin) return true;
   try {
@@ -39,7 +44,8 @@ function isTrustedControlPlaneOrigin(origin: string | undefined, req: Request): 
       hostname === "localhost" ||
       hostname === "127.0.0.1" ||
       hostname === "[::1]" ||
-      hostname.endsWith(".run.app")
+      hostname.endsWith(".run.app") ||
+      hostname.endsWith(".netlify.app")
     ) {
       return true;
     }
@@ -54,7 +60,12 @@ function isTrustedControlPlaneOrigin(origin: string | undefined, req: Request): 
       return true;
     }
 
-    for (const envUrl of [process.env.APP_URL, process.env.BETTER_AUTH_URL]) {
+    for (const envUrl of [
+      process.env.APP_URL,
+      process.env.BETTER_AUTH_URL,
+      process.env.URL,
+      process.env.DEPLOY_PRIME_URL,
+    ]) {
       if (!envUrl?.trim()) continue;
       try {
         if (new URL(envUrl.trim()).host.toLowerCase() === originHost) {
@@ -182,7 +193,10 @@ export class ErrorOverlay {}
 `);
       });
     }
-    const { createServer: createViteServer } = await import("vite");
+    const viteModule = "vite";
+    const { createServer: createViteServer } = await import(
+      /* @vite-ignore */ viteModule
+    );
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
@@ -234,7 +248,7 @@ export class ErrorOverlay {}
 
 export default app;
 
-if (process.env.VERCEL !== "1") {
+if (!isServerlessRuntime) {
   startServer().catch((err) => {
     console.error("[AS ROUTER] Fatal startup error:", err);
     process.exit(1);

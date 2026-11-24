@@ -221,8 +221,12 @@ analyticsRouter.get(
     req.socket?.setNoDelay?.(true);
     res.flushHeaders?.();
 
-    if (process.env.VERCEL === "1") {
-      res.write("event: serverless_mode\ndata: {\"vercel\":true}\n\n");
+    if (
+      process.env.VERCEL === "1" ||
+      process.env.NETLIFY === "true" ||
+      Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME)
+    ) {
+      res.write("event: serverless_mode\ndata: {\"serverless\":true}\n\n");
       res.end();
       return;
     }

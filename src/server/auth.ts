@@ -13,11 +13,13 @@ import {
 const appUrl =
   process.env.APP_URL?.trim() ||
   process.env.BETTER_AUTH_URL?.trim() ||
+  process.env.URL?.trim() ||
   "http://localhost:3000";
 const isHttps =
   appUrl.startsWith("https://") ||
   Boolean(process.env.BETTER_AUTH_URL?.trim().startsWith("https://")) ||
-  process.env.NODE_ENV === "production";
+  process.env.NODE_ENV === "production" ||
+  process.env.NETLIFY === "true";
 const emailVerificationEnabled = isGmailMailerConfigured();
 
 const baseTrustedOrigins = Array.from(
@@ -25,7 +27,10 @@ const baseTrustedOrigins = Array.from(
     [
       appUrl,
       process.env.BETTER_AUTH_URL?.trim(),
+      process.env.URL?.trim(),
+      process.env.DEPLOY_PRIME_URL?.trim(),
       "https://*.run.app",
+      "https://*.netlify.app",
       "http://localhost:3000",
       "http://127.0.0.1:3000",
     ].filter((origin): origin is string => Boolean(origin))

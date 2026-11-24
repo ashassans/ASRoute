@@ -33,10 +33,15 @@ function getOrCreateDb(): AppDatabase {
       connectionString.includes("localhost") ||
       connectionString.includes("127.0.0.1");
 
+    const isServerlessDb =
+      process.env.VERCEL === "1" ||
+      process.env.NETLIFY === "true" ||
+      Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
     const pool = new Pool({
       connectionString,
       ssl: isLocal ? false : { rejectUnauthorized: false },
-      max: process.env.VERCEL === "1" ? 5 : 10,
+      max: isServerlessDb ? 5 : 10,
       idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 15000,
       allowExitOnIdle: true,
@@ -51,9 +56,15 @@ function getOrCreateDb(): AppDatabase {
     return global._asRouterDb;
   }
 
+  const pgliteDir =
+    process.env.NETLIFY === "true" ||
+    process.env.VERCEL === "1" ||
+    Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME)
+      ? "/tmp/.asrouter-pgdata"
+      : "./.asrouter-pgdata";
   const pglite = process.env.NODE_TEST_CONTEXT
     ? new PGlite()
-    : new PGlite("./.asrouter-pgdata", { relaxedDurability: true });
+    : new PGlite(pgliteDir, { relaxedDurability: true });
   global._asRouterPglite = pglite;
   global._asRouterDb = drizzlePglite(pglite, {
     schema,
