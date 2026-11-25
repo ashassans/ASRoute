@@ -613,13 +613,13 @@ curl ${environment.gatewayEndpoint}/messages \\
   const hoveredBucket =
     hoveredBucketIdx !== null ? buckets[hoveredBucketIdx] : null;
 
-  // SVG bezier Y coordinates for up to 4 target nodes (centered within viewBox height 200)
+  // SVG bezier Y coordinates aligned with justify-around item centers (viewBox height 200)
   const branchYs = useMemo(() => {
     const count = topologyNodes.length;
     if (count <= 1) return [100];
-    if (count === 2) return [64, 136];
-    if (count === 3) return [42, 100, 158];
-    return [26, 75, 125, 174];
+    if (count === 2) return [50, 150];
+    if (count === 3) return [33, 100, 167];
+    return [25, 75, 125, 175];
   }, [topologyNodes.length]);
 
   return (
@@ -1303,7 +1303,7 @@ curl ${environment.gatewayEndpoint}/messages \\
             ) : (
               <div className="w-full grid grid-cols-12 items-center gap-2">
                 {/* Left Hub + SVG Curves */}
-                <div className="col-span-4 sm:col-span-5 relative h-[190px]">
+                <div className="col-span-4 sm:col-span-5 relative h-[200px]">
                   <svg
                     viewBox="0 0 260 200"
                     className="w-full h-full overflow-visible"
@@ -1311,16 +1311,26 @@ curl ${environment.gatewayEndpoint}/messages \\
                   >
                     <path
                       id="ov-in-path"
-                      d="M 0 100 L 58 100"
+                      d="M 0 100 L 50 100"
                       fill="none"
                       stroke={
-                        isLiveActive ? "rgba(16,185,129,0.55)" : "var(--border-strong)"
+                        isLiveActive
+                          ? "rgba(16,185,129,0.65)"
+                          : !streamPaused
+                            ? "rgba(99,102,241,0.45)"
+                            : "var(--border-strong)"
                       }
-                      strokeWidth={isLiveActive ? "1.6" : "1.25"}
+                      strokeWidth={isLiveActive ? "1.8" : "1.4"}
                     />
-                    {isLiveActive && (
-                      <circle r="3" fill="#10B981">
-                        <animateMotion dur="0.9s" repeatCount="indefinite">
+                    {!streamPaused && (
+                      <circle
+                        r={isLiveActive ? 3.2 : 2.8}
+                        fill={isLiveActive ? "#10B981" : "#6366F1"}
+                      >
+                        <animateMotion
+                          dur={isLiveActive ? "0.85s" : "1.45s"}
+                          repeatCount="indefinite"
+                        >
                           <mpath href="#ov-in-path" />
                         </animateMotion>
                       </circle>
@@ -1332,28 +1342,48 @@ curl ${environment.gatewayEndpoint}/messages \\
                       const nodeVisual = getProviderVisual(
                         node?.provider || "custom"
                       );
-                      const strokeColor =
-                        node?.status === "active"
-                          ? nodeVisual.color
-                          : node?.status === "error"
-                            ? "rgba(244,63,94,0.45)"
-                            : nodeVisual.border;
+                      const isActive = node?.status === "active";
+                      const isErr = node?.status === "error";
+                      const isPrimaryRecent = !isLiveActive && idx === 0 && !isErr;
+                      const isHighlighted = isActive || isPrimaryRecent;
+                      const strokeColor = isActive
+                        ? "#10B981"
+                        : isErr
+                          ? "rgba(244,63,94,0.55)"
+                          : nodeVisual.color;
+                      const dotColor = isActive
+                        ? "#10B981"
+                        : isErr
+                          ? "#F43F5E"
+                          : nodeVisual.color;
+                      const shouldAnimateFlow = !streamPaused && !isErr;
+
                       return (
                         <g key={pid}>
                           <path
                             id={pid}
-                            d={`M 82 100 C 145 100, 175 ${ty}, 256 ${ty}`}
+                            d={`M 90 100 C 148 100, 178 ${ty}, 256 ${ty}`}
                             fill="none"
                             stroke={strokeColor}
-                            strokeOpacity={node?.status === "active" ? 0.72 : 0.48}
-                            strokeWidth={node?.status === "active" ? "1.8" : "1.25"}
+                            strokeOpacity={
+                              isActive ? 0.85 : isPrimaryRecent ? 0.68 : isErr ? 0.45 : 0.34
+                            }
+                            strokeWidth={isHighlighted ? "1.8" : "1.25"}
+                            strokeDasharray={isErr ? "4 3" : undefined}
                           />
-                          {node?.status === "active" && (
-                            <circle r="3.4" fill={nodeVisual.color}>
+                          {shouldAnimateFlow && (
+                            <circle
+                              r={isHighlighted ? 3.4 : 2.5}
+                              fill={dotColor}
+                            >
                               <animateMotion
-                                dur={`${1.05 + idx * 0.2}s`}
+                                dur={
+                                  isLiveActive
+                                    ? `${0.95 + idx * 0.16}s`
+                                    : `${1.5 + idx * 0.3}s`
+                                }
                                 repeatCount="indefinite"
-                                begin={`${idx * 0.15}s`}
+                                begin={`${idx * 0.24}s`}
                               >
                                 <mpath href={`#${pid}`} />
                               </animateMotion>
@@ -1367,47 +1397,55 @@ curl ${environment.gatewayEndpoint}/messages \\
                   {/* Central AS ROUTER Node */}
                   <motion.div
                     animate={
-                      isLiveActive ? { scale: [1, 1.08, 1] } : { scale: 1 }
+                      isLiveActive
+                        ? { scale: [1, 1.07, 1] }
+                        : !streamPaused
+                          ? { scale: [1, 1.025, 1] }
+                          : { scale: 1 }
                     }
                     transition={
                       isLiveActive
                         ? {
-                            duration: 1.4,
+                            duration: 1.2,
                             repeat: Infinity,
                             ease: "easeInOut",
                           }
-                        : { duration: 0.25 }
+                        : !streamPaused
+                          ? {
+                              duration: 2.8,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                            }
+                          : { duration: 0.25 }
                     }
-                    className={`absolute top-1/2 -translate-y-1/2 left-[42px] w-9 h-8 flex items-center justify-center transition-all ${
+                    className={`absolute top-1/2 -translate-y-1/2 left-[27%] -translate-x-1/2 w-10 h-10 rounded-xl bg-surface/95 border flex items-center justify-center transition-all ${
                       isLiveActive
-                        ? "drop-shadow-[0_0_16px_rgba(56,189,248,0.45)]"
-                        : "drop-shadow-[0_0_10px_rgba(99,102,241,0.28)]"
+                        ? "border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.35)]"
+                        : "border-indigo-500/45 shadow-[0_0_18px_rgba(99,102,241,0.28)]"
                     }`}
                     title="AS ROUTER Engine"
                   >
                     <img
                       src="/assets/as-logo.svg"
                       alt="AS ROUTER"
-                      className="w-7 h-auto object-contain"
+                      className="w-6 h-auto object-contain"
                     />
                   </motion.div>
                 </div>
 
                 {/* Right Active / Recent Provider + Model Nodes */}
-                <div className="col-span-8 sm:col-span-7 h-[190px] flex flex-col justify-center gap-3 py-1">
+                <div className="col-span-8 sm:col-span-7 h-[200px] flex flex-col justify-around">
                   {topologyNodes.map((node, idx) => {
                     const badge = getProviderVisual(node.provider);
-                    const borderTone =
-                      node.status === "active"
-                        ? "border-emerald-400/60 shadow-[0_0_14px_rgba(16,185,129,0.14)]"
-                        : node.status === "error"
-                          ? "border-rose-500/40"
-                          : "border-hairline-strong";
-                    const dotTone =
-                      node.status === "active"
-                        ? "bg-emerald-400 animate-pulse"
-                        : node.status === "error"
-                          ? "bg-rose-500"
+                    const isActive = node.status === "active";
+                    const isErr = node.status === "error";
+                    const isPrimaryRecent = !isLiveActive && idx === 0 && !isErr;
+                    const dotTone = isActive
+                      ? "bg-emerald-400 animate-pulse"
+                      : isErr
+                        ? "bg-rose-500"
+                        : isPrimaryRecent && !streamPaused
+                          ? "bg-amber-400 animate-pulse"
                           : "bg-amber-400";
 
                     return (
@@ -1419,7 +1457,21 @@ curl ${environment.gatewayEndpoint}/messages \\
                         className="flex items-center justify-between gap-2.5"
                       >
                         <div
-                          className={`flex items-center gap-2 px-3 py-1.5 bg-elevated border rounded-full min-w-0 flex-1 ${borderTone}`}
+                          className={`flex items-center gap-2 px-3 py-1.5 bg-elevated border rounded-full min-w-0 flex-1 transition-all ${
+                            isActive
+                              ? "border-emerald-400/60 shadow-[0_0_14px_rgba(16,185,129,0.16)]"
+                              : isErr
+                                ? "border-rose-500/45"
+                                : "border-hairline-strong"
+                          }`}
+                          style={
+                            isPrimaryRecent
+                              ? {
+                                  borderColor: `color-mix(in srgb, ${badge.color} 55%, transparent)`,
+                                  boxShadow: `0 0 14px color-mix(in srgb, ${badge.color} 18%, transparent)`,
+                                }
+                              : undefined
+                          }
                         >
                           <span
                             className={`w-2 h-2 rounded-full shrink-0 ${dotTone}`}
@@ -1439,11 +1491,13 @@ curl ${environment.gatewayEndpoint}/messages \\
                         </div>
                         <span
                           className={`font-mono text-[11px] tabular-nums shrink-0 ${
-                            node.status === "active"
+                            isActive
                               ? "text-emerald-400 font-semibold"
-                              : node.status === "error"
+                              : isErr
                                 ? "text-rose-400"
-                                : "text-ink-muted"
+                                : isPrimaryRecent
+                                  ? "text-indigo-400 font-medium"
+                                  : "text-ink-muted"
                           }`}
                         >
                           {node.meta}
