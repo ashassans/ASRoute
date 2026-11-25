@@ -254,23 +254,3 @@ BETTER_AUTH_URL=https://asroute.vercel.app
 BETTER_AUTH_SECRET=<long-random-secret>
 DATABASE_URL=<postgres-or-neon-url>
 ```
-
-Add the Google OAuth and Gmail variables only when those integrations are required.
-
-For authentication cookies and OAuth redirects, production URLs must match `APP_URL` and `BETTER_AUTH_URL`.
-
-## Security
-
-- Provider API keys are encrypted with AES-256-GCM before database storage
-- Gateway keys are stored as hashes rather than raw values
-- Workspace data is isolated by authenticated user ID
-- Gateway keys can be restricted by combo and usage limits
-- Remote image URLs are validated against private, loopback, and metadata networks
-- API responses should never expose provider secrets
-
-## Environment notes
-
-- If no database URL is provided, ASRoute uses embedded PGlite storage
-- PGlite is convenient for local development but PostgreSQL/Neon is recommended for production
-- Provider credentials are workspace-specific
-- The optional Gemini server key is not the primary provider-connection flow
