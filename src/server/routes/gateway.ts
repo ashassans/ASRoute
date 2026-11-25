@@ -43,11 +43,11 @@ export async function isModelAllowedForKey(
   if (!allowedCombo || allowedCombo === "*") return true;
   const normalizedAllowed = allowedCombo
     .trim()
-    .replace(/^(as-router-combo|combo)\//i, "")
+    .replace(/^(as-router-combo|as-router|combo)\//i, "")
     .toLowerCase();
   const normalizedReq = requestedModel
     .trim()
-    .replace(/^(as-router-combo|combo)\//i, "")
+    .replace(/^(as-router-combo|as-router|combo)\//i, "")
     .toLowerCase();
   if (normalizedAllowed === normalizedReq) return true;
 
@@ -174,6 +174,24 @@ gatewayRouter.get("/models", async (req: Request, res: Response) => {
       created: number;
       owned_by: string;
     }> = [];
+
+    const hasActiveLlm = userConns.some((c) => !isSearchProvider(c.provider));
+    const allowedNormalized = (keyRow.allowedCombo || "*")
+      .trim()
+      .replace(/^(as-router-combo|as-router|combo)\//i, "")
+      .toLowerCase();
+    if (
+      hasActiveLlm &&
+      (allowedNormalized === "*" || allowedNormalized === "auto")
+    ) {
+      seenIds.add("auto");
+      models.push({
+        id: "auto",
+        object: "model",
+        created: 1735689600,
+        owned_by: "as-router",
+      });
+    }
 
     for (const c of userCombos) {
       if (keyRow.freeOnly && !c.freeOnly) continue;

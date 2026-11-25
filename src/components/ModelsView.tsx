@@ -24,6 +24,7 @@ interface ModelRow {
   key: string;
   providerKey: string;
   isCombo?: boolean;
+  isBuiltinAuto?: boolean;
   providerName: string;
   modelId: string;
   copyId: string;
@@ -56,6 +57,25 @@ export function ModelsView({
   const rows = useMemo<ModelRow[]>(() => {
     const list: ModelRow[] = [];
     const seen = new Set<string>();
+
+    const activeLlmConns = connections.filter(
+      (c) => c.isActive && !isSearchProvider(c.provider)
+    );
+    if (activeLlmConns.length > 0) {
+      seen.add("builtin:auto");
+      list.push({
+        key: "builtin:auto",
+        providerKey: "as-router",
+        isBuiltinAuto: true,
+        providerName: "Built-in",
+        modelId: "auto",
+        copyId: "auto",
+        capabilities: ["fast", "coding", "reasoning", "vision", "tools"],
+        strategyLabel: `intent_auto · ${activeLlmConns.length} ${
+          activeLlmConns.length === 1 ? "provider" : "providers"
+        }`,
+      });
+    }
 
     for (const combo of combos) {
       if (!combo.isActive) continue;
@@ -278,12 +298,21 @@ export function ModelsView({
         <div className="bg-surface border border-hairline rounded-lg divide-y divide-hairline overflow-hidden">
           {filtered.map((row, idx) => {
             const isCopied = copiedKey === row.key;
-            const visual = row.isCombo
-              ? getComboAccent(row.modelId)
-              : getProviderVisual(row.providerKey);
-            const shortCode = row.isCombo
-              ? "CB"
-              : getProviderVisual(row.providerKey).short;
+            const visual = row.isBuiltinAuto
+              ? {
+                  color: "#6366F1",
+                  softBg: "rgba(99, 102, 241, 0.14)",
+                  border: "rgba(99, 102, 241, 0.35)",
+                  short: "AS",
+                }
+              : row.isCombo
+                ? getComboAccent(row.modelId)
+                : getProviderVisual(row.providerKey);
+            const shortCode = row.isBuiltinAuto
+              ? "AS"
+              : row.isCombo
+                ? "CB"
+                : getProviderVisual(row.providerKey).short;
 
             return (
               <motion.div

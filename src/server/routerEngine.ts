@@ -13,6 +13,7 @@ import {
   getConnectionPrefix,
   getModelSpec,
   getModelUnitCost,
+  getProviderSpec,
   isModelKnownFree,
   isSearchProvider,
   type DetectedIntent,
@@ -588,11 +589,11 @@ export async function resolveRoutingTarget(
 ): Promise<{
   combo: typeof combos.$inferSelect | null;
   tiers: EnrichedTier[];
-  matchedVia: "wildcard" | "combo" | "direct" | "default";
+  matchedVia: "wildcard" | "combo" | "builtin_auto" | "direct" | "default";
 }> {
   const trimmedModel = requestedModel.trim();
   const comboLookupName = trimmedModel
-    .replace(/^(as-router-combo|combo)\//i, "")
+    .replace(/^(as-router-combo|as-router|combo)\//i, "")
     .trim();
 
   const [userConns, userCombos, userWildcards, allUserTierRows] =
@@ -659,6 +660,78 @@ export async function resolveRoutingTarget(
       .map((t) => ({ tier: t, connection: connMap.get(t.connectionId)! }))
       .filter((x) => Boolean(x.connection));
     return { combo: exactCombo, tiers: enriched, matchedVia: "combo" };
+  }
+
+  // 2.5 Built-in "auto" virtual model ID (smart intent routing across all active LLM connections)
+  if (comboLookupName.toLowerCase() === "auto") {
+    const activeConns = llmConns
+      .filter((c) => c.isActive)
+      .sort((a, b) => {
+        const aHealthy = a.circuitStatus === "healthy" ? 2 : a.circuitStatus === "half_open" ? 1 : 0;
+        const bHealthy = b.circuitStatus === "healthy" ? 2 : b.circuitStatus === "half_open" ? 1 : 0;
+        if (aHealthy !== bHealthy) return bHealthy - aHealthy;
+        return (a.lastLatencyMs ?? 9999) - (b.lastLatencyMs ?? 9999);
+      });
+
+    const perConnModels = activeConns.map((conn) => {
+      let parsedAvailable: string[] = [];
+      if (conn.availableModels) {
+        try {
+          const parsed = JSON.parse(conn.availableModels);
+          if (Array.isArray(parsed)) {
+            parsedAvailable = parsed
+              .filter((m): m is string => typeof m === "string" && Boolean(m.trim()))
+              .map((m) => m.trim());
+          }
+        } catch {
+          // ignore malformed availableModels JSON
+        }
+      }
+      const fallbackCatalogModel =
+        conn.provider === "custom"
+          ? undefined
+          : getProviderSpec(conn.provider).models[0]?.id;
+      const candidateModels = Array.from(
+        new Set(
+          [
+            ...(conn.defaultModel ? [conn.defaultModel.trim()] : []),
+            ...parsedAvailable.slice(0, 5),
+            ...(fallbackCatalogModel ? [fallbackCatalogModel] : []),
+          ].filter(Boolean)
+        )
+      ).slice(0, 4);
+      return { conn, models: candidateModels };
+    });
+
+    const enriched: EnrichedTier[] = [];
+    const maxRounds = Math.max(0, ...perConnModels.map((x) => x.models.length));
+    for (let round = 0; round < maxRounds && enriched.length < 24; round++) {
+      for (const entry of perConnModels) {
+        if (enriched.length >= 24) break;
+        const modelId = entry.models[round];
+        if (!modelId) continue;
+        enriched.push({
+          tier: {
+            id: `builtin-auto-${entry.conn.id}-${round}`,
+            comboId: "builtin-auto",
+            connectionId: entry.conn.id,
+            upstreamModel: modelId,
+            priority: enriched.length,
+            weight: 100,
+            maxRetries: 1,
+            requestCount: 0,
+            createdAt: new Date(),
+          },
+          connection: entry.conn,
+        });
+      }
+    }
+
+    return {
+      combo: null,
+      tiers: enriched,
+      matchedVia: "builtin_auto",
+    };
   }
 
   // 3. Direct provider/model or preset-prefix/model syntax
@@ -804,7 +877,12 @@ export async function executeGatewayChatCompletion(params: {
 
   const detectedIntent = classifyRequestIntent(request);
   const target = await resolveRoutingTarget(userId, request.model);
-  const strategy = (target.combo?.strategy || "priority") as RoutingStrategy;
+  const effectiveComboName =
+    target.combo?.name ?? (target.matchedVia === "builtin_auto" ? "auto" : null);
+  const strategy = (
+    target.combo?.strategy ||
+    (target.matchedVia === "builtin_auto" ? "intent_auto" : "priority")
+  ) as RoutingStrategy;
   const cursor = target.combo?.roundRobinCursor ?? 0;
   const enforceFreeOnly = Boolean(params.freeOnly || target.combo?.freeOnly);
   const cacheEnabled = Boolean(target.combo?.enableCache || params.useCache);
@@ -888,7 +966,7 @@ export async function executeGatewayChatCompletion(params: {
         userId,
         apiKeyId,
         apiKeyPrefix,
-        comboName: target.combo?.name ?? cached.comboName,
+        comboName: effectiveComboName ?? cached.comboName,
         requestedModel: request.model,
         resolvedProvider: cached.resolvedProvider,
         resolvedModel: cached.resolvedModel,
@@ -909,7 +987,7 @@ export async function executeGatewayChatCompletion(params: {
         model: request.model,
         resolvedProvider: cached.resolvedProvider,
         resolvedModel: cached.resolvedModel,
-        comboName: target.combo?.name ?? cached.comboName,
+        comboName: effectiveComboName ?? cached.comboName,
         detectedIntent,
         content: cached.content,
         toolCalls: cached.toolCalls,
@@ -940,7 +1018,7 @@ export async function executeGatewayChatCompletion(params: {
       userId,
       apiKeyId,
       apiKeyPrefix,
-      comboName: target.combo?.name ?? null,
+      comboName: effectiveComboName,
       requestedModel: request.model,
       resolvedProvider: "none",
       resolvedModel: request.model,
@@ -1182,7 +1260,8 @@ export async function executeGatewayChatCompletion(params: {
         const isRealTier =
           Boolean(target.combo) &&
           !tier.id.startsWith("direct-") &&
-          !tier.id.startsWith("auto-");
+          !tier.id.startsWith("auto-") &&
+          !tier.id.startsWith("builtin-auto-");
 
         const postSuccessWrites: Promise<unknown>[] = [
           ...pendingDbWrites,
@@ -1212,7 +1291,7 @@ export async function executeGatewayChatCompletion(params: {
             userId,
             apiKeyId,
             apiKeyPrefix,
-            comboName: target.combo?.name ?? null,
+            comboName: effectiveComboName,
             requestedModel: request.model,
             resolvedProvider: connection.provider,
             resolvedModel: tier.upstreamModel,
@@ -1300,7 +1379,7 @@ export async function executeGatewayChatCompletion(params: {
             userId,
             resolvedProvider: connection.provider,
             resolvedModel: tier.upstreamModel,
-            comboName: target.combo?.name ?? null,
+            comboName: effectiveComboName,
             detectedIntent,
             content: result.content,
             toolCalls: result.toolCalls,
@@ -1318,7 +1397,7 @@ export async function executeGatewayChatCompletion(params: {
           model: request.model,
           resolvedProvider: connection.provider,
           resolvedModel: tier.upstreamModel,
-          comboName: target.combo?.name ?? null,
+          comboName: effectiveComboName,
           detectedIntent,
           content: result.content,
           toolCalls: result.toolCalls,
@@ -1598,7 +1677,8 @@ export async function executeGatewayChatCompletion(params: {
       const isRealAdapterTier =
         Boolean(target.combo) &&
         !toolFallbackCandidate.tier.id.startsWith("direct-") &&
-        !toolFallbackCandidate.tier.id.startsWith("auto-");
+        !toolFallbackCandidate.tier.id.startsWith("auto-") &&
+        !toolFallbackCandidate.tier.id.startsWith("builtin-auto-");
 
       const adapterWrites: Promise<unknown>[] = [
         ...pendingDbWrites,
@@ -1622,7 +1702,7 @@ export async function executeGatewayChatCompletion(params: {
           userId,
           apiKeyId,
           apiKeyPrefix,
-          comboName: target.combo?.name ?? null,
+          comboName: effectiveComboName,
           requestedModel: request.model,
           resolvedProvider: fbConn.provider,
           resolvedModel: toolFallbackCandidate.tier.upstreamModel,
@@ -1706,7 +1786,7 @@ export async function executeGatewayChatCompletion(params: {
         model: request.model,
         resolvedProvider: toolFallbackCandidate.connection.provider,
         resolvedModel: toolFallbackCandidate.tier.upstreamModel,
-        comboName: target.combo?.name ?? null,
+        comboName: effectiveComboName,
         detectedIntent,
         content: finalContent,
         toolCalls: emulatedCalls,
@@ -1745,7 +1825,7 @@ export async function executeGatewayChatCompletion(params: {
       userId,
       apiKeyId,
       apiKeyPrefix,
-      comboName: target.combo?.name ?? null,
+      comboName: effectiveComboName,
       requestedModel: request.model,
       resolvedProvider: lastFailure?.provider || "none",
       resolvedModel: lastFailure?.model || request.model,
@@ -1834,7 +1914,10 @@ export async function simulateComboRoute(params: {
     params.userId,
     params.requestedModel
   );
-  const strategy = (target.combo?.strategy || "priority") as RoutingStrategy;
+  const strategy = (
+    target.combo?.strategy ||
+    (target.matchedVia === "builtin_auto" ? "intent_auto" : "priority")
+  ) as RoutingStrategy;
   const enforceFreeOnly = Boolean(params.freeOnly || target.combo?.freeOnly);
 
   const syntheticRequest: Partial<NormalizedCompletionRequest> = {
@@ -1958,7 +2041,9 @@ export async function simulateComboRoute(params: {
   return {
     requestedModel: params.requestedModel,
     matchedVia: target.matchedVia,
-    comboName: target.combo?.name ?? null,
+    comboName:
+      target.combo?.name ??
+      (target.matchedVia === "builtin_auto" ? "auto" : null),
     strategy,
     detectedIntent,
     compressPrompt: target.combo?.compressPrompt ?? false,

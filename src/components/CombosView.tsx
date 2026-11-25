@@ -322,6 +322,10 @@ export function CombosView({
       opts.push({ value: v, label, group });
     };
 
+    if (llmConnections.some((c) => c.isActive)) {
+      push("auto", "Built-in smart intent router", "Built-in");
+    }
+
     for (const c of combos) {
       push(c.name, `${c.strategy} · ${c.tiers.length} tiers`, "Combo");
     }

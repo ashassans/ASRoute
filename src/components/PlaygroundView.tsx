@@ -460,6 +460,15 @@ export function PlaygroundView({
 }: PlaygroundViewProps) {
   const modelOptions = useMemo(() => {
     const list: Array<{ value: string; label: string }> = [];
+    const hasActiveLlm = connections.some(
+      (c) => c.isActive && !isSearchProvider(c.provider)
+    );
+    if (hasActiveLlm) {
+      list.push({
+        value: "auto",
+        label: "Built-in: auto (Smart Intent Router)",
+      });
+    }
     for (const c of combos) {
       if (c.isActive) {
         list.push({ value: c.name, label: `Combo: ${c.name}` });

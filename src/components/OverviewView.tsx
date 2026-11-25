@@ -617,17 +617,10 @@ export function OverviewView({
   const firstActiveLlmConn = connections.find(
     (c) => c.isActive && !isSearchProvider(c.provider)
   );
-  const firstActiveModelId = firstActiveLlmConn
-    ? firstActiveLlmConn.defaultModel ||
-      firstActiveLlmConn.availableModels?.[0] ||
-      getProviderSpec(firstActiveLlmConn.provider).models[0]?.id
-    : null;
   const defaultModelAlias =
     combos.find((c) => c.isActive)?.name ||
     combos[0]?.name ||
-    (firstActiveLlmConn && firstActiveModelId
-      ? `${getConnectionPrefix(firstActiveLlmConn)}/${firstActiveModelId}`
-      : "YOUR_PROVIDER/MODEL");
+    (firstActiveLlmConn ? "auto" : "YOUR_PROVIDER/MODEL");
   const snippetApiKeyPlaceholder = "sk-asr-YOUR_GATEWAY_API_KEY";
   const openaiCurlSnippet = `curl ${environment.gatewayEndpoint}/chat/completions \\
   -H "Content-Type: application/json" \\
