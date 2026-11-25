@@ -375,7 +375,56 @@ export function OverviewView({
     [buckets]
   );
 
-  const isLiveActive = activeRoutes.length > 0;
+  const [pulsingRoute, setPulsingRoute] = useState<{
+    key: string;
+    isError: boolean;
+  } | null>(null);
+  const seenLogIdRef = useRef<string | null>(logs[0]?.id ?? null);
+  const sseSawKeyAtRef = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    if (activeRoutes.length === 0) return;
+    const now = Date.now();
+    for (const r of activeRoutes) {
+      sseSawKeyAtRef.current.set(`${r.provider}:${r.model}`, now);
+    }
+  }, [activeRoutes]);
+
+  useEffect(() => {
+    const newest = logs[0];
+    if (!newest) return;
+    if (seenLogIdRef.current === null) {
+      seenLogIdRef.current = newest.id;
+      return;
+    }
+    if (newest.id === seenLogIdRef.current) return;
+    seenLogIdRef.current = newest.id;
+
+    if (streamPaused) return;
+    if (!newest.resolvedProvider || newest.resolvedProvider === "none") return;
+
+    const ageMs = Date.now() - new Date(newest.createdAt).getTime();
+    if (ageMs > 45_000) return;
+
+    const routeKey = `${newest.resolvedProvider}:${newest.resolvedModel}`;
+    const lastSseAt = sseSawKeyAtRef.current.get(routeKey) ?? 0;
+    if (Date.now() - lastSseAt < 10_000 && activeRoutes.length === 0) {
+      // SSE already animated this route in real time while in flight
+      return;
+    }
+
+    const isErr =
+      newest.outcome === "error" || newest.outcome === "rate_limited";
+    setPulsingRoute({ key: routeKey, isError: isErr });
+    const timer = window.setTimeout(() => {
+      setPulsingRoute((prev) => (prev?.key === routeKey ? null : prev));
+    }, 2200);
+    return () => window.clearTimeout(timer);
+  }, [logs, streamPaused, activeRoutes.length]);
+
+  const isLiveActive = !streamPaused && activeRoutes.length > 0;
+  const hasIncomingFlow =
+    !streamPaused && (activeRoutes.length > 0 || pulsingRoute !== null);
 
   const recentNodes = useMemo(() => {
     const seen = new Set<string>();
@@ -384,7 +433,7 @@ export function OverviewView({
       provider: string;
       model: string;
       connectionName: string;
-      status: "recent" | "error";
+      status: "recent" | "error" | "active" | "pulse_error";
       meta: string;
     }> = [];
 
@@ -411,18 +460,46 @@ export function OverviewView({
   }, [logs, nowMs]);
 
   const topologyNodes = useMemo(() => {
-    if (activeRoutes.length > 0) {
-      return activeRoutes.slice(0, 4).map((r) => ({
+    const activeByKey = new Map<string, LiveRouteActivity>();
+    if (!streamPaused) {
+      for (const r of activeRoutes) {
+        activeByKey.set(`${r.provider}:${r.model}`, r);
+      }
+    }
+
+    const merged = [...recentNodes];
+    for (const [key, r] of activeByKey.entries()) {
+      const idx = merged.findIndex((n) => `${n.provider}:${n.model}` === key);
+      const activeNode = {
         id: r.requestId,
         provider: r.provider,
         model: r.model,
         connectionName: r.connectionName || r.provider,
         status: "active" as const,
         meta: "LIVE",
-      }));
+      };
+      if (idx >= 0) {
+        merged[idx] = activeNode;
+      } else {
+        merged.unshift(activeNode);
+      }
     }
-    return recentNodes;
-  }, [activeRoutes, recentNodes]);
+
+    if (!streamPaused && pulsingRoute) {
+      const idx = merged.findIndex(
+        (n) => `${n.provider}:${n.model}` === pulsingRoute.key
+      );
+      if (idx >= 0 && merged[idx].status !== "active") {
+        merged[idx] = {
+          ...merged[idx],
+          status: pulsingRoute.isError ? "pulse_error" : "active",
+          meta: pulsingRoute.isError ? "ERR" : "LIVE",
+        };
+      }
+    }
+
+    return merged.slice(0, 4);
+  }, [activeRoutes, recentNodes, pulsingRoute, streamPaused]);
 
   // Build Failover Matrix slots (26 blocks per provider) from real logs + circuit state
   const failoverRows = useMemo(() => {
@@ -1314,23 +1391,24 @@ curl ${environment.gatewayEndpoint}/messages \\
                       d="M 0 100 L 50 100"
                       fill="none"
                       stroke={
-                        isLiveActive
-                          ? "rgba(16,185,129,0.65)"
-                          : !streamPaused
-                            ? "rgba(99,102,241,0.45)"
-                            : "var(--border-strong)"
+                        hasIncomingFlow
+                          ? pulsingRoute?.isError && !isLiveActive
+                            ? "rgba(244,63,94,0.65)"
+                            : "rgba(16,185,129,0.65)"
+                          : "var(--border-strong)"
                       }
-                      strokeWidth={isLiveActive ? "1.8" : "1.4"}
+                      strokeWidth={hasIncomingFlow ? "1.8" : "1.25"}
                     />
-                    {!streamPaused && (
+                    {hasIncomingFlow && (
                       <circle
-                        r={isLiveActive ? 3.2 : 2.8}
-                        fill={isLiveActive ? "#10B981" : "#6366F1"}
+                        r={3.2}
+                        fill={
+                          pulsingRoute?.isError && !isLiveActive
+                            ? "#F43F5E"
+                            : "#10B981"
+                        }
                       >
-                        <animateMotion
-                          dur={isLiveActive ? "0.85s" : "1.45s"}
-                          repeatCount="indefinite"
-                        >
+                        <animateMotion dur="0.85s" repeatCount="indefinite">
                           <mpath href="#ov-in-path" />
                         </animateMotion>
                       </circle>
@@ -1342,21 +1420,20 @@ curl ${environment.gatewayEndpoint}/messages \\
                       const nodeVisual = getProviderVisual(
                         node?.provider || "custom"
                       );
-                      const isActive = node?.status === "active";
-                      const isErr = node?.status === "error";
-                      const isPrimaryRecent = !isLiveActive && idx === 0 && !isErr;
-                      const isHighlighted = isActive || isPrimaryRecent;
-                      const strokeColor = isActive
-                        ? "#10B981"
+                      const isTargetActive = node?.status === "active";
+                      const isTargetPulseErr = node?.status === "pulse_error";
+                      const isErr = node?.status === "error" || isTargetPulseErr;
+                      const isBranchAnimating =
+                        !streamPaused && (isTargetActive || isTargetPulseErr);
+
+                      const strokeColor = isTargetActive
+                        ? nodeVisual.color
                         : isErr
                           ? "rgba(244,63,94,0.55)"
-                          : nodeVisual.color;
-                      const dotColor = isActive
-                        ? "#10B981"
-                        : isErr
-                          ? "#F43F5E"
-                          : nodeVisual.color;
-                      const shouldAnimateFlow = !streamPaused && !isErr;
+                          : nodeVisual.border;
+                      const dotColor = isTargetPulseErr
+                        ? "#F43F5E"
+                        : nodeVisual.color;
 
                       return (
                         <g key={pid}>
@@ -1366,24 +1443,16 @@ curl ${environment.gatewayEndpoint}/messages \\
                             fill="none"
                             stroke={strokeColor}
                             strokeOpacity={
-                              isActive ? 0.85 : isPrimaryRecent ? 0.68 : isErr ? 0.45 : 0.34
+                              isBranchAnimating ? 0.85 : isErr ? 0.42 : 0.32
                             }
-                            strokeWidth={isHighlighted ? "1.8" : "1.25"}
+                            strokeWidth={isBranchAnimating ? "1.85" : "1.25"}
                             strokeDasharray={isErr ? "4 3" : undefined}
                           />
-                          {shouldAnimateFlow && (
-                            <circle
-                              r={isHighlighted ? 3.4 : 2.5}
-                              fill={dotColor}
-                            >
+                          {isBranchAnimating && (
+                            <circle r={3.5} fill={dotColor}>
                               <animateMotion
-                                dur={
-                                  isLiveActive
-                                    ? `${0.95 + idx * 0.16}s`
-                                    : `${1.5 + idx * 0.3}s`
-                                }
+                                dur="0.95s"
                                 repeatCount="indefinite"
-                                begin={`${idx * 0.24}s`}
                               >
                                 <mpath href={`#${pid}`} />
                               </animateMotion>
@@ -1397,31 +1466,23 @@ curl ${environment.gatewayEndpoint}/messages \\
                   {/* Central AS ROUTER Node */}
                   <motion.div
                     animate={
-                      isLiveActive
-                        ? { scale: [1, 1.07, 1] }
-                        : !streamPaused
-                          ? { scale: [1, 1.025, 1] }
-                          : { scale: 1 }
+                      hasIncomingFlow ? { scale: [1, 1.08, 1] } : { scale: 1 }
                     }
                     transition={
-                      isLiveActive
+                      hasIncomingFlow
                         ? {
-                            duration: 1.2,
+                            duration: 1.15,
                             repeat: Infinity,
                             ease: "easeInOut",
                           }
-                        : !streamPaused
-                          ? {
-                              duration: 2.8,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                            }
-                          : { duration: 0.25 }
+                        : { duration: 0.25 }
                     }
                     className={`absolute top-1/2 -translate-y-1/2 left-[27%] -translate-x-1/2 w-10 h-10 rounded-xl bg-surface/95 border flex items-center justify-center transition-all ${
-                      isLiveActive
-                        ? "border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.35)]"
-                        : "border-indigo-500/45 shadow-[0_0_18px_rgba(99,102,241,0.28)]"
+                      hasIncomingFlow
+                        ? pulsingRoute?.isError && !isLiveActive
+                          ? "border-rose-400/60 shadow-[0_0_20px_rgba(244,63,94,0.32)]"
+                          : "border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.35)]"
+                        : "border-hairline-strong shadow-[0_0_10px_rgba(99,102,241,0.14)]"
                     }`}
                     title="AS ROUTER Engine"
                   >
@@ -1438,19 +1499,19 @@ curl ${environment.gatewayEndpoint}/messages \\
                   {topologyNodes.map((node, idx) => {
                     const badge = getProviderVisual(node.provider);
                     const isActive = node.status === "active";
-                    const isErr = node.status === "error";
-                    const isPrimaryRecent = !isLiveActive && idx === 0 && !isErr;
+                    const isPulseErr = node.status === "pulse_error";
+                    const isErr = node.status === "error" || isPulseErr;
                     const dotTone = isActive
                       ? "bg-emerald-400 animate-pulse"
-                      : isErr
-                        ? "bg-rose-500"
-                        : isPrimaryRecent && !streamPaused
-                          ? "bg-amber-400 animate-pulse"
+                      : isPulseErr
+                        ? "bg-rose-500 animate-pulse"
+                        : isErr
+                          ? "bg-rose-500"
                           : "bg-amber-400";
 
                     return (
                       <motion.div
-                        key={`${node.id}-${idx}`}
+                        key={`${node.provider}-${node.model}-${idx}`}
                         initial={{ opacity: 0.6, x: 6 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.2, delay: idx * 0.04 }}
@@ -1459,19 +1520,13 @@ curl ${environment.gatewayEndpoint}/messages \\
                         <div
                           className={`flex items-center gap-2 px-3 py-1.5 bg-elevated border rounded-full min-w-0 flex-1 transition-all ${
                             isActive
-                              ? "border-emerald-400/60 shadow-[0_0_14px_rgba(16,185,129,0.16)]"
-                              : isErr
-                                ? "border-rose-500/45"
-                                : "border-hairline-strong"
+                              ? "border-emerald-400/65 shadow-[0_0_14px_rgba(16,185,129,0.18)]"
+                              : isPulseErr
+                                ? "border-rose-400/65 shadow-[0_0_14px_rgba(244,63,94,0.18)]"
+                                : isErr
+                                  ? "border-rose-500/40"
+                                  : "border-hairline-strong"
                           }`}
-                          style={
-                            isPrimaryRecent
-                              ? {
-                                  borderColor: `color-mix(in srgb, ${badge.color} 55%, transparent)`,
-                                  boxShadow: `0 0 14px color-mix(in srgb, ${badge.color} 18%, transparent)`,
-                                }
-                              : undefined
-                          }
                         >
                           <span
                             className={`w-2 h-2 rounded-full shrink-0 ${dotTone}`}
@@ -1494,10 +1549,8 @@ curl ${environment.gatewayEndpoint}/messages \\
                             isActive
                               ? "text-emerald-400 font-semibold"
                               : isErr
-                                ? "text-rose-400"
-                                : isPrimaryRecent
-                                  ? "text-indigo-400 font-medium"
-                                  : "text-ink-muted"
+                                ? "text-rose-400 font-medium"
+                                : "text-ink-muted"
                           }`}
                         >
                           {node.meta}
