@@ -1,7 +1,6 @@
 import "dotenv/config";
 import http from "node:http";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express, {
   type NextFunction,
@@ -18,9 +17,6 @@ import { keysRouter } from "./src/server/routes/keys.ts";
 import { playgroundRouter } from "./src/server/routes/playground.ts";
 import { providersRouter } from "./src/server/routes/providers.ts";
 import { searchRouter } from "./src/server/routes/search.ts";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -208,7 +204,7 @@ export class ErrorOverlay {}
     });
     app.use(vite.middlewares);
   } else {
-    const distDir = path.resolve(__dirname, "dist");
+    const distDir = path.resolve(process.cwd(), "dist");
     app.use(express.static(distDir));
     app.get("*", (req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith("/api/") || req.path.startsWith("/v1/")) {
