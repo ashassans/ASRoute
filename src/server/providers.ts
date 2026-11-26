@@ -9,6 +9,7 @@ import {
 import {
   estimateModelCostUsd,
   getProviderSpec,
+  hasFreeModelSuffix,
   isModelKnownFree,
   isSearchProvider,
 } from "../shared/catalog.ts";
@@ -1846,36 +1847,8 @@ export async function testProviderConnection(params: {
   }
 }
 
-function isUpstreamModelFree(
-  id: string,
-  entry?: Record<string, unknown> | null
-): boolean {
-  if (entry && typeof entry === "object") {
-    if (entry.free === true || entry.is_free === true) return true;
-    if (typeof entry.tier === "string" && entry.tier.toLowerCase() === "free") {
-      return true;
-    }
-    if (entry.pricing && typeof entry.pricing === "object") {
-      const p = entry.pricing as Record<string, unknown>;
-      if (
-        p.prompt !== undefined &&
-        p.prompt !== null &&
-        String(p.prompt).trim() !== ""
-      ) {
-        const promptCost = Number(p.prompt);
-        const compCost =
-          p.completion !== undefined &&
-          p.completion !== null &&
-          String(p.completion).trim() !== ""
-            ? Number(p.completion)
-            : 0;
-        if (!Number.isNaN(promptCost) && !Number.isNaN(compCost)) {
-          return promptCost === 0 && compCost === 0;
-        }
-      }
-    }
-  }
-  return /(^|[:/._-])free([:/._-]|$)/i.test(id);
+function isUpstreamModelFree(id: string): boolean {
+  return hasFreeModelSuffix(id);
 }
 
 export async function fetchProviderModels(params: {
@@ -1930,7 +1903,7 @@ export async function fetchProviderModels(params: {
     );
     const list = (filtered.length > 0 ? filtered : rawModels)
       .map((m) => (m.name || "").replace(/^models\//, "").trim())
-      .filter((id) => Boolean(id) && (!freeOnly || isUpstreamModelFree(id) || /flash|gemma/i.test(id)));
+      .filter((id) => Boolean(id) && (!freeOnly || isUpstreamModelFree(id)));
     return Array.from(new Set(list)).sort();
   }
 
@@ -1961,7 +1934,7 @@ export async function fetchProviderModels(params: {
     const list = (Array.isArray(json.data) ? json.data : [])
       .filter((m) => {
         const id = (m.id || "").trim();
-        return Boolean(id) && (!freeOnly || isUpstreamModelFree(id, m));
+        return Boolean(id) && (!freeOnly || isUpstreamModelFree(id));
       })
       .map((m) => (m.id || "").trim());
     return Array.from(new Set(list)).sort();
@@ -2007,7 +1980,7 @@ export async function fetchProviderModels(params: {
       const id = typeof m === "string" ? m.trim() : String(m?.id || m?.name || "").trim();
       if (!id) return false;
       if (!freeOnly) return true;
-      return isUpstreamModelFree(id, typeof m === "string" ? null : m);
+      return isUpstreamModelFree(id);
     })
     .map((m) =>
       typeof m === "string" ? m.trim() : String(m?.id || m?.name || "").trim()

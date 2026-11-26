@@ -1811,6 +1811,12 @@ const KNOWN_FREE_GEMINI_MODELS = new Set([
   "gemini-4-hydrogen",
 ]);
 
+export function hasFreeModelSuffix(modelId: string): boolean {
+  const trimmed = (modelId || "").trim();
+  if (!trimmed) return false;
+  return /(?:^|[:/._\-\s(])free\)?$/i.test(trimmed);
+}
+
 export function isModelKnownFree(providerId: string, modelId: string): boolean {
   const id = (modelId || "").trim().toLowerCase();
   if (!id) return false;

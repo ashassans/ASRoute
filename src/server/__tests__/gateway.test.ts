@@ -11,6 +11,7 @@ import {
 import {
   getConnectionPrefix,
   getProviderSpec,
+  hasFreeModelSuffix,
   isModelKnownFree,
   isSearchProvider,
   LLM_PROVIDER_PRESETS,
@@ -23,7 +24,11 @@ import {
   generateGatewayApiKey,
   hashGatewayApiKey,
 } from "../crypto.ts";
-import { invokeUpstreamCompletion, UpstreamHttpError } from "../providers.ts";
+import {
+  fetchProviderModels,
+  invokeUpstreamCompletion,
+  UpstreamHttpError,
+} from "../providers.ts";
 import {
   classifyRequestIntent,
   clearGatewayResponseCache,
@@ -1418,7 +1423,45 @@ test("testConnectionModelsBatch and removeConnectionModels check all models and 
   }
 });
 
+test("hasFreeModelSuffix and fetchProviderModels(freeOnly) only import models ending with 'free'", async () => {
+  assert.equal(hasFreeModelSuffix("deepseek/deepseek-r1:free"), true);
+  assert.equal(hasFreeModelSuffix("meta-llama/llama-3.3-70b-instruct:FREE"), true);
+  assert.equal(hasFreeModelSuffix("openrouter/free"), true);
+  assert.equal(hasFreeModelSuffix("qwen3-coder-free"), true);
+  assert.equal(hasFreeModelSuffix("model_free"), true);
+  assert.equal(hasFreeModelSuffix("openrouter/auto"), false);
+  assert.equal(hasFreeModelSuffix("free-model-paid"), false);
+  assert.equal(hasFreeModelSuffix("gemini-2.5-flash"), false);
+  assert.equal(hasFreeModelSuffix("carefree"), false);
 
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    return new Response(
+      JSON.stringify({
+        data: [
+          { id: "openrouter/auto", pricing: { prompt: "0", completion: "0" } },
+          { id: "gpt-4o-mini", free: true },
+          { id: "free-tier-model-v1" },
+          { id: "deepseek/deepseek-r1:free", pricing: { prompt: "0", completion: "0" } },
+          { id: "qwen/qwen3-coder-free" },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }) as typeof fetch;
 
-
-
+  try {
+    const models = await fetchProviderModels({
+      provider: "openrouter",
+      apiKey: "sk-or-test",
+      baseUrl: "https://openrouter.ai/api/v1",
+      freeOnly: true,
+    });
+    assert.deepEqual(models, [
+      "deepseek/deepseek-r1:free",
+      "qwen/qwen3-coder-free",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

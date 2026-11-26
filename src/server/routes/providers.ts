@@ -3,7 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { Router, type Response } from "express";
 import { db } from "../../db/index.ts";
 import { providerConnections } from "../../db/schema.ts";
-import { getProviderSpec, isSearchProvider } from "../../shared/catalog.ts";
+import {
+  getProviderSpec,
+  hasFreeModelSuffix,
+  isSearchProvider,
+} from "../../shared/catalog.ts";
 import type { ModelHealthEntry } from "../../types/gateway.ts";
 import { decryptSecret, encryptSecret, maskSecret } from "../crypto.ts";
 import { type AuthedRequest, requireSession } from "../middleware/auth.ts";
@@ -44,6 +48,7 @@ providersRouter.post(
         typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : "";
       let wantsServerKey = Boolean(useServerKey);
 
+      let existingDefaultModel: string | null = null;
       if (typeof connectionId === "string" && connectionId.trim()) {
         const [existingConn] = await db
           .select()
@@ -59,6 +64,7 @@ providersRouter.post(
             .status(404)
             .json({ error: "Provider connection not found." });
         }
+        existingDefaultModel = existingConn.defaultModel;
         if (!provider) resolvedProvider = existingConn.provider;
         if (baseUrl === undefined) resolvedBaseUrl = existingConn.baseUrl;
         if (!resolvedApiKey) {
@@ -98,11 +104,22 @@ providersRouter.post(
       });
 
       let updatedConnPayload: ReturnType<typeof sanitizeConnection> | undefined;
-      if (typeof connectionId === "string" && connectionId.trim()) {
+      if (
+        typeof connectionId === "string" &&
+        connectionId.trim() &&
+        !(Boolean(freeOnly) && models.length === 0)
+      ) {
+        const nextDefault =
+          Boolean(freeOnly) &&
+          models.length > 0 &&
+          (!existingDefaultModel || !hasFreeModelSuffix(existingDefaultModel))
+            ? models[0]
+            : existingDefaultModel;
         const [updatedConn] = await db
           .update(providerConnections)
           .set({
             availableModels: JSON.stringify(models),
+            ...(Boolean(freeOnly) ? { defaultModel: nextDefault } : {}),
           })
           .where(
             and(

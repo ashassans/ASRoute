@@ -660,7 +660,7 @@ export function PlaygroundView({
           });
           if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data.models)) {
+            if (Array.isArray(data.models) && (!onlyFree || data.models.length > 0)) {
               syncedCount += 1;
               totalModels += data.models.length;
             }
@@ -678,7 +678,12 @@ export function PlaygroundView({
           "success"
         );
       } else {
-        onNotify("Unable to fetch models from active providers.", "error");
+        onNotify(
+          onlyFree
+            ? "No models ending with 'free' found across active providers."
+            : "Unable to fetch models from active providers.",
+          "error"
+        );
       }
     } finally {
       setSyncingModels(false);

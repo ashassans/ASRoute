@@ -1,16 +1,19 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Activity,
+  AlertCircle,
   CheckCircle2,
   ChevronDown,
   Globe,
   KeyRound,
+  Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
   Search,
+  Square,
   Trash2,
   X,
   Zap,
@@ -25,6 +28,7 @@ import {
   SEARCH_PROVIDER_PRESETS,
   getConnectionPrefix,
   getProviderSpec,
+  hasFreeModelSuffix,
   isSearchProvider,
   matchPresetForConnection,
 } from "../shared/catalog.ts";
@@ -140,11 +144,49 @@ export function ProvidersView({
       }
     >
   >({});
+  const [modalCheckResults, setModalCheckResults] = useState<
+    Record<
+      string,
+      {
+        status: "queued" | "checking" | "ok" | "error";
+        latencyMs?: number;
+        error?: string;
+      }
+    >
+  >({});
+  const [checkingModalModels, setCheckingModalModels] = useState(false);
+  const [confirmModalCheckOpen, setConfirmModalCheckOpen] = useState(false);
+  const [modalDeletingModels, setModalDeletingModels] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [modalBulkDeleting, setModalBulkDeleting] = useState(false);
+  const modalCheckAbortRef = useRef<AbortController | null>(null);
+
+  const resetModalModelCheck = () => {
+    modalCheckAbortRef.current?.abort();
+    modalCheckAbortRef.current = null;
+    setCheckingModalModels(false);
+    setConfirmModalCheckOpen(false);
+    setModalCheckResults({});
+    setModalDeletingModels(new Set());
+    setModalBulkDeleting(false);
+  };
+
+  const closeProviderModal = () => {
+    resetModalModelCheck();
+    setShowAdd(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      modalCheckAbortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (showAdd) setShowAdd(false);
+        if (showAdd) closeProviderModal();
         if (openMenuId) {
           setOpenMenuId(null);
           setConfirmDeleteId(null);
@@ -160,6 +202,7 @@ export function ProvidersView({
   const searchConnections = connections.filter((c) => isSearchProvider(c.provider));
 
   const openModal = (initialProvider = "openai") => {
+    resetModalModelCheck();
     setEditingId(null);
     setQuickPreset(null);
     setShowQuickCustomize(false);
@@ -184,6 +227,7 @@ export function ProvidersView({
   };
 
   const openQuickConnect = (preset: ReadyMadeProviderPreset) => {
+    resetModalModelCheck();
     const existingCount = getMatchingConnections(preset, connections).length;
     setEditingId(null);
     setQuickPreset(preset);
@@ -210,7 +254,8 @@ export function ProvidersView({
     setShowAdd(true);
   };
 
-  const openEditModal = (conn: ProviderConnection) => {
+  const openEditModal = (conn: ProviderConnection, startConfirmCheck = false) => {
+    resetModalModelCheck();
     setEditingId(conn.id);
     setQuickPreset(null);
     setShowQuickCustomize(false);
@@ -243,10 +288,12 @@ export function ProvidersView({
           conn.monthlyUsdQuota
       )
     );
+    setConfirmModalCheckOpen(startConfirmCheck);
     setShowAdd(true);
   };
 
   const handleProviderChange = (next: string) => {
+    resetModalModelCheck();
     setProvider(next);
     const spec = getProviderSpec(next);
     setBaseUrl(spec.defaultBaseUrl);
@@ -255,6 +302,277 @@ export function ProvidersView({
     setFetchError(null);
     if (next !== "gemini") {
       setUseServerKey(false);
+    }
+  };
+
+  const modalModelsToCheck = useMemo(() => {
+    if (!editingId || isSearchProvider(provider)) return [];
+    const baseList =
+      fetchedModels.length > 0
+        ? [
+            ...(defaultModel.trim() ? [defaultModel.trim()] : []),
+            ...fetchedModels,
+          ]
+        : [
+            ...(defaultModel.trim() ? [defaultModel.trim()] : []),
+            ...(provider === "custom"
+              ? []
+              : getProviderSpec(provider).models.map((m) => m.id)),
+          ];
+    const unique = Array.from(new Set(baseList.filter(Boolean)));
+    return freeOnly ? unique.filter(hasFreeModelSuffix) : unique;
+  }, [editingId, provider, fetchedModels, defaultModel, freeOnly]);
+
+  const modalResultEntries = useMemo(() => {
+    const entries = Object.entries(modalCheckResults);
+    const rank = (status: "queued" | "checking" | "ok" | "error") =>
+      status === "error"
+        ? 0
+        : status === "checking"
+          ? 1
+          : status === "queued"
+            ? 2
+            : 3;
+    return entries.sort((a, b) => rank(a[1].status) - rank(b[1].status));
+  }, [modalCheckResults]);
+
+  const modalFailedModels = useMemo(
+    () =>
+      modalResultEntries
+        .filter(([, st]) => st.status === "error")
+        .map(([modelId]) => modelId),
+    [modalResultEntries]
+  );
+
+  const modalWorkingCount = useMemo(
+    () =>
+      modalResultEntries.filter(([, st]) => st.status === "ok").length,
+    [modalResultEntries]
+  );
+
+  const modalCompletedCount = useMemo(
+    () =>
+      modalResultEntries.filter(
+        ([, st]) => st.status === "ok" || st.status === "error"
+      ).length,
+    [modalResultEntries]
+  );
+
+  const runModalModelsCheck = async () => {
+    if (!editingId || modalModelsToCheck.length === 0) return;
+    const targetConnId = editingId;
+    const targetModels = [...modalModelsToCheck];
+    modalCheckAbortRef.current?.abort();
+    const controller = new AbortController();
+    modalCheckAbortRef.current = controller;
+
+    setConfirmModalCheckOpen(false);
+    setCheckingModalModels(true);
+    const initial: Record<
+      string,
+      {
+        status: "queued" | "checking" | "ok" | "error";
+        latencyMs?: number;
+        error?: string;
+      }
+    > = {};
+    for (const modelId of targetModels) {
+      initial[modelId] = { status: "queued" };
+    }
+    setModalCheckResults(initial);
+
+    let okCount = 0;
+    let errCount = 0;
+    let aborted = false;
+
+    try {
+      const BATCH_SIZE = 3;
+      for (let i = 0; i < targetModels.length; i += BATCH_SIZE) {
+        if (controller.signal.aborted) {
+          aborted = true;
+          break;
+        }
+        const batch = targetModels.slice(i, i + BATCH_SIZE);
+        setModalCheckResults((prev) => {
+          const next = { ...prev };
+          for (const modelId of batch) {
+            next[modelId] = { status: "checking" };
+          }
+          return next;
+        });
+
+        try {
+          const res = await fetch(`/api/providers/${targetConnId}/test-models`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ models: batch }),
+            signal: controller.signal,
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            const errMsg = data.error || `HTTP ${res.status}`;
+            errCount += batch.length;
+            setModalCheckResults((prev) => {
+              const next = { ...prev };
+              for (const modelId of batch) {
+                next[modelId] = { status: "error", error: errMsg };
+              }
+              return next;
+            });
+            continue;
+          }
+
+          const results: Array<{
+            model: string;
+            ok: boolean;
+            latencyMs: number;
+            error?: string;
+          }> = Array.isArray(data.results) ? data.results : [];
+
+          setModalCheckResults((prev) => {
+            const next = { ...prev };
+            for (const r of results) {
+              next[r.model] = {
+                status: r.ok ? "ok" : "error",
+                latencyMs: r.latencyMs,
+                error: r.error,
+              };
+            }
+            return next;
+          });
+          for (const r of results) {
+            if (r.ok) okCount += 1;
+            else errCount += 1;
+          }
+
+          if (data.connection) {
+            const updatedConn = data.connection as ProviderConnection;
+            onUpdateWorkspace((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    connections: prev.connections.map((c) =>
+                      c.id === updatedConn.id ? updatedConn : c
+                    ),
+                  }
+                : prev
+            );
+          }
+        } catch (err) {
+          if (controller.signal.aborted) {
+            aborted = true;
+            break;
+          }
+          const errMsg =
+            err instanceof Error ? err.message : "Network error checking batch";
+          errCount += batch.length;
+          setModalCheckResults((prev) => {
+            const next = { ...prev };
+            for (const modelId of batch) {
+              next[modelId] = { status: "error", error: errMsg };
+            }
+            return next;
+          });
+        }
+      }
+    } finally {
+      if (modalCheckAbortRef.current === controller) {
+        modalCheckAbortRef.current = null;
+        setCheckingModalModels(false);
+      }
+    }
+
+    if (aborted) {
+      setModalCheckResults((prev) => {
+        const next: typeof prev = {};
+        for (const [m, st] of Object.entries(prev)) {
+          if (st.status === "ok" || st.status === "error") next[m] = st;
+        }
+        return next;
+      });
+      onNotify("Provider model check stopped.", "error");
+    } else {
+      onNotify(
+        `Checked ${targetModels.length} model${targetModels.length === 1 ? "" : "s"}: ${okCount} working, ${errCount} failed.`,
+        errCount > 0 && okCount === 0 ? "error" : "success"
+      );
+    }
+  };
+
+  const handleStopModalModelsCheck = () => {
+    modalCheckAbortRef.current?.abort();
+  };
+
+  const handleRemoveModalModels = async (modelsToRemove: string[]) => {
+    if (!editingId || modelsToRemove.length === 0) return;
+    const isBulk = modelsToRemove.length > 1;
+    if (isBulk) {
+      setModalBulkDeleting(true);
+    } else {
+      setModalDeletingModels((prev) => {
+        const next = new Set(prev);
+        next.add(modelsToRemove[0]);
+        return next;
+      });
+    }
+    try {
+      const res = await fetch(`/api/providers/${editingId}/remove-models`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ models: modelsToRemove }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        onNotify(data.error || "Failed to delete model(s)", "error");
+        return;
+      }
+      const removedSet = new Set(modelsToRemove);
+      const updatedConn = data.connection as ProviderConnection | undefined;
+      if (updatedConn) {
+        setFetchedModels(updatedConn.availableModels || []);
+        setDefaultModel(updatedConn.defaultModel || "");
+        onUpdateWorkspace((prev) =>
+          prev
+            ? {
+                ...prev,
+                connections: prev.connections.map((c) =>
+                  c.id === updatedConn.id ? updatedConn : c
+                ),
+              }
+            : prev
+        );
+      } else {
+        setFetchedModels((prev) => prev.filter((m) => !removedSet.has(m)));
+        if (removedSet.has(defaultModel.trim())) {
+          setDefaultModel("");
+        }
+        await onRefresh();
+      }
+      setModalCheckResults((prev) => {
+        const next = { ...prev };
+        for (const m of modelsToRemove) {
+          delete next[m];
+        }
+        return next;
+      });
+      onNotify(
+        data.deactivated
+          ? `Removed ${data.removedCount} model${data.removedCount === 1 ? "" : "s"}. Connection paused (0 models left).`
+          : `Deleted ${data.removedCount} failed model${data.removedCount === 1 ? "" : "s"}.`,
+        "success"
+      );
+    } catch {
+      onNotify("Network error deleting failed model(s)", "error");
+    } finally {
+      if (isBulk) {
+        setModalBulkDeleting(false);
+      } else {
+        setModalDeletingModels((prev) => {
+          const next = new Set(prev);
+          next.delete(modelsToRemove[0]);
+          return next;
+        });
+      }
     }
   };
 
@@ -289,6 +607,8 @@ export function ProvidersView({
       }
       const models: string[] = Array.isArray(data.models) ? data.models : [];
       setFetchedModels(models);
+      setModalCheckResults({});
+      setConfirmModalCheckOpen(false);
       if (data.connection) {
         const updatedConn = data.connection as ProviderConnection;
         onUpdateWorkspace((prev) =>
@@ -303,7 +623,11 @@ export function ProvidersView({
         );
       }
       if (models.length > 0) {
-        if (!defaultModel.trim() || (onlyFree && !models.includes(defaultModel))) {
+        if (
+          !defaultModel.trim() ||
+          (onlyFree && !hasFreeModelSuffix(defaultModel)) ||
+          (onlyFree && !models.includes(defaultModel))
+        ) {
           setDefaultModel(models[0]);
         }
         if (editingId && !data.connection) {
@@ -314,12 +638,43 @@ export function ProvidersView({
           "success"
         );
       } else {
-        setFetchError(onlyFree ? "No free models returned" : "No models returned");
+        if (onlyFree && defaultModel.trim() && !hasFreeModelSuffix(defaultModel)) {
+          setDefaultModel("");
+        }
+        setFetchError(
+          onlyFree
+            ? "No models ending with 'free' returned"
+            : "No models returned"
+        );
       }
     } catch {
       setFetchError("Network error fetching models");
     } finally {
       setFetchingModels(false);
+    }
+  };
+
+  const handleToggleFreeOnly = (nextFree: boolean) => {
+    setFreeOnly(nextFree);
+    setFetchError(null);
+    if (nextFree) {
+      setFetchedModels((prev) => {
+        const filtered = prev.filter(hasFreeModelSuffix);
+        if (
+          defaultModel.trim() &&
+          !hasFreeModelSuffix(defaultModel.trim())
+        ) {
+          setDefaultModel(filtered[0] || "");
+        }
+        return filtered;
+      });
+    }
+    if (
+      apiKey.trim() ||
+      editingId ||
+      (useServerKey && provider === "gemini")
+    ) {
+      void handleFetchModels(nextFree);
     }
   };
 
@@ -336,11 +691,21 @@ export function ProvidersView({
         quickPreset?.label ||
         getProviderSpec(provider).label;
 
+      const modelsToSave = freeOnly
+        ? fetchedModels.filter(hasFreeModelSuffix)
+        : fetchedModels;
+      const savedDefaultModel =
+        freeOnly &&
+        defaultModel.trim() &&
+        !hasFreeModelSuffix(defaultModel.trim())
+          ? modelsToSave[0] || ""
+          : defaultModel.trim();
+
       const payload: Record<string, unknown> = {
         name: resolvedName,
         baseUrl: baseUrl.trim() || null,
-        defaultModel: defaultModel.trim() || null,
-        availableModels: fetchedModels,
+        defaultModel: savedDefaultModel || null,
+        availableModels: modelsToSave,
         rpmLimit: rpmLimit ? Number(rpmLimit) : null,
         rpdLimit: rpdLimit ? Number(rpdLimit) : null,
         dailyTokenQuota: dailyTokenQuota ? Number(dailyTokenQuota) : null,
@@ -395,7 +760,7 @@ export function ProvidersView({
       } else {
         await onRefresh();
       }
-      setShowAdd(false);
+      closeProviderModal();
       setEditingId(null);
       onNotify(
         isEdit ? "Provider connection updated." : "Provider connection saved.",
@@ -505,6 +870,13 @@ export function ProvidersView({
         return;
       }
       const models: string[] = Array.isArray(data.models) ? data.models : [];
+      if (onlyFree && models.length === 0) {
+        onNotify(
+          `No models ending with 'free' found for ${conn.name}`,
+          "error"
+        );
+        return;
+      }
       if (data.connection) {
         const updatedConn = data.connection as ProviderConnection;
         onUpdateWorkspace((prev) =>
@@ -1541,6 +1913,17 @@ export function ProvidersView({
                                       : "Ping free models"}
                                   </span>
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    openEditModal(conn, true);
+                                  }}
+                                  className="w-full px-3 py-1.5 text-xs text-ink-2 hover:bg-subtle flex items-center gap-2"
+                                >
+                                  <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                                  <span>Check all models</span>
+                                </button>
                                 {conn.circuitStatus !== "healthy" && (
                                   <button
                                     type="button"
@@ -2029,7 +2412,7 @@ export function ProvidersView({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            onClick={() => setShowAdd(false)}
+            onClick={closeProviderModal}
             className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4"
           >
             <motion.div
@@ -2066,7 +2449,7 @@ export function ProvidersView({
               <button
                 type="button"
                 aria-label="Close"
-                onClick={() => setShowAdd(false)}
+                onClick={closeProviderModal}
                 className="text-ink-muted hover:text-ink"
               >
                 <X className="w-4 h-4" />
@@ -2260,12 +2643,15 @@ export function ProvidersView({
                           <span>{fetchingModels ? "Fetching..." : "Fetch"}</span>
                         </button>
                       </div>
-                      <div className="mt-2.5 px-1">
+                      <div className="mt-2.5 px-1 space-y-1">
                         <ToggleSwitch
                           checked={freeOnly}
-                          onChange={setFreeOnly}
+                          onChange={handleToggleFreeOnly}
                           label="Import free models only"
                         />
+                        <p className="text-[11px] text-ink-dim">
+                          Imports only model IDs ending in <span className="font-mono">free</span> (e.g. <span className="font-mono">:free</span>, <span className="font-mono">-free</span>).
+                        </p>
                       </div>
                       <datalist id="provider-model-suggestions">
                         {Array.from(
@@ -2302,6 +2688,229 @@ export function ProvidersView({
                       {fetchError && (
                         <div className="mt-1.5 text-xs text-red-400">
                           {fetchError}
+                        </div>
+                      )}
+
+                      {Boolean(editingId) && modalModelsToCheck.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-hairline space-y-2.5">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="text-[11px] text-ink-muted tabular-nums">
+                              {modalResultEntries.length > 0 ? (
+                                checkingModalModels ? (
+                                  <span>
+                                    Checking {modalCompletedCount}/
+                                    {modalResultEntries.length} models...
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-2">
+                                    <span className="text-emerald-400 font-medium">
+                                      {modalWorkingCount} working
+                                    </span>
+                                    <span>·</span>
+                                    <span
+                                      className={
+                                        modalFailedModels.length > 0
+                                          ? "text-red-400 font-medium"
+                                          : "text-ink-muted"
+                                      }
+                                    >
+                                      {modalFailedModels.length} failed
+                                    </span>
+                                  </span>
+                                )
+                              ) : (
+                                <span>
+                                  Test all {modalModelsToCheck.length} model
+                                  {modalModelsToCheck.length === 1 ? "" : "s"}{" "}
+                                  for this provider
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {!checkingModalModels &&
+                                modalResultEntries.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setModalCheckResults({})}
+                                    className="px-2 py-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
+                                  >
+                                    Clear
+                                  </button>
+                                )}
+                              {checkingModalModels ? (
+                                <button
+                                  type="button"
+                                  onClick={handleStopModalModelsCheck}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-elevated hover:bg-subtle text-red-400 border border-hairline-strong rounded-lg transition-colors whitespace-nowrap"
+                                >
+                                  <Square className="w-3 h-3 fill-current" />
+                                  <span className="tabular-nums">
+                                    Stop ({modalCompletedCount}/
+                                    {modalResultEntries.length})
+                                  </span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={
+                                    fetchingModels || modalBulkDeleting
+                                  }
+                                  onClick={() =>
+                                    setConfirmModalCheckOpen((v) => !v)
+                                  }
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-elevated hover:bg-subtle disabled:opacity-60 text-ink border border-hairline-strong rounded-lg transition-colors whitespace-nowrap"
+                                >
+                                  <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                                  <span>
+                                    Check Models ({modalModelsToCheck.length})
+                                  </span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {confirmModalCheckOpen && !checkingModalModels && (
+                            <div className="bg-canvas border border-hairline rounded-lg p-3 space-y-2">
+                              <p className="text-xs text-ink-2">
+                                Send 1 test request to each of{" "}
+                                <span className="font-semibold text-ink tabular-nums">
+                                  {modalModelsToCheck.length}
+                                </span>{" "}
+                                model
+                                {modalModelsToCheck.length === 1 ? "" : "s"}?
+                                Failed models can be deleted right here.
+                              </p>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmModalCheckOpen(false)
+                                  }
+                                  className="px-2.5 py-1 text-xs font-medium text-ink-2 hover:text-ink bg-surface border border-hairline rounded-md"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={runModalModelsCheck}
+                                  className="px-2.5 py-1 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white rounded-md transition-colors"
+                                >
+                                  Confirm & Check
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {modalResultEntries.length > 0 && (
+                            <div className="bg-canvas border border-hairline rounded-lg overflow-hidden">
+                              {modalFailedModels.length > 0 &&
+                                !checkingModalModels && (
+                                  <div className="px-3 py-2 border-b border-hairline bg-elevated/60 flex items-center justify-between gap-2 flex-wrap">
+                                    <span className="text-[11px] font-medium text-red-400 tabular-nums">
+                                      {modalFailedModels.length} failed model
+                                      {modalFailedModels.length === 1
+                                        ? ""
+                                        : "s"}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      disabled={modalBulkDeleting}
+                                      onClick={() =>
+                                        handleRemoveModalModels(
+                                          modalFailedModels
+                                        )
+                                      }
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 rounded-md disabled:opacity-50 transition-colors whitespace-nowrap"
+                                    >
+                                      {modalBulkDeleting ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="w-3 h-3" />
+                                      )}
+                                      <span className="tabular-nums">
+                                        {modalBulkDeleting
+                                          ? "Deleting..."
+                                          : `Delete All Failed (${modalFailedModels.length})`}
+                                      </span>
+                                    </button>
+                                  </div>
+                                )}
+
+                              <div className="max-h-52 overflow-y-auto divide-y divide-hairline">
+                                {modalResultEntries.map(([modelId, st]) => {
+                                  const isDeleting =
+                                    modalDeletingModels.has(modelId);
+                                  return (
+                                    <div
+                                      key={modelId}
+                                      className="px-3 py-2 flex items-start justify-between gap-2.5"
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className="font-mono text-[11px] text-ink truncate">
+                                            {modelId}
+                                          </span>
+                                          {st.status === "ok" && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 shrink-0 tabular-nums">
+                                              <CheckCircle2 className="w-3 h-3" />
+                                              Working
+                                              {typeof st.latencyMs === "number"
+                                                ? ` · ${st.latencyMs}ms`
+                                                : ""}
+                                            </span>
+                                          )}
+                                          {st.status === "error" && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-400 shrink-0">
+                                              <AlertCircle className="w-3 h-3" />
+                                              Error
+                                            </span>
+                                          )}
+                                          {st.status === "checking" && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] text-indigo-400 shrink-0">
+                                              <Loader2 className="w-3 h-3 animate-spin" />
+                                              Checking
+                                            </span>
+                                          )}
+                                          {st.status === "queued" && (
+                                            <span className="text-[11px] text-ink-dim shrink-0">
+                                              Queued
+                                            </span>
+                                          )}
+                                        </div>
+                                        {st.status === "error" && st.error && (
+                                          <p className="mt-0.5 text-[11px] text-red-400/90 break-words line-clamp-2">
+                                            {st.error}
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {st.status === "error" &&
+                                        !checkingModalModels && (
+                                          <button
+                                            type="button"
+                                            disabled={
+                                              isDeleting || modalBulkDeleting
+                                            }
+                                            onClick={() =>
+                                              handleRemoveModalModels([modelId])
+                                            }
+                                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-red-400 hover:bg-red-500/10 border border-hairline rounded-md disabled:opacity-50 transition-colors shrink-0"
+                                          >
+                                            {isDeleting ? (
+                                              <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : (
+                                              <Trash2 className="w-3 h-3" />
+                                            )}
+                                            <span>Delete</span>
+                                          </button>
+                                        )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2449,7 +3058,7 @@ export function ProvidersView({
               <div className="pt-3 border-t border-hairline flex items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowAdd(false)}
+                  onClick={closeProviderModal}
                   className="px-4 py-2 text-xs font-medium text-ink-2 hover:text-ink bg-canvas border border-hairline rounded-lg whitespace-nowrap"
                 >
                   Cancel
