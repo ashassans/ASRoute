@@ -1,10 +1,3 @@
-# ASRoute
-
-**ASRoute** is a unified, multi-provider AI gateway with a dashboard for routing, failover, observability, quotas, and API-key management.
-
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-asroute.vercel.app-111827?style=for-the-badge&logo=vercel)](https://asroute.vercel.app)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/License-Unlicensed-lightgrey?style=for-the-badge)](#license)
 
 ## Live applications
 
