@@ -3,12 +3,16 @@ import { and, eq } from "drizzle-orm";
 import { Router, type Response } from "express";
 import { db } from "../../db/index.ts";
 import { providerConnections } from "../../db/schema.ts";
+import { getProviderSpec, isSearchProvider } from "../../shared/catalog.ts";
+import type { ModelHealthEntry } from "../../types/gateway.ts";
 import { decryptSecret, encryptSecret, maskSecret } from "../crypto.ts";
 import { type AuthedRequest, requireSession } from "../middleware/auth.ts";
 import {
   fetchProviderModels,
+  invokeUpstreamCompletion,
   probeProviderFreeModels,
   testProviderConnection,
+  UpstreamHttpError,
 } from "../providers.ts";
 import { publishCircuitUpdate, publishWorkspaceMutation } from "../sse.ts";
 import { validateOutboundUrl } from "../urlSafety.ts";
@@ -668,3 +672,339 @@ providersRouter.delete(
     }
   }
 );
+
+function formatModelTestError(err: unknown): string {
+  const statusPrefix =
+    err instanceof UpstreamHttpError && err.statusCode
+      ? `HTTP ${err.statusCode}: `
+      : "";
+  const raw = err instanceof Error ? err.message : String(err);
+  let detail = raw.trim();
+  if (detail.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(detail) as {
+        error?: { message?: string } | string;
+        message?: string;
+      };
+      if (typeof parsed.error === "string" && parsed.error) {
+        detail = parsed.error;
+      } else if (
+        parsed.error &&
+        typeof parsed.error === "object" &&
+        typeof parsed.error.message === "string" &&
+        parsed.error.message
+      ) {
+        detail = parsed.error.message;
+      } else if (typeof parsed.message === "string" && parsed.message) {
+        detail = parsed.message;
+      }
+    } catch {
+      // keep raw message
+    }
+  }
+  const combined =
+    statusPrefix && !detail.startsWith("HTTP ")
+      ? `${statusPrefix}${detail}`
+      : detail;
+  return combined.slice(0, 140) || "Model check failed";
+}
+
+export class ProviderRouteError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
+export async function testConnectionModelsBatch(
+  userId: string,
+  connectionId: string,
+  rawModels: string[]
+) {
+  const targetModels = Array.from(
+    new Set(
+      rawModels
+        .filter((m): m is string => typeof m === "string")
+        .map((m) => m.trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 5);
+
+  if (targetModels.length === 0) {
+    throw new ProviderRouteError("At least one model ID is required.", 400);
+  }
+
+  const [conn] = await db
+    .select()
+    .from(providerConnections)
+    .where(
+      and(
+        eq(providerConnections.id, connectionId),
+        eq(providerConnections.userId, userId)
+      )
+    );
+
+  if (!conn) {
+    throw new ProviderRouteError("Provider connection not found", 404);
+  }
+
+  if (isSearchProvider(conn.provider)) {
+    throw new ProviderRouteError(
+      "Search providers do not support LLM model checks.",
+      400
+    );
+  }
+
+  const keys = decryptConnectionAllKeys(conn);
+  const nextHealth: Record<string, ModelHealthEntry> = {
+    ...parseModelHealth(conn.modelHealth),
+  };
+
+  const results = await Promise.all(
+    targetModels.map(async (modelId, idx) => {
+      const testedAt = new Date().toISOString();
+      if (keys.length === 0) {
+        const entry: ModelHealthEntry = {
+          ok: false,
+          latencyMs: 0,
+          testedAt,
+          error: "No API key configured for this connection.",
+        };
+        nextHealth[modelId] = entry;
+        return { model: modelId, ...entry };
+      }
+
+      const t0 = Date.now();
+      let lastErr: unknown = null;
+      const attemptKeys =
+        keys.length > 1
+          ? [keys[idx % keys.length], keys[(idx + 1) % keys.length]]
+          : [keys[0]];
+
+      for (let k = 0; k < attemptKeys.length; k++) {
+        const keyToUse = attemptKeys[k];
+        try {
+          await invokeUpstreamCompletion({
+            provider: conn.provider,
+            model: modelId,
+            apiKey: keyToUse,
+            baseUrl: conn.baseUrl,
+            timeoutMs: 7000,
+            request: {
+              model: modelId,
+              messages: [{ role: "user", content: "Reply with OK." }],
+              max_tokens: 16,
+              stream: false,
+            },
+          });
+          const latencyMs = Date.now() - t0;
+          const entry: ModelHealthEntry = {
+            ok: true,
+            latencyMs,
+            testedAt: new Date().toISOString(),
+          };
+          nextHealth[modelId] = entry;
+          return { model: modelId, ...entry };
+        } catch (err: unknown) {
+          lastErr = err;
+          const retryNextKey =
+            k + 1 < attemptKeys.length &&
+            err instanceof UpstreamHttpError &&
+            err.retryable &&
+            err.statusCode !== 504 &&
+            Date.now() - t0 < 4000;
+          if (!retryNextKey) break;
+        }
+      }
+
+      const latencyMs = Date.now() - t0;
+      const entry: ModelHealthEntry = {
+        ok: false,
+        latencyMs,
+        testedAt: new Date().toISOString(),
+        error: formatModelTestError(lastErr),
+      };
+      nextHealth[modelId] = entry;
+      return { model: modelId, ...entry };
+    })
+  );
+
+  const fastestHealthy = results
+    .filter((r) => r.ok && r.latencyMs > 0)
+    .sort((a, b) => a.latencyMs - b.latencyMs)[0];
+
+  const [updatedConn] = await db
+    .update(providerConnections)
+    .set({
+      modelHealth: JSON.stringify(nextHealth),
+      ...(fastestHealthy ? { lastLatencyMs: fastestHealthy.latencyMs } : {}),
+    })
+    .where(eq(providerConnections.id, conn.id))
+    .returning();
+
+  const sanitized = updatedConn ? sanitizeConnection(updatedConn) : undefined;
+  if (sanitized) {
+    publishWorkspaceMutation(userId, {
+      entity: "provider",
+      action: "upsert",
+      id: conn.id,
+      record: sanitized,
+    });
+  }
+
+  return { results, connection: sanitized };
+}
+
+export async function removeConnectionModels(
+  userId: string,
+  connectionId: string,
+  rawModels: string[]
+) {
+  const toRemove = new Set(
+    rawModels
+      .filter((m): m is string => typeof m === "string")
+      .map((m) => m.trim())
+      .filter(Boolean)
+  );
+
+  if (toRemove.size === 0) {
+    throw new ProviderRouteError("At least one model ID is required.", 400);
+  }
+
+  const [conn] = await db
+    .select()
+    .from(providerConnections)
+    .where(
+      and(
+        eq(providerConnections.id, connectionId),
+        eq(providerConnections.userId, userId)
+      )
+    );
+
+  if (!conn) {
+    throw new ProviderRouteError("Provider connection not found", 404);
+  }
+
+  const spec = getProviderSpec(conn.provider);
+  const currentAvailable = parseAvailableModels(conn.availableModels);
+  const effectiveModels =
+    currentAvailable.length > 0
+      ? Array.from(
+          new Set([
+            ...(conn.defaultModel ? [conn.defaultModel] : []),
+            ...currentAvailable,
+          ])
+        )
+      : Array.from(
+          new Set([
+            ...(conn.defaultModel ? [conn.defaultModel] : []),
+            ...(conn.provider === "custom"
+              ? []
+              : spec.models.map((m) => m.id)),
+          ])
+        );
+
+  const remainingModels = effectiveModels.filter((m) => !toRemove.has(m));
+  const nextDefaultModel =
+    conn.defaultModel && !toRemove.has(conn.defaultModel)
+      ? conn.defaultModel
+      : remainingModels[0] ?? null;
+
+  const nextHealth = { ...parseModelHealth(conn.modelHealth) };
+  for (const m of toRemove) {
+    delete nextHealth[m];
+  }
+
+  const deactivated = remainingModels.length === 0;
+  const [updatedConn] = await db
+    .update(providerConnections)
+    .set({
+      isActive: deactivated ? false : conn.isActive,
+      availableModels: deactivated
+        ? null
+        : serializeAvailableModels(remainingModels),
+      defaultModel: deactivated ? null : nextDefaultModel,
+      modelHealth: JSON.stringify(nextHealth),
+    })
+    .where(eq(providerConnections.id, conn.id))
+    .returning();
+
+  const sanitized = updatedConn ? sanitizeConnection(updatedConn) : undefined;
+  if (sanitized) {
+    publishWorkspaceMutation(userId, {
+      entity: "provider",
+      action: "upsert",
+      id: conn.id,
+      record: sanitized,
+    });
+  }
+
+  return {
+    ok: true,
+    removedCount: effectiveModels.length - remainingModels.length,
+    remainingCount: remainingModels.length,
+    deactivated,
+    connection: sanitized,
+  };
+}
+
+providersRouter.post(
+  "/:id/test-models",
+  requireSession,
+  async (req: AuthedRequest, res: Response) => {
+    try {
+      const userId = req.authUser!.id;
+      const { id } = req.params;
+      const rawModels: unknown = req.body?.models;
+
+      if (!Array.isArray(rawModels)) {
+        return res.status(400).json({ error: "models array is required." });
+      }
+
+      const payload = await testConnectionModelsBatch(
+        userId,
+        id,
+        rawModels as string[]
+      );
+      return res.json(payload);
+    } catch (err) {
+      if (err instanceof ProviderRouteError) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+      console.error("[AS ROUTER] Test models error:", err);
+      return res.status(500).json({ error: "Failed to check provider models" });
+    }
+  }
+);
+
+providersRouter.post(
+  "/:id/remove-models",
+  requireSession,
+  async (req: AuthedRequest, res: Response) => {
+    try {
+      const userId = req.authUser!.id;
+      const { id } = req.params;
+      const rawModels: unknown = req.body?.models;
+
+      if (!Array.isArray(rawModels)) {
+        return res.status(400).json({ error: "models array is required." });
+      }
+
+      const payload = await removeConnectionModels(
+        userId,
+        id,
+        rawModels as string[]
+      );
+      return res.json(payload);
+    } catch (err) {
+      if (err instanceof ProviderRouteError) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+      console.error("[AS ROUTER] Remove models error:", err);
+      return res.status(500).json({ error: "Failed to remove models" });
+    }
+  }
+);
+
+

@@ -1474,6 +1474,8 @@ export default function App() {
                     onTestInPlayground={(modelId) =>
                       openPlaygroundWith({ model: modelId })
                     }
+                    onUpdateWorkspace={setWorkspace}
+                    onRefresh={refreshWorkspace}
                     onNotify={notify}
                   />
                 )}

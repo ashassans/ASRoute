@@ -39,6 +39,10 @@ import {
   validateLlmComboConnections,
 } from "../routes/combos.ts";
 import {
+  removeConnectionModels,
+  testConnectionModelsBatch,
+} from "../routes/providers.ts";
+import {
   extractReadableContentFromHtml,
   parseDuckDuckGoHtml,
 } from "../searchEngine.ts";
@@ -1335,6 +1339,85 @@ test("Built-in 'claude' virtual model routes across active LLM providers and alw
     globalThis.fetch = originalFetch;
   }
 });
+
+test("testConnectionModelsBatch and removeConnectionModels check all models and delete failed ones cleanly", async () => {
+  await ensureSchema();
+  const uid = "usr_model_batch_check";
+  await db.delete(user).where(eq(user.id, uid));
+  await db.insert(user).values({
+    id: uid,
+    name: "Batch Model Check",
+    email: "batch-check@example.com",
+  });
+
+  await db.insert(providerConnections).values({
+    id: "conn_batch_openai",
+    userId: uid,
+    provider: "openai",
+    name: "OpenAI Batch",
+    baseUrl: "https://api.openai.com/v1",
+    defaultModel: "broken-model-404",
+    availableModels: JSON.stringify(["broken-model-404", "gpt-6.2-sol"]),
+    encryptedApiKey: encryptSecret("sk-batch-key"),
+    isActive: true,
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body || "{}")) as { model?: string };
+    if (body.model === "broken-model-404") {
+      return new Response(
+        JSON.stringify({ error: { message: "Model broken-model-404 not found" } }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { content: "OK" }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 4, completion_tokens: 1 },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }) as typeof fetch;
+
+  try {
+    const checked = await testConnectionModelsBatch(uid, "conn_batch_openai", [
+      "broken-model-404",
+      "gpt-6.2-sol",
+    ]);
+    assert.equal(checked.results.length, 2);
+    const failed = checked.results.find((r) => r.model === "broken-model-404");
+    const working = checked.results.find((r) => r.model === "gpt-6.2-sol");
+    assert.equal(failed?.ok, false);
+    assert.ok(failed?.error?.includes("broken-model-404 not found"));
+    assert.equal(working?.ok, true);
+    assert.equal(checked.connection?.modelHealth["gpt-6.2-sol"]?.ok, true);
+    assert.equal(checked.connection?.modelHealth["broken-model-404"]?.ok, false);
+
+    // Delete only the failed model; working model stays & defaultModel updates
+    const removedOne = await removeConnectionModels(uid, "conn_batch_openai", [
+      "broken-model-404",
+    ]);
+    assert.equal(removedOne.ok, true);
+    assert.equal(removedOne.removedCount, 1);
+    assert.equal(removedOne.remainingCount, 1);
+    assert.equal(removedOne.deactivated, false);
+    assert.deepEqual(removedOne.connection?.availableModels, ["gpt-6.2-sol"]);
+    assert.equal(removedOne.connection?.defaultModel, "gpt-6.2-sol");
+    assert.equal(removedOne.connection?.modelHealth["broken-model-404"], undefined);
+
+    // Delete the final remaining model; connection should deactivate cleanly
+    const removedLast = await removeConnectionModels(uid, "conn_batch_openai", [
+      "gpt-6.2-sol",
+    ]);
+    assert.equal(removedLast.deactivated, true);
+    assert.equal(removedLast.remainingCount, 0);
+    assert.equal(removedLast.connection?.isActive, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 
 
 
