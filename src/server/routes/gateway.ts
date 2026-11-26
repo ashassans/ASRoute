@@ -192,6 +192,18 @@ gatewayRouter.get("/models", async (req: Request, res: Response) => {
         owned_by: "as-router",
       });
     }
+    if (
+      hasActiveLlm &&
+      (allowedNormalized === "*" || allowedNormalized === "claude")
+    ) {
+      seenIds.add("claude");
+      models.push({
+        id: "claude",
+        object: "model",
+        created: 1735689600,
+        owned_by: "as-router",
+      });
+    }
 
     for (const c of userCombos) {
       if (keyRow.freeOnly && !c.freeOnly) continue;

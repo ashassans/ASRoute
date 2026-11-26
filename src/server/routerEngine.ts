@@ -344,6 +344,72 @@ function scoreTierForIntent(
   return score;
 }
 
+function scoreTierForBestModel(
+  item: EnrichedTier,
+  intent: DetectedIntent
+): number {
+  const modelSpec = getModelSpec(item.connection.provider, item.tier.upstreamModel);
+  const modelIdLower = item.tier.upstreamModel.toLowerCase();
+  const healthMap = parseModelHealth(item.connection.modelHealth);
+  const health = healthMap[item.tier.upstreamModel];
+  let score = 0;
+
+  if (modelSpec) {
+    if (modelSpec.tierRank === "flagship") score += 65;
+    else if (modelSpec.tierRank === "balanced") score += 30;
+
+    if (modelSpec.capabilities.includes("reasoning")) score += 10;
+    if (modelSpec.capabilities.includes("coding")) score += 10;
+    if (modelSpec.capabilities.includes(intent)) score += 15;
+
+    if (intent === "vision") {
+      score += modelSpec.capabilities.includes("vision") ? 45 : -25;
+    } else if (intent === "tools") {
+      score += modelSpec.capabilities.includes("tools") ? 25 : -20;
+    }
+  } else {
+    if (
+      /(opus|sonnet|gpt-6(?!.*luna)|gpt-5(?!.*mini)|gpt-4\.5|gpt-4o(?!-mini)|o4(?!-mini)|o3|o1|claude|gemini-4-carbon|gemini-4-argon|gemini-4-pro|gemini-3.*pro|gemini-2\.5-pro|deepseek-v4-pro|deepseek-v4|deepseek-v3|deepseek-r1|reasoner|qwen3\.8|qwen.*72b|qwen.*235b|qwen.*coder|llama-4-maverick|llama-3\.3-70b|405b|70b|27b|grok-4|mistral-large|kimi-k3|sonar-pro|flagship|max|ultra|\bpro\b)/i.test(
+        modelIdLower
+      )
+    ) {
+      score += 55;
+    }
+    if (/(mini|nano|lite|8b|3b|1b|small|haiku|instant|micro|luna)/i.test(modelIdLower)) {
+      score -= 35;
+    }
+    if (intent === "vision") {
+      if (
+        /(flash|hydrogen|neon|argon|carbon|terra|sol|astra|gpt-6|gpt-5|gpt-4o|claude|grok-4|llama-4|vision|-vl|pixtral|llava|gemini-3|gemini-4|gemini-2)/i.test(
+          modelIdLower
+        )
+      ) {
+        score += 40;
+      } else {
+        score -= 20;
+      }
+    } else if (intent === "tools") {
+      if (/(gemma|deepseek-r1|reasoner|:thinking|-thinking)/i.test(modelIdLower)) {
+        score -= 45;
+      }
+    }
+  }
+
+  if (health) {
+    const testedAgeMs = Date.now() - new Date(health.testedAt).getTime();
+    if (testedAgeMs < 15 * 60 * 1000) {
+      if (!health.ok) score -= 65;
+      else if (health.latencyMs > 0 && health.latencyMs < 2500) score += 8;
+    }
+    if (intent === "tools" && health.supportsTools === false) {
+      score -= 75;
+    }
+  }
+
+  score += Math.max(0, 10 - item.tier.priority);
+  return score;
+}
+
 function resolveConnectionApiKeys(conn: ConnectionRow): {
   keys: string[];
   cursor: number;
@@ -589,7 +655,13 @@ export async function resolveRoutingTarget(
 ): Promise<{
   combo: typeof combos.$inferSelect | null;
   tiers: EnrichedTier[];
-  matchedVia: "wildcard" | "combo" | "builtin_auto" | "direct" | "default";
+  matchedVia:
+    | "wildcard"
+    | "combo"
+    | "builtin_auto"
+    | "builtin_claude"
+    | "direct"
+    | "default";
 }> {
   const trimmedModel = requestedModel.trim();
   const comboLookupName = trimmedModel
@@ -662,17 +734,21 @@ export async function resolveRoutingTarget(
     return { combo: exactCombo, tiers: enriched, matchedVia: "combo" };
   }
 
-  // 2.5 Built-in "auto" virtual model ID (smart intent routing across all active LLM connections)
-  if (comboLookupName.toLowerCase() === "auto") {
+  // 2.5 Built-in "auto" & "claude" virtual model IDs across all active LLM connections
+  const builtinId = comboLookupName.toLowerCase();
+  if (builtinId === "auto" || builtinId === "claude") {
     const activeConns = llmConns
       .filter((c) => c.isActive)
       .sort((a, b) => {
-        const aHealthy = a.circuitStatus === "healthy" ? 2 : a.circuitStatus === "half_open" ? 1 : 0;
-        const bHealthy = b.circuitStatus === "healthy" ? 2 : b.circuitStatus === "half_open" ? 1 : 0;
+        const aHealthy =
+          a.circuitStatus === "healthy" ? 2 : a.circuitStatus === "half_open" ? 1 : 0;
+        const bHealthy =
+          b.circuitStatus === "healthy" ? 2 : b.circuitStatus === "half_open" ? 1 : 0;
         if (aHealthy !== bHealthy) return bHealthy - aHealthy;
         return (a.lastLatencyMs ?? 9999) - (b.lastLatencyMs ?? 9999);
       });
 
+    const maxPerConn = builtinId === "claude" ? 6 : 4;
     const perConnModels = activeConns.map((conn) => {
       let parsedAvailable: string[] = [];
       if (conn.availableModels) {
@@ -687,19 +763,21 @@ export async function resolveRoutingTarget(
           // ignore malformed availableModels JSON
         }
       }
-      const fallbackCatalogModel =
+      const catalogModels =
         conn.provider === "custom"
-          ? undefined
-          : getProviderSpec(conn.provider).models[0]?.id;
+          ? []
+          : getProviderSpec(conn.provider)
+              .models.slice(0, 3)
+              .map((m) => m.id);
       const candidateModels = Array.from(
         new Set(
           [
             ...(conn.defaultModel ? [conn.defaultModel.trim()] : []),
-            ...parsedAvailable.slice(0, 5),
-            ...(fallbackCatalogModel ? [fallbackCatalogModel] : []),
+            ...parsedAvailable.slice(0, 8),
+            ...catalogModels,
           ].filter(Boolean)
         )
-      ).slice(0, 4);
+      ).slice(0, maxPerConn);
       return { conn, models: candidateModels };
     });
 
@@ -712,8 +790,8 @@ export async function resolveRoutingTarget(
         if (!modelId) continue;
         enriched.push({
           tier: {
-            id: `builtin-auto-${entry.conn.id}-${round}`,
-            comboId: "builtin-auto",
+            id: `builtin-${builtinId}-${entry.conn.id}-${round}`,
+            comboId: `builtin-${builtinId}`,
             connectionId: entry.conn.id,
             upstreamModel: modelId,
             priority: enriched.length,
@@ -730,7 +808,7 @@ export async function resolveRoutingTarget(
     return {
       combo: null,
       tiers: enriched,
-      matchedVia: "builtin_auto",
+      matchedVia: builtinId === "claude" ? "builtin_claude" : "builtin_auto",
     };
   }
 
@@ -878,10 +956,17 @@ export async function executeGatewayChatCompletion(params: {
   const detectedIntent = classifyRequestIntent(request);
   const target = await resolveRoutingTarget(userId, request.model);
   const effectiveComboName =
-    target.combo?.name ?? (target.matchedVia === "builtin_auto" ? "auto" : null);
+    target.combo?.name ??
+    (target.matchedVia === "builtin_auto"
+      ? "auto"
+      : target.matchedVia === "builtin_claude"
+        ? "claude"
+        : null);
   const strategy = (
     target.combo?.strategy ||
-    (target.matchedVia === "builtin_auto" ? "intent_auto" : "priority")
+    (target.matchedVia === "builtin_auto" || target.matchedVia === "builtin_claude"
+      ? "intent_auto"
+      : "priority")
   ) as RoutingStrategy;
   const cursor = target.combo?.roundRobinCursor ?? 0;
   const enforceFreeOnly = Boolean(params.freeOnly || target.combo?.freeOnly);
@@ -1003,12 +1088,19 @@ export async function executeGatewayChatCompletion(params: {
     }
   }
 
-  const orderedTiers = orderTiersByStrategy(
-    target.tiers,
-    strategy,
-    cursor,
-    detectedIntent
-  );
+  const orderedTiers =
+    target.matchedVia === "builtin_claude"
+      ? [...target.tiers].sort(
+          (a, b) =>
+            scoreTierForBestModel(b, detectedIntent) -
+            scoreTierForBestModel(a, detectedIntent)
+        )
+      : orderTiersByStrategy(
+          target.tiers,
+          strategy,
+          cursor,
+          detectedIntent
+        );
   const attempts: FallbackHop[] = [];
   const now = new Date();
 
@@ -1261,7 +1353,7 @@ export async function executeGatewayChatCompletion(params: {
           Boolean(target.combo) &&
           !tier.id.startsWith("direct-") &&
           !tier.id.startsWith("auto-") &&
-          !tier.id.startsWith("builtin-auto-");
+          !tier.id.startsWith("builtin-");
 
         const postSuccessWrites: Promise<unknown>[] = [
           ...pendingDbWrites,
@@ -1678,7 +1770,7 @@ export async function executeGatewayChatCompletion(params: {
         Boolean(target.combo) &&
         !toolFallbackCandidate.tier.id.startsWith("direct-") &&
         !toolFallbackCandidate.tier.id.startsWith("auto-") &&
-        !toolFallbackCandidate.tier.id.startsWith("builtin-auto-");
+        !toolFallbackCandidate.tier.id.startsWith("builtin-");
 
       const adapterWrites: Promise<unknown>[] = [
         ...pendingDbWrites,
@@ -1916,7 +2008,9 @@ export async function simulateComboRoute(params: {
   );
   const strategy = (
     target.combo?.strategy ||
-    (target.matchedVia === "builtin_auto" ? "intent_auto" : "priority")
+    (target.matchedVia === "builtin_auto" || target.matchedVia === "builtin_claude"
+      ? "intent_auto"
+      : "priority")
   ) as RoutingStrategy;
   const enforceFreeOnly = Boolean(params.freeOnly || target.combo?.freeOnly);
 
@@ -1941,12 +2035,19 @@ export async function simulateComboRoute(params: {
   };
 
   const detectedIntent = classifyRequestIntent(syntheticRequest);
-  const ordered = orderTiersByStrategy(
-    target.tiers,
-    strategy,
-    target.combo?.roundRobinCursor ?? 0,
-    detectedIntent
-  );
+  const ordered =
+    target.matchedVia === "builtin_claude"
+      ? [...target.tiers].sort(
+          (a, b) =>
+            scoreTierForBestModel(b, detectedIntent) -
+            scoreTierForBestModel(a, detectedIntent)
+        )
+      : orderTiersByStrategy(
+          target.tiers,
+          strategy,
+          target.combo?.roundRobinCursor ?? 0,
+          detectedIntent
+        );
   const now = new Date();
   const faultSet = new Set(params.simulatedFaultConnectionIds || []);
 
@@ -2043,8 +2144,13 @@ export async function simulateComboRoute(params: {
     matchedVia: target.matchedVia,
     comboName:
       target.combo?.name ??
-      (target.matchedVia === "builtin_auto" ? "auto" : null),
-    strategy,
+      (target.matchedVia === "builtin_auto"
+        ? "auto"
+        : target.matchedVia === "builtin_claude"
+          ? "claude"
+          : null),
+    strategy:
+      target.matchedVia === "builtin_claude" ? "best_model" : strategy,
     detectedIntent,
     compressPrompt: target.combo?.compressPrompt ?? false,
     winner,

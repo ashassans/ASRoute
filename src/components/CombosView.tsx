@@ -324,6 +324,7 @@ export function CombosView({
 
     if (llmConnections.some((c) => c.isActive)) {
       push("auto", "Built-in smart intent router", "Built-in");
+      push("claude", "Built-in always-best model router", "Built-in");
     }
 
     for (const c of combos) {

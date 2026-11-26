@@ -1239,6 +1239,103 @@ test("built-in auto model ID routes with intent_auto across active LLM connectio
   }
 });
 
+test("Built-in 'claude' virtual model routes across active LLM providers and always picks the best flagship model", async () => {
+  await ensureSchema();
+  const uid = "usr_builtin_claude";
+  await db.delete(user).where(eq(user.id, uid));
+  await db.insert(user).values({
+    id: uid,
+    name: "Builtin Claude Test",
+    email: "builtin-claude@example.com",
+  });
+
+  await db.insert(providerConnections).values([
+    {
+      id: "conn_claude_tavily",
+      userId: uid,
+      provider: "tavily",
+      name: "Tavily Search",
+      defaultModel: "tavily-search",
+      encryptedApiKey: encryptSecret("tvly-claude-key"),
+      isActive: true,
+    },
+    {
+      id: "conn_claude_groq",
+      userId: uid,
+      provider: "groq",
+      name: "Groq Fast",
+      baseUrl: "https://api.groq.com/openai/v1",
+      defaultModel: "llama-3.1-8b-instant",
+      availableModels: JSON.stringify(["llama-3.1-8b-instant"]),
+      encryptedApiKey: encryptSecret("gsk-claude-key"),
+      isActive: true,
+      lastLatencyMs: 90,
+    },
+    {
+      id: "conn_claude_openai",
+      userId: uid,
+      provider: "openai",
+      name: "OpenAI Flagship",
+      baseUrl: "https://api.openai.com/v1",
+      defaultModel: "gpt-6.2-sol",
+      availableModels: JSON.stringify(["gpt-6.2-sol"]),
+      encryptedApiKey: encryptSecret("sk-claude-key"),
+      isActive: true,
+      lastLatencyMs: 380,
+    },
+  ]);
+
+  const target = await resolveRoutingTarget(uid, "claude");
+  assert.equal(target.matchedVia, "builtin_claude");
+  assert.equal(target.combo, null);
+  assert.ok(target.tiers.length >= 2);
+  assert.ok(target.tiers.every((t) => !isSearchProvider(t.connection.provider)));
+
+  const prefixedTarget = await resolveRoutingTarget(uid, "as-router/claude");
+  assert.equal(prefixedTarget.matchedVia, "builtin_claude");
+  assert.equal(
+    await isModelAllowedForKey("claude", uid, "as-router/claude"),
+    true
+  );
+
+  const originalFetch = globalThis.fetch;
+  let calledUrl = "";
+  let sentModel = "";
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    calledUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const body = JSON.parse(String(init?.body || "{}")) as { model?: string };
+    sentModel = body.model || "";
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { content: "Routed via best claude!" }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 6, completion_tokens: 4 },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }) as typeof fetch;
+
+  try {
+    const res = await executeGatewayChatCompletion({
+      userId: uid,
+      apiKeyId: null,
+      apiKeyPrefix: null,
+      request: {
+        model: "claude",
+        messages: [{ role: "user", content: "Hi" }],
+        stream: false,
+      },
+    });
+    assert.equal(res.comboName, "claude");
+    assert.equal(res.content, "Routed via best claude!");
+    assert.equal(res.resolvedProvider, "openai");
+    assert.equal(res.resolvedModel, "gpt-6.2-astra");
+    assert.ok(calledUrl.includes("api.openai.com"));
+    assert.equal(sentModel, "gpt-6.2-astra");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 
 
 

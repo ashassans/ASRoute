@@ -61,20 +61,40 @@ export function ModelsView({
     const activeLlmConns = connections.filter(
       (c) => c.isActive && !isSearchProvider(c.provider)
     );
+    const activeComboNames = new Set(
+      combos.filter((c) => c.isActive).map((c) => c.name.trim().toLowerCase())
+    );
     if (activeLlmConns.length > 0) {
-      seen.add("builtin:auto");
-      list.push({
-        key: "builtin:auto",
-        providerKey: "as-router",
-        isBuiltinAuto: true,
-        providerName: "Built-in",
-        modelId: "auto",
-        copyId: "auto",
-        capabilities: ["fast", "coding", "reasoning", "vision", "tools"],
-        strategyLabel: `intent_auto · ${activeLlmConns.length} ${
-          activeLlmConns.length === 1 ? "provider" : "providers"
-        }`,
-      });
+      if (!activeComboNames.has("auto")) {
+        seen.add("builtin:auto");
+        list.push({
+          key: "builtin:auto",
+          providerKey: "as-router",
+          isBuiltinAuto: true,
+          providerName: "Built-in",
+          modelId: "auto",
+          copyId: "auto",
+          capabilities: ["fast", "coding", "reasoning", "vision", "tools"],
+          strategyLabel: `intent_auto · ${activeLlmConns.length} ${
+            activeLlmConns.length === 1 ? "provider" : "providers"
+          }`,
+        });
+      }
+      if (!activeComboNames.has("claude")) {
+        seen.add("builtin:claude");
+        list.push({
+          key: "builtin:claude",
+          providerKey: "as-router",
+          isBuiltinAuto: true,
+          providerName: "Built-in",
+          modelId: "claude",
+          copyId: "claude",
+          capabilities: ["coding", "reasoning", "vision", "tools"],
+          strategyLabel: `best_model · ${activeLlmConns.length} ${
+            activeLlmConns.length === 1 ? "provider" : "providers"
+          }`,
+        });
+      }
     }
 
     for (const combo of combos) {

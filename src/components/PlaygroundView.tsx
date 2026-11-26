@@ -464,10 +464,21 @@ export function PlaygroundView({
       (c) => c.isActive && !isSearchProvider(c.provider)
     );
     if (hasActiveLlm) {
-      list.push({
-        value: "auto",
-        label: "Built-in: auto (Smart Intent Router)",
-      });
+      const activeComboNames = new Set(
+        combos.filter((c) => c.isActive).map((c) => c.name.trim().toLowerCase())
+      );
+      if (!activeComboNames.has("auto")) {
+        list.push({
+          value: "auto",
+          label: "Built-in: auto (Smart Intent Router)",
+        });
+      }
+      if (!activeComboNames.has("claude")) {
+        list.push({
+          value: "claude",
+          label: "Built-in: claude (Always Best Model)",
+        });
+      }
     }
     for (const c of combos) {
       if (c.isActive) {
