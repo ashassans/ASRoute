@@ -213,9 +213,9 @@ export function OverviewView({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [hoveredBucketIdx, setHoveredBucketIdx] = useState<number | null>(null);
   const [copiedCurl, setCopiedCurl] = useState(false);
-  const [endpointMode, setEndpointMode] = useState<"openai" | "anthropic">(
-    "openai"
-  );
+  const [endpointMode, setEndpointMode] = useState<
+    "openai" | "responses" | "anthropic"
+  >("openai");
   const [copiedChart, setCopiedChart] = useState(false);
 
   // Interactive landing showcase states
@@ -645,8 +645,21 @@ curl ${environment.gatewayEndpoint}/messages \\
     "messages": [{"role": "user", "content": "Hello from AS ROUTER"}]
   }'`;
 
+  const responsesCurlSnippet = `# Codex CLI / OpenAI Responses API
+curl ${environment.gatewayEndpoint}/responses \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer ${snippetApiKeyPlaceholder}" \\
+  -d '{
+    "model": "${defaultModelAlias}",
+    "input": "Hello from AS ROUTER"
+  }'`;
+
   const activeSnippet =
-    endpointMode === "anthropic" ? anthropicCurlSnippet : openaiCurlSnippet;
+    endpointMode === "anthropic"
+      ? anthropicCurlSnippet
+      : endpointMode === "responses"
+        ? responsesCurlSnippet
+        : openaiCurlSnippet;
 
   const copyCurl = async () => {
     try {
@@ -1867,12 +1880,16 @@ curl ${environment.gatewayEndpoint}/messages \\
             <h3 className="font-display text-sm font-semibold text-ink">
               {endpointMode === "anthropic"
                 ? "Anthropic-Compatible Endpoint (/v1/messages)"
-                : "OpenAI-Compatible Gateway Endpoint (/v1/chat/completions)"}
+                : endpointMode === "responses"
+                  ? "OpenAI Responses Endpoint (/v1/responses)"
+                  : "OpenAI-Compatible Gateway Endpoint (/v1/chat/completions)"}
             </h3>
             <div className="mt-1 font-mono text-xs text-indigo-400 truncate">
               {endpointMode === "anthropic"
                 ? `${environment.gatewayEndpoint}/messages`
-                : `${environment.gatewayEndpoint}/chat/completions`}
+                : endpointMode === "responses"
+                  ? `${environment.gatewayEndpoint}/responses`
+                  : `${environment.gatewayEndpoint}/chat/completions`}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
@@ -1887,6 +1904,17 @@ curl ${environment.gatewayEndpoint}/messages \\
                 }`}
               >
                 OpenAI
+              </button>
+              <button
+                type="button"
+                onClick={() => setEndpointMode("responses")}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
+                  endpointMode === "responses"
+                    ? "bg-elevated text-indigo-300"
+                    : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                /v1/responses
               </button>
               <button
                 type="button"

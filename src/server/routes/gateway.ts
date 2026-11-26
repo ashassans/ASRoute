@@ -442,6 +442,868 @@ gatewayRouter.post("/chat/completions", async (req: Request, res: Response) => {
   }
 });
 
+interface ResponsesToolSpec {
+  type?: string;
+  name?: string;
+  description?: string;
+  parameters?: Record<string, unknown>;
+  function?: {
+    name?: string;
+    description?: string;
+    parameters?: Record<string, unknown>;
+  };
+}
+
+export interface ResponsesApiBody {
+  model?: string;
+  input?: unknown;
+  instructions?: string | null;
+  stream?: boolean;
+  temperature?: number;
+  top_p?: number;
+  max_output_tokens?: number;
+  max_tokens?: number;
+  stop?: string | string[];
+  parallel_tool_calls?: boolean;
+  tools?: ResponsesToolSpec[];
+  tool_choice?:
+    | "auto"
+    | "none"
+    | "required"
+    | { type?: string; name?: string; function?: { name?: string } };
+  text?: {
+    format?: {
+      type?: string;
+      name?: string;
+      schema?: Record<string, unknown>;
+      strict?: boolean;
+    };
+  };
+}
+
+function serializeResponsesOutputValue(output: unknown): string {
+  if (typeof output === "string") return output;
+  if (Array.isArray(output)) {
+    const parts = output
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const obj = item as Record<string, unknown>;
+          if (typeof obj.text === "string") return obj.text;
+          if (typeof obj.output_text === "string") return obj.output_text;
+          return JSON.stringify(obj);
+        }
+        return "";
+      })
+      .filter(Boolean);
+    return parts.join("\n");
+  }
+  if (output === null || output === undefined) return "";
+  return JSON.stringify(output);
+}
+
+export function normalizeResponsesBodyToChatRequest(
+  body: ResponsesApiBody
+): NormalizedCompletionRequest {
+  const translatedMessages: OpenAIChatMessage[] = [];
+
+  if (typeof body.instructions === "string" && body.instructions.trim()) {
+    translatedMessages.push({ role: "system", content: body.instructions });
+  }
+
+  const pushAssistantToolCall = (call: {
+    id: string;
+    name: string;
+    arguments: string;
+  }) => {
+    const prev = translatedMessages[translatedMessages.length - 1];
+    const toolCall = {
+      id: call.id,
+      type: "function" as const,
+      function: { name: call.name, arguments: call.arguments },
+    };
+    if (prev && prev.role === "assistant") {
+      prev.tool_calls = [...(prev.tool_calls || []), toolCall];
+    } else {
+      translatedMessages.push({
+        role: "assistant",
+        content: null,
+        tool_calls: [toolCall],
+      });
+    }
+  };
+
+  if (typeof body.input === "string") {
+    translatedMessages.push({ role: "user", content: body.input });
+  } else if (Array.isArray(body.input)) {
+    for (const rawItem of body.input) {
+      if (typeof rawItem === "string") {
+        translatedMessages.push({ role: "user", content: rawItem });
+        continue;
+      }
+      if (!rawItem || typeof rawItem !== "object") continue;
+
+      const item = rawItem as Record<string, unknown>;
+      const itemType = typeof item.type === "string" ? item.type : "";
+
+      if (itemType === "function_call") {
+        const fnName = typeof item.name === "string" ? item.name.trim() : "";
+        if (!fnName) continue;
+        const callId =
+          typeof item.call_id === "string" && item.call_id.trim()
+            ? item.call_id.trim()
+            : typeof item.id === "string" && item.id.trim()
+              ? item.id.trim()
+              : `call_${crypto.randomBytes(6).toString("hex")}`;
+        const args =
+          typeof item.arguments === "string"
+            ? item.arguments
+            : JSON.stringify(item.arguments ?? {});
+        pushAssistantToolCall({ id: callId, name: fnName, arguments: args });
+        continue;
+      }
+
+      if (itemType === "function_call_output") {
+        const callId =
+          typeof item.call_id === "string" && item.call_id.trim()
+            ? item.call_id.trim()
+            : "call_0";
+        translatedMessages.push({
+          role: "tool",
+          tool_call_id: callId,
+          content: serializeResponsesOutputValue(item.output),
+        });
+        continue;
+      }
+
+      if (itemType === "reasoning" || itemType === "item_reference") {
+        continue;
+      }
+
+      // Standard message item (type === "message" or omitted type with role)
+      const rawRole =
+        typeof item.role === "string" ? item.role.toLowerCase() : "user";
+      const mappedRole: OpenAIChatMessage["role"] =
+        rawRole === "system" || rawRole === "developer"
+          ? "system"
+          : rawRole === "assistant"
+            ? "assistant"
+            : rawRole === "tool"
+              ? "tool"
+              : "user";
+
+      if (mappedRole === "tool") {
+        const callId =
+          typeof item.call_id === "string"
+            ? item.call_id
+            : typeof item.tool_call_id === "string"
+              ? item.tool_call_id
+              : "call_0";
+        translatedMessages.push({
+          role: "tool",
+          tool_call_id: callId,
+          content: serializeResponsesOutputValue(item.content),
+        });
+        continue;
+      }
+
+      if (typeof item.content === "string") {
+        translatedMessages.push({ role: mappedRole, content: item.content });
+        continue;
+      }
+
+      if (!Array.isArray(item.content)) continue;
+
+      if (mappedRole === "system" || mappedRole === "assistant") {
+        const text = item.content
+          .map((part) => {
+            if (typeof part === "string") return part;
+            if (part && typeof part === "object") {
+              const p = part as Record<string, unknown>;
+              if (typeof p.text === "string") return p.text;
+              if (typeof p.refusal === "string") return p.refusal;
+            }
+            return "";
+          })
+          .filter(Boolean)
+          .join("\n");
+        if (text) {
+          translatedMessages.push({ role: mappedRole, content: text });
+        }
+        continue;
+      }
+
+      const userParts: OpenAIContentPart[] = [];
+      for (const rawPart of item.content) {
+        if (typeof rawPart === "string") {
+          if (rawPart) userParts.push({ type: "text", text: rawPart });
+          continue;
+        }
+        if (!rawPart || typeof rawPart !== "object") continue;
+        const part = rawPart as Record<string, unknown>;
+        const pType = typeof part.type === "string" ? part.type : "";
+        if (
+          (pType === "input_text" || pType === "output_text" || pType === "text" || !pType) &&
+          typeof part.text === "string"
+        ) {
+          userParts.push({ type: "text", text: part.text });
+        } else if (pType === "input_image") {
+          const rawUrl =
+            typeof part.image_url === "string"
+              ? part.image_url
+              : part.image_url && typeof part.image_url === "object"
+                ? (part.image_url as { url?: string }).url
+                : undefined;
+          const detail =
+            typeof part.detail === "string"
+              ? part.detail
+              : part.image_url && typeof part.image_url === "object"
+                ? (part.image_url as { detail?: string }).detail
+                : undefined;
+          if (typeof rawUrl === "string" && rawUrl.trim()) {
+            userParts.push({
+              type: "image_url",
+              image_url: detail ? { url: rawUrl, detail } : { url: rawUrl },
+            });
+          }
+        } else if (pType === "input_file" && typeof part.filename === "string") {
+          userParts.push({
+            type: "text",
+            text: `[Attached file: ${part.filename}]`,
+          });
+        }
+      }
+
+      if (userParts.length > 0) {
+        const hasImages = userParts.some((p) => p.type === "image_url");
+        translatedMessages.push({
+          role: "user",
+          content: hasImages
+            ? userParts
+            : userParts
+                .map((p) => (p.type === "text" ? p.text : ""))
+                .join("\n"),
+        });
+      }
+    }
+  }
+
+  const translatedTools: OpenAIToolDefinition[] = [];
+  if (Array.isArray(body.tools)) {
+    for (const t of body.tools) {
+      if (!t || t.type !== "function") continue;
+      const fnName = t.name || t.function?.name;
+      if (!fnName) continue;
+      translatedTools.push({
+        type: "function",
+        function: {
+          name: fnName,
+          description: t.description ?? t.function?.description,
+          parameters: t.parameters ?? t.function?.parameters,
+        },
+      });
+    }
+  }
+
+  let translatedToolChoice: NormalizedCompletionRequest["tool_choice"];
+  if (
+    body.tool_choice === "auto" ||
+    body.tool_choice === "none" ||
+    body.tool_choice === "required"
+  ) {
+    translatedToolChoice = body.tool_choice;
+  } else if (body.tool_choice && typeof body.tool_choice === "object") {
+    const fnName =
+      body.tool_choice.name || body.tool_choice.function?.name;
+    if (body.tool_choice.type === "function" && fnName) {
+      translatedToolChoice = {
+        type: "function",
+        function: { name: fnName },
+      };
+    }
+  }
+
+  let responseFormat: Record<string, unknown> | undefined;
+  const textFormat = body.text?.format;
+  if (textFormat?.type === "json_object") {
+    responseFormat = { type: "json_object" };
+  } else if (textFormat?.type === "json_schema" && textFormat.schema) {
+    responseFormat = {
+      type: "json_schema",
+      json_schema: {
+        name: textFormat.name || "response",
+        schema: textFormat.schema,
+        ...(typeof textFormat.strict === "boolean"
+          ? { strict: textFormat.strict }
+          : {}),
+      },
+    };
+  }
+
+  const rawMax = Number(body.max_output_tokens ?? body.max_tokens);
+  const maxTokens =
+    Number.isFinite(rawMax) && rawMax > 0
+      ? Math.min(Math.round(rawMax), 65536)
+      : undefined;
+
+  return {
+    model: body.model || "",
+    messages: translatedMessages,
+    stream: Boolean(body.stream),
+    temperature: body.temperature,
+    max_tokens: maxTokens,
+    top_p: body.top_p,
+    stop: body.stop,
+    response_format: responseFormat,
+    tools: translatedTools.length > 0 ? translatedTools : undefined,
+    tool_choice: translatedToolChoice,
+  };
+}
+
+function buildResponsesObject(params: {
+  id: string;
+  createdAt: number;
+  model: string;
+  status: "in_progress" | "completed" | "incomplete" | "failed";
+  output: Array<Record<string, unknown>>;
+  outputText?: string;
+  instructions?: string | null;
+  maxOutputTokens?: number | null;
+  temperature?: number | null;
+  topP?: number | null;
+  parallelToolCalls?: boolean;
+  incompleteReason?: string | null;
+  error?: { code: string; message: string } | null;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+  } | null;
+  meta?: Record<string, unknown>;
+}) {
+  return {
+    id: params.id,
+    object: "response",
+    created_at: params.createdAt,
+    status: params.status,
+    error: params.error ?? null,
+    incomplete_details: params.incompleteReason
+      ? { reason: params.incompleteReason }
+      : null,
+    instructions: params.instructions ?? null,
+    max_output_tokens: params.maxOutputTokens ?? null,
+    model: params.model,
+    output: params.output,
+    ...(typeof params.outputText === "string"
+      ? { output_text: params.outputText }
+      : {}),
+    parallel_tool_calls: params.parallelToolCalls ?? true,
+    temperature: params.temperature ?? 1,
+    top_p: params.topP ?? 1,
+    usage: params.usage
+      ? {
+          input_tokens: params.usage.promptTokens,
+          input_tokens_details: { cached_tokens: 0 },
+          output_tokens: params.usage.completionTokens,
+          output_tokens_details: { reasoning_tokens: 0 },
+          total_tokens:
+            params.usage.promptTokens + params.usage.completionTokens,
+        }
+      : null,
+    ...(params.meta ? { x_asrouter: params.meta } : {}),
+  };
+}
+
+gatewayRouter.post("/responses", async (req: Request, res: Response) => {
+  try {
+    const keyRow = await authenticateGatewayKey(req);
+    const body = (req.body || {}) as ResponsesApiBody;
+
+    if (!body.model || typeof body.model !== "string" || !body.model.trim()) {
+      return res.status(400).json({
+        error: {
+          message: "Request must include a 'model' string.",
+          type: "invalid_request_error",
+        },
+      });
+    }
+
+    const requestPayload = normalizeResponsesBodyToChatRequest(body);
+    if (requestPayload.messages.length === 0) {
+      return res.status(400).json({
+        error: {
+          message:
+            "Request must include non-empty 'input' or 'instructions'.",
+          type: "invalid_request_error",
+        },
+      });
+    }
+
+    if (!(await isModelAllowedForKey(keyRow.allowedCombo, keyRow.userId, requestPayload.model))) {
+      return res.status(403).json({
+        error: {
+          message: `This API key is scoped exclusively to combo "${keyRow.allowedCombo}".`,
+          type: "permission_error",
+        },
+      });
+    }
+
+    const abortController = new AbortController();
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        abortController.abort();
+      }
+    });
+
+    const responseId = `resp_${crypto.randomBytes(10).toString("hex")}`;
+    const createdAt = Math.floor(Date.now() / 1000);
+    const parallelToolCalls =
+      typeof body.parallel_tool_calls === "boolean"
+        ? body.parallel_tool_calls
+        : true;
+
+    if (requestPayload.stream) {
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      req.socket?.setNoDelay?.(true);
+      res.flushHeaders?.();
+
+      let seq = 0;
+      const emitEvent = (eventType: string, data: Record<string, unknown>) => {
+        const frame = {
+          type: eventType,
+          sequence_number: seq++,
+          ...data,
+        };
+        res.write(`event: ${eventType}\ndata: ${JSON.stringify(frame)}\n\n`);
+      };
+
+      const baseShell = (
+        status: "in_progress" | "completed" | "incomplete" | "failed",
+        extra?: Partial<Parameters<typeof buildResponsesObject>[0]>
+      ) =>
+        buildResponsesObject({
+          id: responseId,
+          createdAt,
+          model: requestPayload.model,
+          status,
+          output: extra?.output ?? [],
+          outputText: extra?.outputText,
+          instructions: body.instructions ?? null,
+          maxOutputTokens: requestPayload.max_tokens ?? null,
+          temperature: requestPayload.temperature ?? 1,
+          topP: requestPayload.top_p ?? 1,
+          parallelToolCalls,
+          incompleteReason: extra?.incompleteReason,
+          error: extra?.error,
+          usage: extra?.usage,
+          meta: extra?.meta,
+        });
+
+      emitEvent("response.created", { response: baseShell("in_progress") });
+      emitEvent("response.in_progress", { response: baseShell("in_progress") });
+
+      let nextOutputIndex = 0;
+      let activeMsgItem: {
+        id: string;
+        outputIndex: number;
+        text: string;
+      } | null = null;
+      const completedOutputItems: Array<Record<string, unknown>> = [];
+      const streamedTools = new Map<
+        number,
+        {
+          id: string;
+          callId: string;
+          name: string;
+          outputIndex: number;
+          arguments: string;
+        }
+      >();
+
+      const closeActiveMsgItem = () => {
+        if (!activeMsgItem) return;
+        const item = activeMsgItem;
+        activeMsgItem = null;
+        emitEvent("response.output_text.done", {
+          item_id: item.id,
+          output_index: item.outputIndex,
+          content_index: 0,
+          text: item.text,
+        });
+        const part = {
+          type: "output_text",
+          text: item.text,
+          annotations: [],
+        };
+        emitEvent("response.content_part.done", {
+          item_id: item.id,
+          output_index: item.outputIndex,
+          content_index: 0,
+          part,
+        });
+        const doneItem = {
+          id: item.id,
+          type: "message",
+          status: "completed",
+          role: "assistant",
+          content: [part],
+        };
+        emitEvent("response.output_item.done", {
+          output_index: item.outputIndex,
+          item: doneItem,
+        });
+        completedOutputItems.push(doneItem);
+      };
+
+      try {
+        const result = await executeGatewayChatCompletion({
+          userId: keyRow.userId,
+          apiKeyId: keyRow.id,
+          apiKeyPrefix: keyRow.keyPrefix,
+          request: requestPayload,
+          freeOnly: Boolean(keyRow.freeOnly),
+          signal: abortController.signal,
+          onStreamDelta: (delta) => {
+            if (abortController.signal.aborted) return;
+            if (delta.content) {
+              if (!activeMsgItem) {
+                const msgId = `msg_${crypto.randomBytes(10).toString("hex")}`;
+                const outputIndex = nextOutputIndex++;
+                activeMsgItem = {
+                  id: msgId,
+                  outputIndex,
+                  text: "",
+                };
+                emitEvent("response.output_item.added", {
+                  output_index: outputIndex,
+                  item: {
+                    id: msgId,
+                    type: "message",
+                    status: "in_progress",
+                    role: "assistant",
+                    content: [],
+                  },
+                });
+                emitEvent("response.content_part.added", {
+                  item_id: msgId,
+                  output_index: outputIndex,
+                  content_index: 0,
+                  part: {
+                    type: "output_text",
+                    text: "",
+                    annotations: [],
+                  },
+                });
+              }
+              activeMsgItem.text += delta.content;
+              emitEvent("response.output_text.delta", {
+                item_id: activeMsgItem.id,
+                output_index: activeMsgItem.outputIndex,
+                content_index: 0,
+                delta: delta.content,
+              });
+            }
+
+            if (Array.isArray(delta.tool_calls)) {
+              if (activeMsgItem) {
+                closeActiveMsgItem();
+              }
+              for (const tc of delta.tool_calls) {
+                const tcIdx = typeof tc.index === "number" ? tc.index : 0;
+                let tracked = streamedTools.get(tcIdx);
+                if (!tracked) {
+                  const outputIndex = nextOutputIndex++;
+                  const fcId = `fc_${crypto.randomBytes(8).toString("hex")}`;
+                  const callId =
+                    tc.id || `call_${crypto.randomBytes(6).toString("hex")}`;
+                  const name = tc.function?.name || "function";
+                  tracked = {
+                    id: fcId,
+                    callId,
+                    name,
+                    outputIndex,
+                    arguments: "",
+                  };
+                  streamedTools.set(tcIdx, tracked);
+                  emitEvent("response.output_item.added", {
+                    output_index: outputIndex,
+                    item: {
+                      id: fcId,
+                      type: "function_call",
+                      status: "in_progress",
+                      call_id: callId,
+                      name,
+                      arguments: "",
+                    },
+                  });
+                }
+                if (tc.function?.arguments) {
+                  tracked.arguments += tc.function.arguments;
+                  emitEvent("response.function_call_arguments.delta", {
+                    item_id: tracked.id,
+                    output_index: tracked.outputIndex,
+                    delta: tc.function.arguments,
+                  });
+                }
+              }
+            }
+          },
+        });
+
+        if (abortController.signal.aborted) {
+          return res.end();
+        }
+
+        if (activeMsgItem) {
+          closeActiveMsgItem();
+        }
+
+        if (streamedTools.size > 0) {
+          const ordered = Array.from(streamedTools.entries()).sort(
+            (a, b) => a[0] - b[0]
+          );
+          for (const [, tracked] of ordered) {
+            emitEvent("response.function_call_arguments.done", {
+              item_id: tracked.id,
+              output_index: tracked.outputIndex,
+              arguments: tracked.arguments,
+            });
+            const doneFc = {
+              id: tracked.id,
+              type: "function_call",
+              status: "completed",
+              call_id: tracked.callId,
+              name: tracked.name,
+              arguments: tracked.arguments,
+            };
+            emitEvent("response.output_item.done", {
+              output_index: tracked.outputIndex,
+              item: doneFc,
+            });
+            completedOutputItems.push(doneFc);
+          }
+        } else if (result.toolCalls && result.toolCalls.length > 0) {
+          for (const tc of result.toolCalls) {
+            const outputIndex = nextOutputIndex++;
+            const fcId = `fc_${crypto.randomBytes(8).toString("hex")}`;
+            const args = tc.function.arguments || "{}";
+            emitEvent("response.output_item.added", {
+              output_index: outputIndex,
+              item: {
+                id: fcId,
+                type: "function_call",
+                status: "in_progress",
+                call_id: tc.id,
+                name: tc.function.name,
+                arguments: "",
+              },
+            });
+            emitEvent("response.function_call_arguments.delta", {
+              item_id: fcId,
+              output_index: outputIndex,
+              delta: args,
+            });
+            emitEvent("response.function_call_arguments.done", {
+              item_id: fcId,
+              output_index: outputIndex,
+              arguments: args,
+            });
+            const doneFc = {
+              id: fcId,
+              type: "function_call",
+              status: "completed",
+              call_id: tc.id,
+              name: tc.function.name,
+              arguments: args,
+            };
+            emitEvent("response.output_item.done", {
+              output_index: outputIndex,
+              item: doneFc,
+            });
+            completedOutputItems.push(doneFc);
+          }
+        }
+
+        if (completedOutputItems.length === 0) {
+          const msgId = `msg_${crypto.randomBytes(10).toString("hex")}`;
+          const outputIndex = nextOutputIndex++;
+          const text = result.content || "";
+          const part = { type: "output_text", text, annotations: [] };
+          emitEvent("response.output_item.added", {
+            output_index: outputIndex,
+            item: {
+              id: msgId,
+              type: "message",
+              status: "in_progress",
+              role: "assistant",
+              content: [],
+            },
+          });
+          emitEvent("response.content_part.added", {
+            item_id: msgId,
+            output_index: outputIndex,
+            content_index: 0,
+            part: { type: "output_text", text: "", annotations: [] },
+          });
+          emitEvent("response.output_text.done", {
+            item_id: msgId,
+            output_index: outputIndex,
+            content_index: 0,
+            text,
+          });
+          emitEvent("response.content_part.done", {
+            item_id: msgId,
+            output_index: outputIndex,
+            content_index: 0,
+            part,
+          });
+          const doneItem = {
+            id: msgId,
+            type: "message",
+            status: "completed",
+            role: "assistant",
+            content: [part],
+          };
+          emitEvent("response.output_item.done", {
+            output_index: outputIndex,
+            item: doneItem,
+          });
+          completedOutputItems.push(doneItem);
+        }
+
+        const isIncomplete = result.finishReason === "length";
+        const finalResponse = baseShell(
+          isIncomplete ? "incomplete" : "completed",
+          {
+            output: completedOutputItems,
+            outputText: result.content || "",
+            incompleteReason: isIncomplete ? "max_output_tokens" : null,
+            usage: {
+              promptTokens: result.promptTokens,
+              completionTokens: result.completionTokens,
+            },
+            meta: {
+              resolved_provider: result.resolvedProvider,
+              resolved_model: result.resolvedModel,
+              combo: result.comboName,
+              detected_intent: result.detectedIntent,
+              latency_ms: result.latencyMs,
+              compressed: result.compressed,
+              cached: Boolean(result.cached),
+              fallback_hops: result.fallbackAttempts,
+            },
+          }
+        );
+
+        emitEvent(
+          isIncomplete ? "response.incomplete" : "response.completed",
+          { response: finalResponse }
+        );
+        return res.end();
+      } catch (streamErr: unknown) {
+        if (!abortController.signal.aborted) {
+          const message =
+            streamErr instanceof Error
+              ? streamErr.message
+              : "Responses stream error";
+          const failedResponse = baseShell("failed", {
+            output: completedOutputItems,
+            error: { code: "gateway_error", message },
+          });
+          emitEvent("response.failed", { response: failedResponse });
+        }
+        return res.end();
+      }
+    }
+
+    const result = await executeGatewayChatCompletion({
+      userId: keyRow.userId,
+      apiKeyId: keyRow.id,
+      apiKeyPrefix: keyRow.keyPrefix,
+      request: requestPayload,
+      freeOnly: Boolean(keyRow.freeOnly),
+      signal: abortController.signal,
+    });
+
+    const output: Array<Record<string, unknown>> = [];
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      for (const tc of result.toolCalls) {
+        output.push({
+          id: `fc_${crypto.randomBytes(8).toString("hex")}`,
+          type: "function_call",
+          status: "completed",
+          call_id: tc.id,
+          name: tc.function.name,
+          arguments: tc.function.arguments || "{}",
+        });
+      }
+    }
+    if (result.content || output.length === 0) {
+      output.push({
+        id: `msg_${crypto.randomBytes(10).toString("hex")}`,
+        type: "message",
+        status: "completed",
+        role: "assistant",
+        content: [
+          {
+            type: "output_text",
+            text: result.content || "",
+            annotations: [],
+          },
+        ],
+      });
+    }
+
+    const isIncomplete = result.finishReason === "length";
+    return res.json(
+      buildResponsesObject({
+        id: responseId,
+        createdAt,
+        model: requestPayload.model,
+        status: isIncomplete ? "incomplete" : "completed",
+        output,
+        outputText: result.content || "",
+        instructions: body.instructions ?? null,
+        maxOutputTokens: requestPayload.max_tokens ?? null,
+        temperature: requestPayload.temperature ?? 1,
+        topP: requestPayload.top_p ?? 1,
+        parallelToolCalls,
+        incompleteReason: isIncomplete ? "max_output_tokens" : null,
+        usage: {
+          promptTokens: result.promptTokens,
+          completionTokens: result.completionTokens,
+        },
+        meta: {
+          resolved_provider: result.resolvedProvider,
+          resolved_model: result.resolvedModel,
+          combo: result.comboName,
+          detected_intent: result.detectedIntent,
+          latency_ms: result.latencyMs,
+          compressed: result.compressed,
+          cached: Boolean(result.cached),
+          fallback_hops: result.fallbackAttempts,
+        },
+      })
+    );
+  } catch (err: unknown) {
+    const status = err instanceof UpstreamHttpError ? err.statusCode : 500;
+    const message = err instanceof Error ? err.message : "Gateway failure";
+    return res.status(status).json({
+      error: {
+        message,
+        type:
+          status === 401
+            ? "auth_error"
+            : status === 429
+              ? "rate_limit_error"
+              : "gateway_error",
+      },
+    });
+  }
+});
+
 gatewayRouter.post("/messages", async (req: Request, res: Response) => {
   try {
     const keyRow = await authenticateGatewayKey(req);

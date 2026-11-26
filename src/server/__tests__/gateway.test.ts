@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 import { eq } from "drizzle-orm";
+import express from "express";
 import test, { after } from "node:test";
 import { db, ensureSchema } from "../../db/index.ts";
 import {
   combos,
   comboTiers,
+  gatewayApiKeys,
   providerConnections,
   user,
 } from "../../db/schema.ts";
@@ -38,7 +41,11 @@ import {
   orderTiersByStrategy,
   resolveRoutingTarget,
 } from "../routerEngine.ts";
-import { isModelAllowedForKey } from "../routes/gateway.ts";
+import {
+  gatewayRouter,
+  isModelAllowedForKey,
+  normalizeResponsesBodyToChatRequest,
+} from "../routes/gateway.ts";
 import {
   buildReadyMadeComboTiers,
   validateLlmComboConnections,
@@ -1465,3 +1472,195 @@ test("hasFreeModelSuffix and fetchProviderModels(freeOnly) only import models en
     globalThis.fetch = originalFetch;
   }
 });
+
+test("POST /v1/responses translates Responses API payloads and supports JSON and SSE streaming", async () => {
+  const normalized = normalizeResponsesBodyToChatRequest({
+    model: "auto",
+    instructions: "You are Codex.",
+    max_output_tokens: 512,
+    input: [
+      {
+        type: "message",
+        role: "developer",
+        content: [{ type: "input_text", text: "Follow repo style." }],
+      },
+      {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: "Read package.json" }],
+      },
+      {
+        type: "function_call",
+        call_id: "call_read_1",
+        name: "read_file",
+        arguments: '{"path":"package.json"}',
+      },
+      {
+        type: "function_call_output",
+        call_id: "call_read_1",
+        output: '{"name":"asroute"}',
+      },
+    ],
+    tools: [
+      {
+        type: "function",
+        name: "read_file",
+        description: "Read a file",
+        parameters: { type: "object", properties: { path: { type: "string" } } },
+      },
+    ],
+    tool_choice: { type: "function", name: "read_file" },
+    text: { format: { type: "json_object" } },
+  });
+
+  assert.equal(normalized.max_tokens, 512);
+  assert.deepEqual(normalized.response_format, { type: "json_object" });
+  assert.equal(normalized.tools?.[0]?.function.name, "read_file");
+  assert.deepEqual(normalized.tool_choice, {
+    type: "function",
+    function: { name: "read_file" },
+  });
+  assert.equal(normalized.messages.length, 5);
+  assert.equal(normalized.messages[0]?.role, "system");
+  assert.equal(normalized.messages[1]?.role, "system");
+  assert.equal(normalized.messages[2]?.role, "user");
+  assert.equal(normalized.messages[3]?.role, "assistant");
+  assert.equal(normalized.messages[3]?.tool_calls?.[0]?.id, "call_read_1");
+  assert.equal(normalized.messages[4]?.role, "tool");
+  assert.equal(normalized.messages[4]?.tool_call_id, "call_read_1");
+
+  await ensureSchema();
+  const uid = "usr_responses_test";
+  await db.delete(providerConnections).where(eq(providerConnections.userId, uid));
+  await db.delete(gatewayApiKeys).where(eq(gatewayApiKeys.userId, uid));
+  await db.delete(user).where(eq(user.id, uid));
+
+  await db.insert(user).values({
+    id: uid,
+    name: "Responses Tester",
+    email: "responses-test@example.com",
+    emailVerified: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  await db.insert(providerConnections).values({
+    id: "conn_resp_openai",
+    userId: uid,
+    provider: "openai",
+    name: "OpenAI Responses Test",
+    encryptedApiKey: encryptSecret("sk-resp-test-key"),
+    defaultModel: "gpt-6.2-sol",
+    availableModels: JSON.stringify(["gpt-6.2-sol"]),
+    isActive: true,
+    createdAt: new Date(),
+  });
+
+  const { rawKey, keyHash, keyPrefix } = generateGatewayApiKey();
+  await db.insert(gatewayApiKeys).values({
+    id: "gkey_responses_test",
+    userId: uid,
+    name: "Codex CLI Test Key",
+    keyPrefix,
+    keyHash,
+    allowedCombo: "*",
+    isActive: true,
+    createdAt: new Date(),
+  });
+
+  const app = express();
+  app.use(express.json());
+  app.use("/v1", gatewayRouter);
+
+  const server = http.createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const targetUrl = typeof input === "string" ? input : input.toString();
+    if (targetUrl.startsWith(baseUrl)) {
+      return originalFetch(input, init);
+    }
+    const reqBody = JSON.parse(String(init?.body || "{}")) as { stream?: boolean };
+    if (reqBody.stream) {
+      const sse =
+        `data: ${JSON.stringify({ choices: [{ delta: { content: "Hello " } }] })}\n\n` +
+        `data: ${JSON.stringify({ choices: [{ delta: { content: "Codex!" } }] })}\n\n` +
+        `data: ${JSON.stringify({
+          choices: [{ delta: {}, finish_reason: "stop" }],
+          usage: { prompt_tokens: 7, completion_tokens: 2 },
+        })}\n\n` +
+        `data: [DONE]\n\n`;
+      return new Response(sse, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { role: "assistant", content: "Hello non-stream!" }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 5, completion_tokens: 3 },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }) as typeof fetch;
+
+  try {
+    // 1) Non-streaming JSON response
+    const jsonRes = await originalFetch(`${baseUrl}/v1/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${rawKey}`,
+      },
+      body: JSON.stringify({
+        model: "auto",
+        input: "Hello",
+      }),
+    });
+    assert.equal(jsonRes.status, 200);
+    const jsonBody = (await jsonRes.json()) as {
+      object: string;
+      status: string;
+      output_text: string;
+      output: Array<{ type: string; content: Array<{ type: string; text: string }> }>;
+      usage: { input_tokens: number; output_tokens: number; total_tokens: number };
+    };
+    assert.equal(jsonBody.object, "response");
+    assert.equal(jsonBody.status, "completed");
+    assert.equal(jsonBody.output_text, "Hello non-stream!");
+    assert.equal(jsonBody.output[0]?.type, "message");
+    assert.equal(jsonBody.output[0]?.content[0]?.text, "Hello non-stream!");
+    assert.equal(jsonBody.usage.total_tokens, 8);
+
+    // 2) Streaming SSE response
+    const streamRes = await originalFetch(`${baseUrl}/v1/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${rawKey}`,
+      },
+      body: JSON.stringify({
+        model: "auto",
+        input: "Hello stream",
+        stream: true,
+      }),
+    });
+    assert.equal(streamRes.status, 200);
+    const sseText = await streamRes.text();
+    assert.ok(sseText.includes("event: response.created"));
+    assert.ok(sseText.includes("event: response.output_text.delta"));
+    assert.ok(sseText.includes('"delta":"Hello "'));
+    assert.ok(sseText.includes('"delta":"Codex!"'));
+    assert.ok(sseText.includes("event: response.completed"));
+    assert.ok(sseText.includes('"output_text":"Hello Codex!"'));
+    assert.ok(!sseText.includes("[DONE]"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
